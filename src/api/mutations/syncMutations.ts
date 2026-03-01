@@ -1,23 +1,22 @@
 import { useMutation } from '@tanstack/react-query';
-import { apiRequest } from '@/api/client';
-import { Academy } from '@/types/academy';
+import { syncWeek } from '@/api/endpoints/sync';
+import { useAcademyStore } from '@/stores/academyStore';
+import { SyncRequest, SyncAcceptedResponse } from '@/types/api';
 
-interface SyncPayload {
-  academyId: string;
-  reputation: number;
-  totalCareerEarnings: number;
-  week: number;
-}
+export function useSyncWeek() {
+  const applyServerSync = useAcademyStore((s) => s.applyServerSync);
 
-/** Syncs high-level academy metrics to the Symfony backend */
-export function useSyncAcademy() {
   return useMutation({
-    mutationFn: (payload: SyncPayload) =>
-      apiRequest<Academy>(`/academies/${payload.academyId}/sync`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-    // TanStack Query will retry offline mutations automatically when connectivity returns
+    mutationFn: (payload: SyncRequest) => syncWeek(payload),
+    onSuccess: (data) => {
+      if (data.accepted) {
+        // Server is authoritative on aggregates — reconcile local state
+        applyServerSync((data as SyncAcceptedResponse).academy);
+      } else {
+        // Anti-cheat rejection: week rolled back on server
+        console.warn('[sync] Week rollback detected. Server week:', data.currentWeek);
+      }
+    },
     retry: 3,
   });
 }

@@ -14,6 +14,7 @@ interface AcademyState {
   academy: Academy;
   setReputation: (delta: number) => void;
   addEarnings: (amount: number) => void;
+  applyServerSync: (data: { reputation: number; totalCareerEarnings: number; hallOfFamePoints: number }) => void;
 }
 
 const DEFAULT_ACADEMY: Academy = {
@@ -23,6 +24,7 @@ const DEFAULT_ACADEMY: Academy = {
   reputation: 0,
   reputationTier: 'Local',
   totalCareerEarnings: 0,
+  hallOfFamePoints: 0,
   squadSize: 0,
   staffCount: 1,
 };
@@ -47,6 +49,16 @@ export const useAcademyStore = create<AcademyState>()(
           academy: {
             ...state.academy,
             totalCareerEarnings: state.academy.totalCareerEarnings + amount,
+          },
+        })),
+      applyServerSync: (data) =>
+        set((state) => ({
+          academy: {
+            ...state.academy,
+            reputation: data.reputation,
+            reputationTier: computeTier(data.reputation),
+            totalCareerEarnings: data.totalCareerEarnings,
+            hallOfFamePoints: data.hallOfFamePoints,
           },
         })),
     }),

@@ -2,6 +2,8 @@ import '../global.css';
 import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
+import { View, ActivityIndicator } from 'react-native';
+import { useAuthFlow } from '@/hooks/useAuthFlow';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -10,11 +12,25 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppNavigator() {
+  const { isReady } = useAuthFlow();
+
+  if (!isReady) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color="#2196F3" />
+      </View>
+    );
+  }
+
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
+
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <AppNavigator />
     </QueryClientProvider>
   );
 }

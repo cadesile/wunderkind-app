@@ -7,6 +7,7 @@ export interface Academy {
   reputation: number; // 0–1000
   reputationTier: ReputationTier;
   totalCareerEarnings: number;
+  hallOfFamePoints: number;
   squadSize: number;
   staffCount: number;
 }

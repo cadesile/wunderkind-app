@@ -3,7 +3,8 @@ import { calculateWeeklyFinances } from './finance';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
-import { WeeklyTick, PersonalityMatrix } from '@/types/game';
+import { WeeklyTick } from '@/types/game';
+import { PersonalityMatrix } from '@/types/player';
 
 let currentWeek = 1;
 
