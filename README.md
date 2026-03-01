@@ -1,10 +1,80 @@
-📱 Wunderkind Factory - Mobile AppThis is the React Native mobile application for The Wunderkind Factory, a football academy management strategy game. This repository contains the core game loop, the dynamic personality engine, and the offline-first synchronization logic.🛠 Tech StackFramework: React NativeState Management: Zustand (Handling the complex 8-trait Personality Matrix)Local Persistence: MMKV (High-performance key-value storage)Sync & API Fetching: TanStack Query (v5)Styling: Tailwind CSS (via NativeWind)Icons: Lucide React Native / Custom SVG Pixel Art🏗 Architecture: Offline-First "Weekly Tick"The app is built as a Client-Authoritative system to allow for seamless offline play.The Game Engine: A centralized GameLoop utility processes the "Weekly Tick." When the player advances time, the engine calculates attribute shifts, financial deductions, and behavioral incidents entirely on-device.State Persistence: Every tick is immediately persisted to MMKV. This ensures the game state is preserved even if the app is closed or the device loses power.Asynchronous Sync: High-level metrics (Academy Reputation, Total Career Earnings) are queued and pushed to the Symfony API using TanStack Query's offline mutation support.🚀 Getting StartedPrerequisitesNode.js: 20.x or 22.x (LTS)Yarn or npmCocoaPods (for iOS development)Android Studio / XcodeInstallationClone the repository:git clone [https://github.com/your-username/wunderkind-app.git](https://github.com/your-username/wunderkind-app.git)
-cd wunderkind-app
-Install dependencies:npm install
-# or
-yarn install
-Install iOS pods:npx pod-install ios
-Start the development server:npx react-native start
-Run on a device/emulator:npm run ios  # for iOS
-npm run android  # for Android
-📋 Key Mobile FeaturesDynamic Radar Charts: Interactive visualization of the 8-trait Personality Matrix.Data Abstraction: UI components designed to show progress bars and star ratings instead of raw integers.Guardian Inbox: A dedicated notification system for handling parent/guardian requests and behavioral incidents.Hybrid Sync Status: A visual indicator in the header showing the current synchronization state with the central API.🤝 Related RepositoriesWunderkind Backend (Symfony)Built with passion for the "Business of Football".
+# Wunderkind Factory — Mobile App
+
+The React Native mobile application for **The Wunderkind Factory**, a football academy management strategy game. Contains the core game loop, the dynamic 8-trait Personality Matrix engine, and offline-first synchronisation logic.
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Expo (managed workflow, Expo Go compatible) |
+| Navigation | Expo Router (file-based) |
+| State | Zustand + AsyncStorage (persist middleware) |
+| API / Sync | TanStack Query v5 (offline mutations) |
+| Styling | NativeWind (Tailwind CSS for React Native) |
+| Icons | Lucide React Native / Custom SVG Pixel Art |
+
+## Architecture: Offline-First "Weekly Tick"
+
+The app is **client-authoritative** to support seamless offline play:
+
+1. **GameLoop** (`src/engine/GameLoop.ts`) — processes the Weekly Tick entirely on-device: trait shifts, financial deductions, behavioral incidents.
+2. **AsyncStorage persistence** — Zustand stores are persisted via `@react-native-async-storage/async-storage` so state survives app closure.
+3. **Async sync** — high-level metrics (Academy Reputation, Total Career Earnings) are queued and pushed to the Symfony API via TanStack Query offline mutations.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20.19.6 (`.nvmrc` included — run `nvm use`)
+- Expo CLI: `npm install -g expo-cli`
+- Expo Go app on your device (iOS / Android)
+
+### Install
+
+```bash
+nvm use
+npm install
+```
+
+### Run
+
+```bash
+# Start Metro + show QR code for Expo Go
+npx expo start
+
+# Run directly on simulator
+npx expo start --ios
+npx expo start --android
+```
+
+Scan the QR code in Expo Go to load the app on your device.
+
+## Project Structure
+
+```
+app/                    # Expo Router screens
+├── _layout.tsx         # Root layout (QueryClient provider)
+├── (tabs)/             # Tab navigator
+│   ├── index.tsx       # Dashboard / Academy overview
+│   ├── squad.tsx       # Player roster
+│   ├── inbox.tsx       # Guardian Inbox
+│   └── finances.tsx    # Financial overview
+└── player/[id].tsx     # Player detail
+
+src/
+├── components/         # UI components (Button, Card, Badge, PersonalityRadar)
+├── engine/             # Game logic (GameLoop, personality, finance)
+├── stores/             # Zustand stores (academy, squad, inbox)
+├── api/                # Symfony API client + TanStack Query mutations
+├── types/              # TypeScript types (Player, Academy, WeeklyTick…)
+└── utils/              # AsyncStorage adapter for Zustand persist
+
+assets/
+├── fonts/
+├── images/
+└── svg/                # Custom pixel art SVG icons
+```
+
+## Related Repositories
+
+- **Wunderkind Backend:** Symfony API (separate repo)

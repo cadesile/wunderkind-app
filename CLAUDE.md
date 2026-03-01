@@ -8,36 +8,37 @@ React Native mobile app for **The Wunderkind Factory** — a football academy ma
 
 ## Tech Stack
 
-- **Framework:** React Native
+- **Framework:** Expo (managed workflow, Expo Go compatible)
+- **Navigation:** Expo Router (file-based routing under `app/`)
 - **State Management:** Zustand (8-trait Personality Matrix)
-- **Local Persistence:** MMKV (high-performance key-value storage)
+- **Local Persistence:** AsyncStorage via `@react-native-async-storage/async-storage` + Zustand persist middleware
 - **Sync & API Fetching:** TanStack Query v5 (with offline mutation support)
-- **Styling:** NativeWind (Tailwind CSS for React Native)
+- **Styling:** NativeWind v4 (Tailwind CSS for React Native)
 - **Icons:** Lucide React Native / Custom SVG Pixel Art
 
 ## Commands
 
 ```bash
+# Use correct Node version
+nvm use
+
 # Install dependencies
 npm install
 
-# Install iOS pods
-npx pod-install ios
+# Start Metro bundler + Expo Go QR
+npx expo start
 
-# Start Metro bundler
-npx react-native start
-
-# Run on device/emulator
-npm run ios
-npm run android
+# Run on simulator
+npx expo start --ios
+npx expo start --android
 ```
 
 ## Architecture: Offline-First "Weekly Tick"
 
 The app is **client-authoritative** to support seamless offline play:
 
-1. **GameLoop utility** — centralized engine that processes the "Weekly Tick" entirely on-device: attribute shifts, financial deductions, behavioral incidents.
-2. **MMKV persistence** — every tick is immediately written to MMKV so state survives app closure or power loss.
+1. **GameLoop utility** (`src/engine/GameLoop.ts`) — centralized engine that processes the "Weekly Tick" entirely on-device: attribute shifts, financial deductions, behavioral incidents.
+2. **AsyncStorage persistence** — Zustand stores use the persist middleware with AsyncStorage so state survives app closure or power loss.
 3. **Async sync** — high-level metrics (Academy Reputation, Total Career Earnings) are queued and pushed to the Symfony API via TanStack Query offline mutations.
 
 ## Key Concepts
