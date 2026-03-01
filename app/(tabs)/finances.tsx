@@ -12,7 +12,7 @@ export default function FinancesScreen() {
         <Text className="text-lg font-bold text-gray-900">Finances</Text>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-4" contentContainerClassName="gap-4">
+      <ScrollView className="flex-1 px-4 py-4" contentContainerStyle={{ gap: 16 }}>
         <Card>
           <Text className="text-sm text-gray-500 mb-1">Total Career Earnings</Text>
           <Text className="text-3xl font-bold text-green-700">

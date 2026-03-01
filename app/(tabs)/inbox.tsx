@@ -41,7 +41,7 @@ export default function InboxScreen() {
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => <MessageRow message={item} />}
-          contentContainerClassName="px-4 py-4"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
         />
       )}
     </SafeAreaView>

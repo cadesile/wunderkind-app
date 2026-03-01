@@ -48,7 +48,7 @@ export default function SquadScreen() {
           data={players}
           keyExtractor={(p) => p.id}
           renderItem={({ item }) => <PlayerRow player={item} />}
-          contentContainerClassName="px-4 py-4"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
         />
       )}
     </SafeAreaView>

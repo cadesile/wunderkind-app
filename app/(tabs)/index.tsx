@@ -19,7 +19,7 @@ export default function DashboardScreen() {
         <SyncStatusIndicator status="synced" />
       </View>
 
-      <ScrollView className="flex-1 px-4 py-4" contentContainerClassName="gap-4">
+      <ScrollView className="flex-1 px-4 py-4" contentContainerStyle={{ gap: 16 }}>
         <Card>
           <Text className="text-sm text-gray-500 mb-1">Academy Reputation</Text>
           <View className="flex-row items-center gap-2">
