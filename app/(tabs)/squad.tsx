@@ -1,30 +1,60 @@
-import { View, Text, FlatList, Pressable } from 'react-native';
+import { View, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useSquadStore } from '@/stores/squadStore';
-import { Card } from '@/components/ui/Card';
+import { PixelText } from '@/components/ui/PixelText';
+import { PixelAvatar } from '@/components/ui/PixelAvatar';
 import { Badge } from '@/components/ui/Badge';
 import { Player } from '@/types/player';
+import { WK, traitColor, pixelShadow } from '@/constants/theme';
 
-function PlayerRow({ player }: { player: Player }) {
+function PlayerCard({ player }: { player: Player }) {
   const router = useRouter();
   const traits = Object.values(player.personality);
   const avgTrait = Math.round(traits.reduce((a, b) => a + b, 0) / traits.length);
 
   return (
     <Pressable onPress={() => router.push(`/player/${player.id}`)}>
-      <Card className="mb-3">
-        <View className="flex-row justify-between items-center">
-          <View>
-            <Text className="font-semibold text-gray-900">{player.name}</Text>
-            <Text className="text-sm text-gray-500">{player.position} · Age {player.age}</Text>
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: WK.border,
+        padding: 12,
+        marginBottom: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        ...pixelShadow,
+      }}>
+        <PixelAvatar size={44} />
+
+        <View style={{ flex: 1 }}>
+          <PixelText size={9} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
+          <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {player.age}</PixelText>
+          <PixelText size={7} dim>{player.nationality}</PixelText>
+
+          {/* Mini trait bar */}
+          <View style={{ marginTop: 6, flexDirection: 'row', gap: 2 }}>
+            {traits.map((v, i) => (
+              <View
+                key={i}
+                style={{
+                  flex: 1,
+                  height: 4,
+                  backgroundColor: traitColor(v),
+                  borderRadius: 0,
+                }}
+              />
+            ))}
           </View>
-          <View className="items-end gap-1">
-            <Badge label={`${player.overallRating}`} color="green" />
-            <Text className="text-xs text-gray-400">Avg trait: {avgTrait}</Text>
-          </View>
+          <PixelText size={7} dim style={{ marginTop: 3 }}>AVG TRAIT: {avgTrait}/20</PixelText>
         </View>
-      </Card>
+
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <Badge label={`${player.overallRating}`} color="yellow" />
+          <PixelText size={8} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -33,21 +63,32 @@ export default function SquadScreen() {
   const players = useSquadStore((s) => s.players);
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="px-4 py-3 bg-white border-b border-gray-100">
-        <Text className="text-lg font-bold text-gray-900">Squad ({players.length})</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 4,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <PixelText size={10} upper>Squad</PixelText>
+        <PixelText size={8} color={WK.yellow}>{players.length} PLAYERS</PixelText>
       </View>
 
       {players.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-gray-400">No players yet. Recruit from the dashboard.</Text>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <PixelText size={8} dim>NO PLAYERS YET</PixelText>
         </View>
       ) : (
         <FlatList
           data={players}
           keyExtractor={(p) => p.id}
-          renderItem={({ item }) => <PlayerRow player={item} />}
-          contentContainerClassName="px-4 py-4"
+          renderItem={({ item }) => <PlayerCard player={item} />}
+          contentContainerStyle={{ padding: 10 }}
         />
       )}
     </SafeAreaView>

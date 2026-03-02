@@ -1,22 +1,36 @@
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import { PixelText } from './PixelText';
+import { WK } from '@/constants/theme';
 
 interface Props {
   label: string;
-  color?: 'green' | 'gold' | 'gray' | 'red';
+  color?: 'green' | 'yellow' | 'red' | 'dim';
 }
 
-const COLOR_STYLES = {
-  green: { bg: 'bg-green-100', text: 'text-green-800' },
-  gold: { bg: 'bg-amber-100', text: 'text-amber-800' },
-  gray: { bg: 'bg-gray-100', text: 'text-gray-600' },
-  red: { bg: 'bg-red-100', text: 'text-red-700' },
+const COLORS = {
+  green:  { bg: WK.green,  text: '#fff' },
+  yellow: { bg: WK.yellow, text: '#3a2000' },
+  red:    { bg: WK.red,    text: '#fff' },
+  dim:    { bg: WK.tealPanel, text: WK.text },
 };
 
-export function Badge({ label, color = 'gray' }: Props) {
-  const { bg, text } = COLOR_STYLES[color];
+/** Pixel-art badge — square corners, thick border */
+export function Badge({ label, color = 'dim' }: Props) {
+  const { bg, text } = COLORS[color];
   return (
-    <View className={`px-2 py-0.5 rounded-full ${bg}`}>
-      <Text className={`text-xs font-semibold ${text}`}>{label}</Text>
+    <View
+      style={{
+        backgroundColor: bg,
+        borderWidth: 2,
+        borderColor: WK.border,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 0,
+      }}
+    >
+      <PixelText size={8} color={text} upper>
+        {label}
+      </PixelText>
     </View>
   );
 }

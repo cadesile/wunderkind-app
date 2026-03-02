@@ -1,5 +1,6 @@
-import { View, Text } from 'react-native';
-import { Wifi, WifiOff, RefreshCw } from 'lucide-react-native';
+import { View } from 'react-native';
+import { PixelText } from './ui/PixelText';
+import { WK } from '@/constants/theme';
 
 type SyncStatus = 'synced' | 'syncing' | 'offline';
 
@@ -7,21 +8,18 @@ interface Props {
   status: SyncStatus;
 }
 
-const STATUS_CONFIG: Record<SyncStatus, { label: string; color: string }> = {
-  synced: { label: 'Synced', color: '#2D6A4F' },
-  syncing: { label: 'Syncing…', color: '#F4A261' },
-  offline: { label: 'Offline', color: '#9CA3AF' },
+const CONFIG: Record<SyncStatus, { label: string; dot: string }> = {
+  synced:  { label: 'LIVE',    dot: WK.green },
+  syncing: { label: 'SYNC…',  dot: WK.yellow },
+  offline: { label: 'OFFLN',  dot: WK.dim },
 };
 
 export function SyncStatusIndicator({ status }: Props) {
-  const { label, color } = STATUS_CONFIG[status];
-
+  const { label, dot } = CONFIG[status];
   return (
-    <View className="flex-row items-center gap-1">
-      {status === 'synced' && <Wifi size={14} color={color} />}
-      {status === 'syncing' && <RefreshCw size={14} color={color} />}
-      {status === 'offline' && <WifiOff size={14} color={color} />}
-      <Text style={{ color, fontSize: 12, fontWeight: '600' }}>{label}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      <View style={{ width: 6, height: 6, backgroundColor: dot, borderRadius: 0 }} />
+      <PixelText size={7} dim>{label}</PixelText>
     </View>
   );
 }

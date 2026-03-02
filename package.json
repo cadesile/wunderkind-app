@@ -10,11 +10,13 @@
     "proxy": "python3 scripts/dev-proxy.py"
   },
   "dependencies": {
+    "@expo-google-fonts/press-start-2p": "^0.4.1",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@tanstack/react-query": "^5.67.3",
     "expo": "~54.0.0",
     "expo-asset": "~12.0.12",
     "expo-constants": "~18.0.13",
+    "expo-font": "^55.0.4",
     "expo-linking": "~8.0.11",
     "expo-router": "~6.0.23",
     "expo-splash-screen": "~31.0.13",

@@ -1,12 +1,48 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
-import { Card } from '@/components/ui/Card';
+import { PixelText } from '@/components/ui/PixelText';
+import { PixelAvatar } from '@/components/ui/PixelAvatar';
 import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { PersonalityRadar } from '@/components/radar/PersonalityRadar';
+import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { TraitName } from '@/types/player';
+
+const TRAIT_LABELS: Record<TraitName, string> = {
+  determination:   'DETERMINATION',
+  professionalism: 'PROFESSIONALISM',
+  ambition:        'AMBITION',
+  loyalty:         'LOYALTY',
+  adaptability:    'ADAPTABILITY',
+  pressure:        'PRESSURE',
+  temperament:     'TEMPERAMENT',
+  consistency:     'CONSISTENCY',
+};
+
+function TraitBar({ name, value }: { name: TraitName; value: number }) {
+  const pct = (value / 20) * 100;
+  const color = traitColor(value);
+
+  return (
+    <View style={{ marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+        <PixelText size={6} dim>{TRAIT_LABELS[name]}</PixelText>
+        <PixelText size={6} color={color}>{value}/20</PixelText>
+      </View>
+      <View style={{
+        height: 6,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        borderWidth: 2,
+        borderColor: WK.border,
+      }}>
+        <View style={{ height: '100%', width: `${pct}%`, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
 
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,36 +51,79 @@ export default function PlayerDetailScreen() {
 
   if (!player) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-gray-50">
-        <Text className="text-gray-400">Player not found.</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark, alignItems: 'center', justifyContent: 'center' }}>
+        <PixelText size={8} dim>PLAYER NOT FOUND</PixelText>
       </SafeAreaView>
     );
   }
 
+  const traits = Object.entries(player.personality) as [TraitName, number][];
+
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100">
-        <Pressable onPress={() => router.back()} className="mr-3">
-          <ChevronLeft size={24} color="#374151" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 4,
+        borderBottomColor: WK.border,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        gap: 10,
+      }}>
+        <Pressable onPress={() => router.back()} hitSlop={8}>
+          <ChevronLeft size={18} color={WK.text} />
         </Pressable>
-        <Text className="text-lg font-bold text-gray-900">{player.name}</Text>
+        <PixelText size={9} upper style={{ flex: 1 }} numberOfLines={1}>{player.name}</PixelText>
+        <Badge label={`OVR ${player.overallRating}`} color="yellow" />
       </View>
 
-      <ScrollView className="flex-1 px-4 py-4" contentContainerClassName="gap-4">
-        <Card>
-          <View className="flex-row justify-between items-center mb-2">
-            <View>
-              <Text className="text-sm text-gray-500">{player.position}</Text>
-              <Text className="text-sm text-gray-500">Age {player.age} · {player.nationality}</Text>
-            </View>
-            <Badge label={`OVR ${player.overallRating}`} color="green" />
-          </View>
-        </Card>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
 
+        {/* Player bio card */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          ...pixelShadow,
+        }}>
+          <PixelAvatar size={64} />
+          <View style={{ flex: 1 }}>
+            <PixelText size={10} upper style={{ marginBottom: 4 }} numberOfLines={2}>{player.name}</PixelText>
+            <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {player.age}</PixelText>
+            <PixelText size={7} dim style={{ marginTop: 2 }}>{player.nationality}</PixelText>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+              <View>
+                <PixelText size={6} dim>OVR</PixelText>
+                <PixelText size={14} color={WK.tealLight}>{player.overallRating}</PixelText>
+              </View>
+              <View>
+                <PixelText size={6} dim>POT</PixelText>
+                <PixelText size={10} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Personality radar */}
         <Card>
-          <Text className="text-sm font-semibold text-gray-700 mb-3">Personality Matrix</Text>
+          <PixelText size={8} upper style={{ marginBottom: 10 }}>Personality Matrix</PixelText>
           <PersonalityRadar personality={player.personality} />
         </Card>
+
+        {/* Individual trait bars */}
+        <Card>
+          <PixelText size={8} upper style={{ marginBottom: 12 }}>Trait Breakdown</PixelText>
+          {traits.map(([name, value]) => (
+            <TraitBar key={name} name={name} value={value} />
+          ))}
+        </Card>
+
       </ScrollView>
     </SafeAreaView>
   );

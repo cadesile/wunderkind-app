@@ -1,29 +1,49 @@
-import { Pressable, Text, PressableProps } from 'react-native';
+import { Pressable, PressableProps, StyleSheet, ViewStyle } from 'react-native';
+import { PixelText } from './PixelText';
+import { WK, pixelShadow } from '@/constants/theme';
 
 interface Props extends PressableProps {
   label: string;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'yellow' | 'green' | 'orange' | 'red' | 'blue' | 'teal';
+  fullWidth?: boolean;
 }
 
-const VARIANT_STYLES = {
-  primary: 'bg-blue-600 active:bg-blue-700',
-  secondary: 'bg-gray-200 active:bg-gray-300',
-  ghost: 'bg-transparent',
+const VARIANTS: Record<NonNullable<Props['variant']>, { bg: string; text: string }> = {
+  yellow: { bg: WK.yellow,    text: '#3a2000' },
+  green:  { bg: WK.green,     text: '#fff' },
+  orange: { bg: WK.orange,    text: '#fff' },
+  red:    { bg: WK.red,       text: '#fff' },
+  blue:   { bg: WK.blue,      text: '#fff' },
+  teal:   { bg: WK.tealPanel, text: WK.text },
 };
 
-const LABEL_STYLES = {
-  primary: 'text-white font-semibold',
-  secondary: 'text-gray-800 font-semibold',
-  ghost: 'text-blue-600 font-semibold',
-};
-
-export function Button({ label, variant = 'primary', ...rest }: Props) {
+/** Pixel-art button — chunky border, elevation drop shadow */
+export function Button({ label, variant = 'teal', fullWidth = false, disabled, style, ...rest }: Props) {
+  const { bg, text } = VARIANTS[variant];
   return (
     <Pressable
-      className={`px-4 py-2 rounded-lg items-center ${VARIANT_STYLES[variant]}`}
+      disabled={disabled}
+      style={({ pressed }) => ({
+        backgroundColor: disabled ? WK.tealCard : bg,
+        borderWidth: 3,
+        borderColor: WK.border,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        alignItems: 'center' as const,
+        borderRadius: 0,
+        opacity: disabled ? 0.5 : 1,
+        transform: [{ translateX: pressed ? 2 : 0 }, { translateY: pressed ? 2 : 0 }],
+        ...(pressed
+          ? { elevation: 1, shadowOffset: { width: 1, height: 1 } }
+          : pixelShadow),
+        ...(fullWidth ? { alignSelf: 'stretch' as const } : {}),
+        ...(style ? (StyleSheet.flatten(style) as ViewStyle) : {}),
+      })}
       {...rest}
     >
-      <Text className={LABEL_STYLES[variant]}>{label}</Text>
+      <PixelText size={9} color={disabled ? WK.dim : text} upper>
+        {label}
+      </PixelText>
     </Pressable>
   );
 }

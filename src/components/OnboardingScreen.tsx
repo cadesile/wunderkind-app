@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
-  Pressable,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PixelText } from '@/components/ui/PixelText';
+import { Button } from '@/components/ui/Button';
+import { WK, pixelShadow } from '@/constants/theme';
 
 interface Props {
   onRegister: (academyName: string) => Promise<void>;
@@ -23,15 +24,11 @@ export function OnboardingScreen({ onRegister }: Props) {
 
   async function handleSubmit() {
     if (!canSubmit) return;
-
     setLoading(true);
     try {
       await onRegister(academyName.trim());
     } catch (err) {
-      Alert.alert(
-        'Could not create academy',
-        'Please check your connection and try again.',
-      );
+      Alert.alert('Could not create academy', 'Please check your connection and try again.');
       console.error('[Onboarding] registerAcademy failed:', err);
     } finally {
       setLoading(false);
@@ -39,57 +36,88 @@ export function OnboardingScreen({ onRegister }: Props) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
       <KeyboardAvoidingView
-        className="flex-1"
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View className="flex-1 px-6 justify-center">
-          {/* Branding */}
-          <Text className="text-4xl font-bold text-gray-900 mb-1">
-            Wunderkind
-          </Text>
-          <Text className="text-base text-gray-400 mb-12">
-            Build the next generation of football stars.
-          </Text>
+        <View style={{ flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 0 }}>
 
-          {/* Academy name input */}
-          <Text className="text-sm font-semibold text-gray-700 mb-2">
-            Academy Name
-          </Text>
-          <TextInput
-            className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900 bg-gray-50 mb-6"
-            placeholder="e.g. North Star Academy"
-            placeholderTextColor="#9CA3AF"
-            value={academyName}
-            onChangeText={setAcademyName}
-            maxLength={40}
-            editable={!loading}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-            autoCapitalize="words"
-            autoCorrect={false}
-          />
+          {/* Logo / title */}
+          <View style={{ marginBottom: 32, alignItems: 'center' }}>
+            <PixelText size={14} upper style={{ textAlign: 'center', marginBottom: 8 }}>
+              WUNDERKIND
+            </PixelText>
+            <PixelText size={8} upper style={{ textAlign: 'center', marginBottom: 6 }}>
+              FACTORY
+            </PixelText>
+            <View style={{ height: 3, width: 80, backgroundColor: WK.yellow, marginTop: 8 }} />
+            <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 12 }}>
+              BUILD THE NEXT GENERATION
+            </PixelText>
+          </View>
 
-          <Pressable
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            className={`rounded-xl py-4 items-center ${
-              canSubmit ? 'bg-blue-500' : 'bg-blue-200'
-            }`}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-white font-semibold text-base">
-                Create My Academy
-              </Text>
-            )}
-          </Pressable>
+          {/* Input card */}
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.border,
+            padding: 16,
+            marginBottom: 12,
+            ...pixelShadow,
+          }}>
+            <PixelText size={7} dim style={{ marginBottom: 10 }}>ACADEMY NAME</PixelText>
+            <TextInput
+              style={{
+                backgroundColor: WK.tealDark,
+                borderWidth: 2,
+                borderColor: loading ? WK.dim : WK.tealLight,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                color: WK.text,
+                fontFamily: WK.font,
+                fontSize: 8,
+                marginBottom: 4,
+              }}
+              placeholder="E.G. NORTH STAR FC"
+              placeholderTextColor={WK.dim}
+              value={academyName}
+              onChangeText={setAcademyName}
+              maxLength={40}
+              editable={!loading}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
 
-          <Text className="text-xs text-gray-400 text-center mt-6">
-            You'll receive 5 youth players to start your journey.
-          </Text>
+          {/* Submit button */}
+          {loading ? (
+            <View style={{
+              height: 48,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 3,
+              borderColor: WK.yellow,
+              backgroundColor: 'rgba(245,200,66,0.15)',
+            }}>
+              <ActivityIndicator color={WK.yellow} />
+            </View>
+          ) : (
+            <Button
+              label="▶ CREATE MY ACADEMY"
+              variant="yellow"
+              fullWidth
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+            />
+          )}
+
+          <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 16 }}>
+            YOU'LL RECEIVE 5 YOUTH PLAYERS
+          </PixelText>
+
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
