@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, FlatList, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useCoachStore } from '@/stores/coachStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { generateCoachProspects } from '@/engine/recruitment';
@@ -120,6 +121,7 @@ export default function CoachesScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      <PitchBackground />
       {/* Header */}
       <View style={{
         backgroundColor: WK.tealMid,

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, FlatList, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
@@ -429,6 +430,7 @@ export default function AcademyHubScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
+      <PitchBackground />
       <PixelTopTabBar
         tabs={[...ACADEMY_TABS]}
         active={activeTab}

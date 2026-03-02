@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Home, Building2, DollarSign, ChevronsRight } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdvanceModal } from '@/components/AdvanceModal';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { PixelText } from '@/components/ui/PixelText';
@@ -9,6 +10,8 @@ import { WK } from '@/constants/theme';
 
 export default function TabLayout() {
   const [advanceVisible, setAdvanceVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 62 + insets.bottom;
 
   return (
     <View style={{ flex: 1 }}>
@@ -23,12 +26,13 @@ export default function TabLayout() {
             backgroundColor: WK.tealDark,
             borderTopWidth: 3,
             borderTopColor: WK.border,
-            height: 58,
+            height: tabBarHeight,
+            paddingBottom: insets.bottom,
           },
           tabBarLabelStyle: {
             fontFamily: WK.font,
-            fontSize: 6,
-            marginBottom: 3,
+            fontSize: 8,
+            marginBottom: 4,
           },
         }}
       >
@@ -43,7 +47,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="facilities"
           options={{
-            title: 'FACILTIES',
+            title: 'BUILD',
             tabBarIcon: ({ color, size }) => <Building2 size={size - 6} color={color} />,
           }}
         />
@@ -66,13 +70,14 @@ export default function TabLayout() {
                   flex: 1,
                   alignItems: 'center',
                   justifyContent: 'center',
+                  paddingBottom: insets.bottom,
                   borderLeftWidth: 2,
                   borderLeftColor: WK.border,
                   backgroundColor: 'rgba(245,200,66,0.08)',
                 }}
               >
                 <ChevronsRight size={18} color={WK.yellow} />
-                <PixelText size={6} color={WK.yellow} style={{ marginTop: 3 }}>ADVANCE</PixelText>
+                <PixelText size={8} color={WK.yellow} style={{ marginTop: 3 }}>ADVANCE</PixelText>
               </Pressable>
             ),
           }}

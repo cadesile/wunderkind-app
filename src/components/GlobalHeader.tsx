@@ -1,6 +1,7 @@
 import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Mail } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { PixelText } from './ui/PixelText';
@@ -15,6 +16,7 @@ import { WK } from '@/constants/theme';
  */
 export function GlobalHeader() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const academy = useAcademyStore((s) => s.academy);
   const unreadCount = useInboxStore((s) => s.unreadCount());
   const syncStatus = useSyncStatus();
@@ -27,8 +29,9 @@ export function GlobalHeader() {
       backgroundColor: WK.tealDark,
       borderBottomWidth: 3,
       borderBottomColor: WK.border,
+      paddingTop: insets.top + 6,
+      paddingBottom: 8,
       paddingHorizontal: 12,
-      paddingVertical: 8,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',

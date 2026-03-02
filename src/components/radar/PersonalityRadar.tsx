@@ -4,6 +4,8 @@ import { WK } from '@/constants/theme';
 
 interface Props {
   personality: PersonalityMatrix;
+  /** Rendered width/height of the SVG. Defaults to 200. */
+  size?: number;
 }
 
 const TRAITS: { key: TraitName; label: string }[] = [
@@ -18,17 +20,13 @@ const TRAITS: { key: TraitName; label: string }[] = [
 ];
 
 const N = TRAITS.length;
-const CX = 100;
-const CY = 105; // slightly below centre to allow label space above
-const R  = 62;  // outer ring radius
-const LR = 80;  // label radius
 
 function toAngle(i: number): number {
   return (i / N) * 2 * Math.PI - Math.PI / 2;
 }
 
-function polar(r: number, angle: number): [number, number] {
-  return [CX + r * Math.cos(angle), CY + r * Math.sin(angle)];
+function polar(cx: number, cy: number, r: number, angle: number): [number, number] {
+  return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
 }
 
 function pts(points: [number, number][]): string {
@@ -44,26 +42,34 @@ function labelAnchor(angle: number): 'start' | 'middle' | 'end' {
 
 function labelDy(angle: number): number {
   const sin = Math.sin(angle);
-  if (sin > 0.5) return 10;   // below centre → nudge down
-  if (sin < -0.5) return -4;  // above centre → nudge up
+  if (sin > 0.5) return 10;
+  if (sin < -0.5) return -4;
   return 4;
 }
 
 const RINGS = [1, 0.75, 0.5, 0.25];
 
-export function PersonalityRadar({ personality }: Props) {
-  const outerPts = TRAITS.map((_, i) => polar(R, toAngle(i)));
+export function PersonalityRadar({ personality, size = 200 }: Props) {
+  // Derive geometry from the size prop so the chart scales dynamically
+  const VW = size;
+  const VH = size + 10; // a little extra height for bottom labels
+  const CX = VW / 2;
+  const CY = VH / 2 + 5;
+  const R  = VW * 0.31;   // outer ring radius — 31% of width
+  const LR = VW * 0.40;   // label radius
+
+  const outerPts = TRAITS.map((_, i) => polar(CX, CY, R, toAngle(i)));
   const dataPts  = TRAITS.map(({ key }, i) =>
-    polar(R * (personality[key] / 20), toAngle(i)),
+    polar(CX, CY, R * (personality[key] / 20), toAngle(i)),
   );
 
   return (
-    <Svg width={200} height={210} viewBox="0 0 200 210">
+    <Svg width={size} height={VH} viewBox={`0 0 ${VW} ${VH}`}>
       {/* Grid rings */}
       {RINGS.map((scale) => (
         <Polygon
           key={scale}
-          points={pts(TRAITS.map((_, i) => polar(R * scale, toAngle(i))))}
+          points={pts(TRAITS.map((_, i) => polar(CX, CY, R * scale, toAngle(i))))}
           fill="none"
           stroke="rgba(255,255,255,0.12)"
           strokeWidth={1}
@@ -97,7 +103,7 @@ export function PersonalityRadar({ personality }: Props) {
       {/* Axis labels */}
       {TRAITS.map(({ label }, i) => {
         const angle = toAngle(i);
-        const [x, y] = polar(LR, angle);
+        const [x, y] = polar(CX, CY, LR, angle);
         return (
           <SvgText
             key={label}
@@ -105,7 +111,7 @@ export function PersonalityRadar({ personality }: Props) {
             y={y + labelDy(angle)}
             textAnchor={labelAnchor(angle)}
             fontFamily={WK.font}
-            fontSize={6}
+            fontSize={7}
             fill={WK.dim}
           >
             {label}

@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useInboxStore, GuardianMessage } from '@/stores/inboxStore';
 import { PixelText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
 
 function MessageRow({ message }: { message: GuardianMessage }) {
@@ -44,6 +45,7 @@ export default function InboxScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      <PitchBackground />
       {/* Header */}
       <View style={{
         backgroundColor: WK.tealMid,

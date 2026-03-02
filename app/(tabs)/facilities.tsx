@@ -1,23 +1,46 @@
-import { View, ScrollView, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, ScrollView, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFacilityStore, facilityUpgradeCost, facilityMaintenanceCost } from '@/stores/facilityStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { FACILITY_DEFS, FacilityMeta, FacilityType } from '@/types/facility';
 import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
+
+// ─── Category definition ──────────────────────────────────────────────────────
+
+type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'TECHNICAL';
+
+const CATEGORIES: { id: FacilityCategory; label: string }[] = [
+  { id: 'TRAINING',  label: 'TRAINING'  },
+  { id: 'MEDICAL',   label: 'MEDICAL'   },
+  { id: 'TECHNICAL', label: 'TECHNICAL' },
+];
+
+/** Maps each facility type to its category */
+const FACILITY_CATEGORY: Record<FacilityType, FacilityCategory> = {
+  trainingPitch:  'TRAINING',
+  youthHostel:    'TRAINING',
+  medicalLab:     'MEDICAL',
+  analyticsSuite: 'TECHNICAL',
+  mediaCenter:    'TECHNICAL',
+};
 
 const LEVEL_BENEFIT_LABELS: Record<FacilityType, (level: number) => string> = {
   trainingPitch:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% XP BOOST`,
   medicalLab:     (l) => l === 0 ? 'INACTIVE' : `-${(l * 8).toFixed(0)}% INJURY PROB`,
   youthHostel:    (l) => l === 0 ? 'MAX 15 PLAYERS' : `MAX ${10 + l * 3} PLAYERS`,
   analyticsSuite: (l) => l === 0 ? 'INACTIVE' : 'TRAITS & POT VISIBLE',
-  mediaCenter:    (l) => l === 0 ? 'INACTIVE' : `+${l * 12} REP/WK`,
+  mediaCenter:    (l) => l === 0 ? 'INACTIVE' : `+${(l * 1.2).toFixed(1)} REP/WK`,
 };
+
+// ─── Facility card ────────────────────────────────────────────────────────────
 
 function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: number; balance: number }) {
   const { upgradeLevel } = useFacilityStore();
-  const { addEarnings } = useAcademyStore();
+  const { addBalance } = useAcademyStore();
 
   const upgradeCost = facilityUpgradeCost(def.type, level);
   const maintenance = facilityMaintenanceCost(level);
@@ -39,7 +62,7 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
           text: 'Upgrade',
           onPress: () => {
             upgradeLevel(def.type);
-            addEarnings(-upgradeCost);
+            addBalance(-upgradeCost);
           },
         },
       ],
@@ -108,12 +131,76 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
   );
 }
 
+// ─── Category subnav ─────────────────────────────────────────────────────────
+
+function CategoryNav({
+  active,
+  onChange,
+}: {
+  active: FacilityCategory;
+  onChange: (c: FacilityCategory) => void;
+}) {
+  return (
+    <View style={{
+      flexDirection: 'row',
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 8,
+    }}>
+      {CATEGORIES.map(({ id, label }) => {
+        const isActive = id === active;
+        return (
+          <Pressable
+            key={id}
+            onPress={() => onChange(id)}
+            style={{
+              flex: 1,
+              paddingVertical: 8,
+              alignItems: 'center',
+              backgroundColor: isActive ? WK.yellow : WK.tealMid,
+              borderWidth: 3,
+              borderColor: WK.border,
+              ...(isActive ? {
+                shadowColor: '#000',
+                shadowOffset: { width: 2, height: 2 },
+                shadowOpacity: 0.4,
+                shadowRadius: 0,
+                elevation: 3,
+              } : {}),
+            }}
+          >
+            <PixelText
+              size={7}
+              color={isActive ? '#3a2000' : WK.dim}
+            >
+              {label}
+            </PixelText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
 export default function FacilitiesScreen() {
   const { levels } = useFacilityStore();
   const academy = useAcademyStore((s) => s.academy);
+  const [activeCategory, setActiveCategory] = useState<FacilityCategory>('TRAINING');
+
+  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
+    ? academy.balance
+    : academy.totalCareerEarnings;
+
+  const visibleDefs = FACILITY_DEFS.filter(
+    (def) => FACILITY_CATEGORY[def.type] === activeCategory,
+  );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
+      <PitchBackground />
+
       {/* Header */}
       <View style={{
         backgroundColor: WK.tealMid,
@@ -126,16 +213,19 @@ export default function FacilitiesScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Facilities</PixelText>
-        <PixelText size={7} color={WK.yellow}>£{academy.totalCareerEarnings.toLocaleString()}</PixelText>
+        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
-        {FACILITY_DEFS.map((def) => (
+      {/* Category subnav */}
+      <CategoryNav active={activeCategory} onChange={setActiveCategory} />
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }}>
+        {visibleDefs.map((def) => (
           <FacilityCard
             key={def.type}
             def={def}
             level={levels[def.type]}
-            balance={academy.totalCareerEarnings}
+            balance={balance}
           />
         ))}
       </ScrollView>

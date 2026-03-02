@@ -1,4 +1,4 @@
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -9,8 +9,9 @@ import { PixelText } from '@/components/ui/PixelText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PersonalityRadar } from '@/components/radar/PersonalityRadar';
-import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { WK, pixelShadow } from '@/constants/theme';
 import { TraitName } from '@/types/player';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 
@@ -25,15 +26,22 @@ const TRAIT_LABELS: Record<TraitName, string> = {
   consistency:     'CONSISTENCY',
 };
 
-function TraitBar({ name, value }: { name: TraitName; value: number }) {
+/** Colour for ability values: yellow ≥70% of 20 (14+), teal 40–70% (8–13), red <40% (<8) */
+function abilityColor(value: number): string {
+  if (value >= 14) return WK.yellow;
+  if (value >= 8)  return WK.tealLight;
+  return WK.red;
+}
+
+function AbilityBar({ name, value }: { name: TraitName; value: number }) {
   const pct = (value / 20) * 100;
-  const color = traitColor(value);
+  const color = abilityColor(value);
 
   return (
-    <View style={{ marginBottom: 8 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-        <PixelText size={6} dim>{TRAIT_LABELS[name]}</PixelText>
-        <PixelText size={6} color={color}>{value}/20</PixelText>
+    <View style={{ paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+        <PixelText size={9} dim>{TRAIT_LABELS[name]}</PixelText>
+        <PixelText size={9} color={color}>{value}/20</PixelText>
       </View>
       <View style={{
         height: 6,
@@ -50,15 +58,18 @@ function TraitBar({ name, value }: { name: TraitName; value: number }) {
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const player = useSquadStore((s) => s.players.find((p) => p.id === id));
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const analyticsUnlocked = useFacilityStore((s) => s.analyticsUnlocked());
 
-  // Live age: floor((gameDate − DOB) / 365.25), fallback to static age
   const gameDate = getGameDate(weekNumber);
   const displayAge = player?.dateOfBirth
     ? computePlayerAge(player.dateOfBirth, gameDate)
     : (player?.age ?? '?');
+
+  // Radar fills available width minus card padding (16px card padding each side)
+  const radarSize = screenWidth - 32;
 
   if (!player) {
     return (
@@ -72,6 +83,8 @@ export default function PlayerDetailScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      <PitchBackground />
+
       {/* Header */}
       <View style={{
         backgroundColor: WK.tealMid,
@@ -124,17 +137,17 @@ export default function PlayerDetailScreen() {
           </View>
         </View>
 
-        {/* Personality radar */}
-        <Card>
-          <PixelText size={8} upper style={{ marginBottom: 10 }}>Personality Matrix</PixelText>
-          <PersonalityRadar personality={player.personality} />
+        {/* Ability Matrix radar — full width */}
+        <Card style={{ alignItems: 'center' }}>
+          <PixelText size={8} upper style={{ marginBottom: 10, alignSelf: 'flex-start' }}>Ability Matrix</PixelText>
+          <PersonalityRadar personality={player.personality} size={radarSize} />
         </Card>
 
-        {/* Individual trait bars */}
+        {/* Ability Breakdown */}
         <Card>
-          <PixelText size={8} upper style={{ marginBottom: 12 }}>Trait Breakdown</PixelText>
+          <PixelText size={8} upper style={{ marginBottom: 4 }}>Ability Breakdown</PixelText>
           {traits.map(([name, value]) => (
-            <TraitBar key={name} name={name} value={value} />
+            <AbilityBar key={name} name={name} value={value} />
           ))}
         </Card>
 

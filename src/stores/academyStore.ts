@@ -70,7 +70,7 @@ export const useAcademyStore = create<AcademyState>()(
         set((state) => ({
           academy: {
             ...state.academy,
-            balance: state.academy.balance + amount,
+            balance: (state.academy.balance ?? 0) + amount,
           },
         })),
       setCreatedAt: (date) =>

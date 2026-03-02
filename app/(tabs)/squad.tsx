@@ -1,5 +1,6 @@
 import { View, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useRouter } from 'expo-router';
 import { useSquadStore } from '@/stores/squadStore';
 import { PixelText } from '@/components/ui/PixelText';
@@ -64,6 +65,7 @@ export default function SquadScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      <PitchBackground />
       {/* Header */}
       <View style={{
         backgroundColor: WK.tealMid,

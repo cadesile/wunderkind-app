@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, ScrollView, FlatList, Modal, Pressable, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useLoanStore, getLoanLimit } from '@/stores/loanStore';
@@ -36,6 +37,7 @@ function FinanceRow({ label, value, accent }: { label: string; value: string; ac
 
 function BalancePane() {
   const academy = useAcademyStore((s) => s.academy);
+  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance)) ? academy.balance : 0;
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
@@ -48,8 +50,8 @@ function BalancePane() {
         ...pixelShadow,
       }}>
         <PixelText size={7} dim style={{ marginBottom: 6 }}>CURRENT BALANCE</PixelText>
-        <PixelText size={22} color={academy.balance >= 0 ? WK.yellow : WK.red}>
-          {academy.balance < 0 ? '-' : ''}£{Math.abs(academy.balance).toLocaleString()}
+        <PixelText size={22} color={balance >= 0 ? WK.yellow : WK.red}>
+          {balance < 0 ? '-' : ''}£{Math.abs(balance).toLocaleString()}
         </PixelText>
       </View>
 
@@ -323,6 +325,7 @@ export default function FinanceHubScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
+      <PitchBackground />
       <PixelTopTabBar
         tabs={[...FINANCE_TABS]}
         active={activeTab}
