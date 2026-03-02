@@ -49,6 +49,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── docs
 │   └── PROJECT_CONTEXT.md
 ├── scripts
+│   ├── dev-proxy.py
 │   └── generate_project_context.sh
 ├── src
 │   ├── api
@@ -83,7 +84,6 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── global.css
 ├── metro.config.js
 ├── nativewind-env.d.ts
-├── nativewind.d.ts
 ├── package-lock.json
 ├── package.json
 ├── README.md
@@ -127,7 +127,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ### Required Environment Variables
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=http://wunderkind-backend.lndo.site
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.156:8080
 ```
 
 ---
@@ -172,16 +172,16 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+4330bb7 Pin all packages to exact Expo SDK 54 expected versions
+289e4fb Switch to NativeWind v4 (compatible with RN 0.81 New Architecture)
+22e3bd4 Realign to Expo Go SDK 54 native binary (RN 0.81.5)
+cd9ba12 Downgrade native modules to legacy-arch versions for Expo Go
 3eec1e5 Call enableScreens() to initialise react-native-screens
 494d426 Add missing expo-router peer dependencies
 7677f1a Add expo-linking (required by expo-router)
 ef2d527 Pin tailwindcss to 3.3.2 for NativeWind v2 compatibility
 973cf3c Remove nativewind/preset from tailwind config (v4-only)
 5f6dd91 Switch to NativeWind v2 for Expo Go compatibility
-9670431 Add react-native-reanimated and fix NativeWind babel plugin
-51d28a0 Add backend API integration and auth flow
-0630921 Scaffold Expo project with full game architecture
-250a390 Initial project setup with README and CLAUDE.md
 ```
 
 ---
