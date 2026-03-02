@@ -20,7 +20,8 @@ export function AdvanceModal({ visible, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>('menu');
   const [tick, setTick] = useState<WeeklyTick | null>(null);
 
-  const syncMutation = useMutation({ mutationFn: syncWeek, retry: 3 });
+  // retry: 0 — sync is fire-and-forget; local state is already authoritative
+  const syncMutation = useMutation({ mutationFn: syncWeek, retry: 0 });
 
   function reset() {
     setPhase('menu');
@@ -37,26 +38,24 @@ export function AdvanceModal({ visible, onClose }: Props) {
     handleClose();
   }
 
-  async function handleAdvanceWeek() {
+  function handleAdvanceWeek() {
     setPhase('loading');
-    try {
-      const result = processWeeklyTick();
-      setTick(result);
 
-      const { academy } = useAcademyStore.getState();
-      await syncMutation.mutateAsync({
-        weekNumber: result.week,
-        clientTimestamp: result.processedAt,
-        earningsDelta: Math.max(0, result.financialSummary.net),
-        reputationDelta: result.reputationDelta,
-        hallOfFamePoints: academy.hallOfFamePoints,
-        transfers: [],
-      });
-    } catch {
-      // Sync failure is non-fatal — local state already updated
-    } finally {
-      setPhase('summary');
-    }
+    // processWeeklyTick() is synchronous — completes in microseconds
+    const result = processWeeklyTick();
+    setTick(result);
+    setPhase('summary');
+
+    // Fire sync in background — do NOT await; local state is already authoritative
+    const { academy } = useAcademyStore.getState();
+    syncMutation.mutate({
+      weekNumber: result.week,
+      clientTimestamp: result.processedAt,
+      earningsDelta: Math.max(0, result.financialSummary.net),
+      reputationDelta: result.reputationDelta,
+      hallOfFamePoints: academy.hallOfFamePoints,
+      transfers: [],
+    });
   }
 
   return (
