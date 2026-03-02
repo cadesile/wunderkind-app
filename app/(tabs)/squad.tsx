@@ -8,9 +8,8 @@ import { Player } from '@/types/player';
 
 function PlayerRow({ player }: { player: Player }) {
   const router = useRouter();
-  const avgTrait = Math.round(
-    Object.values(player.personality).reduce((a, b) => a + b, 0) / 8
-  );
+  const traits = Object.values(player.personality);
+  const avgTrait = Math.round(traits.reduce((a, b) => a + b, 0) / traits.length);
 
   return (
     <Pressable onPress={() => router.push(`/player/${player.id}`)}>

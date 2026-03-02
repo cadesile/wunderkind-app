@@ -6,17 +6,17 @@ interface Props {
 }
 
 const TRAIT_LABELS: Record<TraitName, string> = {
-  determination: 'Det',
-  creativity: 'Cre',
-  teamwork: 'Twk',
-  discipline: 'Dis',
-  resilience: 'Res',
-  leadership: 'Ldr',
-  coachability: 'Cch',
-  ambition: 'Amb',
+  determination:   'Det',
+  professionalism: 'Pro',
+  ambition:        'Amb',
+  loyalty:         'Loy',
+  adaptability:    'Ada',
+  pressure:        'Pre',
+  temperament:     'Tem',
+  consistency:     'Con',
 };
 
-/** Placeholder radar — renders trait bars until SVG radar chart is wired up */
+/** Renders trait bars on a 1–20 scale */
 export function PersonalityRadar({ personality }: Props) {
   return (
     <View className="gap-2">
@@ -26,7 +26,7 @@ export function PersonalityRadar({ personality }: Props) {
           <View className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
             <View
               className="h-2 bg-blue-500 rounded-full"
-              style={{ width: `${value}%` }}
+              style={{ width: `${(value / 20) * 100}%` }}
             />
           </View>
           <Text className="text-xs text-gray-400 w-6 text-right">{value}</Text>

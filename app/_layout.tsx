@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
+import { OnboardingScreen } from '@/components/OnboardingScreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,7 +17,7 @@ const queryClient = new QueryClient({
 });
 
 function AppNavigator() {
-  const { isReady } = useAuthFlow();
+  const { isReady, isOnboarding, registerAcademy } = useAuthFlow();
 
   if (!isReady) {
     return (
@@ -24,6 +25,10 @@ function AppNavigator() {
         <ActivityIndicator size="large" color="#2196F3" />
       </View>
     );
+  }
+
+  if (isOnboarding) {
+    return <OnboardingScreen onRegister={registerAcademy} />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;

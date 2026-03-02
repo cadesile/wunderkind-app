@@ -12,6 +12,7 @@ function computeTier(reputation: number): ReputationTier {
 
 interface AcademyState {
   academy: Academy;
+  setName: (name: string) => void;
   setReputation: (delta: number) => void;
   addEarnings: (amount: number) => void;
   applyServerSync: (data: { reputation: number; totalCareerEarnings: number; hallOfFamePoints: number }) => void;
@@ -33,6 +34,8 @@ export const useAcademyStore = create<AcademyState>()(
   persist(
     (set) => ({
       academy: DEFAULT_ACADEMY,
+      setName: (name) =>
+        set((state) => ({ academy: { ...state.academy, name } })),
       setReputation: (delta) =>
         set((state) => {
           const next = Math.max(0, Math.min(1000, state.academy.reputation + delta));

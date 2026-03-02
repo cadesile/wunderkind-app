@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Player, PersonalityMatrix, TraitName } from '@/types/player';
+import { Player, PersonalityMatrix, Position, TraitName } from '@/types/player';
+import { generatePlayer } from '@/engine/personality';
 import { zustandStorage } from '@/utils/storage';
+
+const STARTER_POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
 
 interface SquadState {
   players: Player[];
@@ -9,6 +12,7 @@ interface SquadState {
   removePlayer: (id: string) => void;
   updateTrait: (playerId: string, trait: TraitName, delta: number) => void;
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
+  generateStarterSquad: () => void;
 }
 
 export const useSquadStore = create<SquadState>()(
@@ -27,7 +31,7 @@ export const useSquadStore = create<SquadState>()(
                   ...p,
                   personality: {
                     ...p.personality,
-                    [trait]: Math.max(0, Math.min(100, p.personality[trait] + delta)),
+                    [trait]: Math.max(1, Math.min(20, p.personality[trait] + delta)),
                   },
                 }
               : p
@@ -39,13 +43,19 @@ export const useSquadStore = create<SquadState>()(
             const playerShifts = shifts[p.id];
             if (!playerShifts) return p;
             const updated = { ...p.personality };
-            (Object.entries(playerShifts) as [TraitName, number][]).forEach(([trait, delta]) => {
-              updated[trait] = Math.max(0, Math.min(100, updated[trait] + delta));
-            });
+            (Object.entries(playerShifts) as [TraitName, number][]).forEach(
+              ([trait, delta]) => {
+                updated[trait] = Math.max(1, Math.min(20, updated[trait] + delta));
+              },
+            );
             return { ...p, personality: updated };
           }),
         })),
+      generateStarterSquad: () => {
+        const starters = STARTER_POSITIONS.map((pos) => generatePlayer(pos));
+        set({ players: starters });
+      },
     }),
-    { name: 'squad-store', storage: zustandStorage }
-  )
+    { name: 'squad-store', storage: zustandStorage },
+  ),
 );
