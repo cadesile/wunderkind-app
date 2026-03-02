@@ -3,6 +3,7 @@ import { Academy } from '@/types/academy';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { FacilityLevels } from '@/types/facility';
+import { Sponsor } from '@/types/market';
 
 const FACILITY_TYPES = [
   'trainingPitch',
@@ -13,11 +14,25 @@ const FACILITY_TYPES = [
 ] as const;
 
 /**
+ * Net sale price after deducting agent commission and investor equity.
+ * Formula: net = grossFee × (1 − agentComm/100) × (1 − ΣinvestorEquity/100)
+ */
+export function calculateNetSalePrice(
+  grossFee: number,
+  agentCommissionRate: number,
+  investorEquityPcts: number[],
+): number {
+  const afterAgent = grossFee * (1 - agentCommissionRate / 100);
+  const totalEquity = investorEquityPcts.reduce((sum, pct) => sum + pct, 0);
+  return Math.floor(afterAgent * (1 - totalEquity / 100));
+}
+
+/**
  * Calculates the weekly financial record.
  *
- * Outgoings = Σ(PlayerWages) + Σ(CoachSalaries) + Σ(FacilityMaintenance)
+ * Income = Σ(sponsor.weeklyPayment) + reputation × 100 pence
+ * Outgoings = Σ(PlayerWages) + Σ(CoachSalaries) + Σ(FacilityMaintenance) + weeklyLoanRepayment
  * Maintenance = FacilityLevel × 500 pence per facility
- * Income = reputation × 10 + (mediaCenterLevel × 12 × 10)  [reputation points → pence]
  */
 export function calculateWeeklyFinances(
   week: number,
@@ -25,6 +40,8 @@ export function calculateWeeklyFinances(
   players: Player[],
   coaches: Coach[],
   facilityLevels: FacilityLevels,
+  sponsors: Sponsor[] = [],
+  weeklyLoanRepayment: number = 0,
 ): FinancialRecord {
   const breakdown: ExpenseItem[] = [];
 
@@ -55,12 +72,20 @@ export function calculateWeeklyFinances(
     }
   });
 
+  // Loan repayments
+  if (weeklyLoanRepayment > 0) {
+    breakdown.push({ label: 'Loan repayment', amount: weeklyLoanRepayment });
+  }
+
   const expenses = breakdown.reduce((sum, item) => sum + item.amount, 0);
 
-  // Income: reputation-based + media center passive bonus feeds reputation,
-  // modelled here as a passive income equivalent
-  const income = Math.floor(academy.reputation * 10);
+  // Sponsor income
+  const sponsorIncome = sponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
+  // Reputation-based passive income
+  const reputationIncome = Math.floor(academy.reputation * 100);
+
+  const income = sponsorIncome + reputationIncome;
   const net = income - expenses;
 
   return { week, income, expenses, net, breakdown };

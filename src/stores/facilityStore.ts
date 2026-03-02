@@ -21,6 +21,8 @@ interface FacilityState {
   levels: FacilityLevels;
   /** Returns true if upgrade succeeded, false if already at max */
   upgradeLevel: (type: FacilityType) => boolean;
+  /** Sets all 5 facilities to level 1; called once during bootstrap */
+  initAllLevels: () => void;
   /** Derived: max squad size from Youth Hostel */
   maxSquadSize: () => number;
   /** Derived: whether the Analytics Suite is active */
@@ -47,6 +49,16 @@ export const useFacilityStore = create<FacilityState>()(
         }));
         return true;
       },
+      initAllLevels: () =>
+        set({
+          levels: {
+            trainingPitch: 1,
+            medicalLab: 1,
+            youthHostel: 1,
+            analyticsSuite: 1,
+            mediaCenter: 1,
+          },
+        }),
       maxSquadSize: () => {
         const lvl = get().levels.youthHostel;
         return lvl === 0 ? 15 : 10 + lvl * 3;

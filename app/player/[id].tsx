@@ -6,7 +6,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { PixelText } from '@/components/ui/PixelText';
-import { PixelAvatar } from '@/components/ui/PixelAvatar';
+import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { PersonalityRadar } from '@/components/radar/PersonalityRadar';
@@ -103,7 +103,7 @@ export default function PlayerDetailScreen() {
           gap: 14,
           ...pixelShadow,
         }}>
-          <PixelAvatar size={64} />
+          <Avatar appearance={player.appearance} role="PLAYER" size={64} />
           <View style={{ flex: 1 }}>
             <PixelText size={10} upper style={{ marginBottom: 4 }} numberOfLines={2}>{player.name}</PixelText>
             <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {displayAge}</PixelText>

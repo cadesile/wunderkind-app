@@ -5,6 +5,8 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
+import { useLoanStore } from '@/stores/loanStore';
+import { useMarketStore } from '@/stores/marketStore';
 import { WeeklyTick } from '@/types/game';
 import { PersonalityMatrix } from '@/types/player';
 
@@ -16,21 +18,22 @@ const BASE_INJURY_PROB = 0.05; // 5% per player per week
  *
  * XP Formula:   WeeklyXP = BaseXP × (1 + PitchLevel × 0.05) × (1 + TotalCoachInfluence / 100)
  * Injury Formula: InjuryProb = BaseProb × (1 − LabLevel × 0.08)
- * Reputation:   BaseRep (5) + MediaCenterLevel × 12 per week
+ * Reputation:   0.5 + mediaCenterLevel × 1.2 per week (0–100 scale)
  *
  * Mutates Zustand stores; returns a WeeklyTick for sync queuing.
  */
 export function processWeeklyTick(): WeeklyTick {
   const { players, applyTraitShifts } = useSquadStore.getState();
-  const { academy, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
+  const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
   const { addIncident } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
   const { levels } = useFacilityStore.getState();
+  const { processWeeklyRepayments, totalWeeklyRepayment } = useLoanStore.getState();
+  const { sponsors: allSponsors } = useMarketStore.getState();
 
   const weekNumber = academy.weekNumber ?? 1;
 
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
-  // WeeklyXP = BaseXP × (1 + PitchLevel × 0.05) × (1 + TotalCoachInfluence / 100)
   const totalCoachInfluence = coaches.reduce((sum, c) => sum + c.influence, 0);
   const weeklyXP =
     BASE_XP *
@@ -38,7 +41,6 @@ export function processWeeklyTick(): WeeklyTick {
     (1 + totalCoachInfluence / 100);
 
   // ── 2. Injury Probability ─────────────────────────────────────────────────────
-  // InjuryProb = BaseProb × (1 − LabLevel × 0.08)   [floors at 0]
   const injuryProb = Math.max(0, BASE_INJURY_PROB * (1 - levels.medicalLab * 0.08));
 
   // ── 3. Personality shifts ─────────────────────────────────────────────────────
@@ -57,7 +59,6 @@ export function processWeeklyTick(): WeeklyTick {
   const incidents = players.flatMap((p) => generateIncidents(p, weekNumber));
   incidents.forEach(addIncident);
 
-  // Injury notifications → inbox
   injuredPlayerIds.forEach((id) => {
     const player = players.find((p) => p.id === id);
     if (player) {
@@ -73,20 +74,35 @@ export function processWeeklyTick(): WeeklyTick {
     }
   });
 
-  // ── 5. Finances ───────────────────────────────────────────────────────────────
-  // Weekly Outgoings = Σ(PlayerWages) + Σ(CoachSalaries) + Σ(FacilityMaintenance)
-  const financialSummary = calculateWeeklyFinances(
-    weekNumber, academy, players, coaches, levels,
-  );
-  addEarnings(financialSummary.net);
+  // ── 5. Loan repayments ────────────────────────────────────────────────────────
+  const weeklyLoanRepayment = totalWeeklyRepayment();
+  processWeeklyRepayments();
 
-  // ── 6. Reputation ─────────────────────────────────────────────────────────────
-  // Base 5 pts + Media Center level × 12 pts per week
-  const BASE_REP_GAIN = 5;
-  const reputationDelta = BASE_REP_GAIN + levels.mediaCenter * 12;
+  // ── 6. Finances ───────────────────────────────────────────────────────────────
+  // Resolve this academy's active sponsors from market data
+  const activeSponsors = allSponsors.filter((s) =>
+    academy.sponsorIds.includes(s.id)
+  );
+  const sponsorIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
+
+  const financialSummary = calculateWeeklyFinances(
+    weekNumber, academy, players, coaches, levels, activeSponsors, weeklyLoanRepayment,
+  );
+
+  // Balance tracks spendable cash
+  addBalance(financialSummary.net);
+
+  // HoF tracker: positive sponsor income only
+  if (sponsorIncome > 0) {
+    addEarnings(sponsorIncome);
+  }
+
+  // ── 7. Reputation ─────────────────────────────────────────────────────────────
+  // Scaled for 0–100: base 0.5 + Media Center level × 1.2 per week
+  const reputationDelta = 0.5 + levels.mediaCenter * 1.2;
   setReputation(reputationDelta);
 
-  // ── 7. Advance week ───────────────────────────────────────────────────────────
+  // ── 8. Advance week ───────────────────────────────────────────────────────────
   incrementWeek();
 
   return {

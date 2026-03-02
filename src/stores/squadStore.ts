@@ -11,6 +11,8 @@ interface SquadState {
   players: Player[];
   addPlayer: (player: Player) => void;
   removePlayer: (id: string) => void;
+  /** Bulk-replace the entire roster (used during bootstrap) */
+  setPlayers: (players: Player[]) => void;
   updateTrait: (playerId: string, trait: TraitName, delta: number) => void;
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   generateStarterSquad: () => void;
@@ -24,6 +26,7 @@ export const useSquadStore = create<SquadState>()(
         set((state) => ({ players: [...state.players, player] })),
       removePlayer: (id) =>
         set((state) => ({ players: state.players.filter((p) => p.id !== id) })),
+      setPlayers: (players) => set({ players }),
       updateTrait: (playerId, trait, delta) =>
         set((state) => ({
           players: state.players.map((p) =>

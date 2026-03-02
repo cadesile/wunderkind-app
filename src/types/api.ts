@@ -1,3 +1,5 @@
+export type { MarketDataResponse } from './market';
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface RegisterRequest {
@@ -26,7 +28,7 @@ export interface LoginResponse {
 export interface SyncRequest {
   weekNumber: number;
   clientTimestamp: string; // ISO 8601
-  earningsDelta: number;   // pence/cents, >= 0
+  earningsDelta: number;   // sponsor income − loan interest this week (pence)
   reputationDelta: number; // can be negative
   hallOfFamePoints: number;
   transfers: never[];      // pass [] until transfer syncing is implemented

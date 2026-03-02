@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useSquadStore } from '@/stores/squadStore';
 import { PixelText } from '@/components/ui/PixelText';
-import { PixelAvatar } from '@/components/ui/PixelAvatar';
+import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Player } from '@/types/player';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
@@ -26,7 +26,7 @@ function PlayerCard({ player }: { player: Player }) {
         gap: 12,
         ...pixelShadow,
       }}>
-        <PixelAvatar size={44} />
+        <Avatar appearance={player.appearance} role="PLAYER" size={44} />
 
         <View style={{ flex: 1 }}>
           <PixelText size={9} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>

@@ -12,6 +12,35 @@ export type PersonalityMatrix = Record<TraitName, number>; // 1–20 scale
 
 export type Position = 'GK' | 'DEF' | 'MID' | 'FWD';
 
+// ─── Appearance system ────────────────────────────────────────────────────────
+
+export type HairStyle = 'buzz' | 'shaggy' | 'afro' | 'crop' | 'bald';
+
+/** Role-specific overlay accessory. null = no accessory. */
+export type AppearanceAccessory = 'glasses' | 'whistle' | 'headset' | null;
+
+/** 0=neutral, 1=determined, 2=stern — mapped from personality traits when available */
+export type AppearanceExpression = 0 | 1 | 2;
+
+export type AppearanceRole = 'PLAYER' | 'COACH' | 'SCOUT' | 'AGENT';
+
+export interface Appearance {
+  /** Hex skin tone — one of 5 predefined shades (light → dark) */
+  skinTone: string;
+  /** Hair silhouette style */
+  hairStyle: HairStyle;
+  /** Hex hair color — from predefined palette; ignored when hairStyle==='bald' */
+  hairColor: string;
+  /** Eye/brow/mouth expression variant */
+  expression: AppearanceExpression;
+  /** Role-specific overlay accessory, or null */
+  accessory: AppearanceAccessory;
+  /** Kit trim / accent color — vibrant for PLAYER, muted for staff */
+  kitTrim: string;
+}
+
+// ─── Player ───────────────────────────────────────────────────────────────────
+
 export interface Player {
   id: string;
   name: string;
@@ -25,7 +54,11 @@ export interface Player {
   potential: number;     // 1–5 stars
   wage: number;          // weekly, in pence
   personality: PersonalityMatrix;
+  /** Deterministic visual appearance generated from id. Optional for backward compat. */
+  appearance?: Appearance;
   guardianId: string | null;
+  /** ID of the agent representing this player, or null if unrepresented */
+  agentId: string | null;
   joinedWeek: number;
   isActive: boolean;
 }

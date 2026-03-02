@@ -1,6 +1,8 @@
 import { PersonalityMatrix, Player, Position, TraitName } from '@/types/player';
 import { BehavioralIncident } from '@/types/game';
 import { generateDOB } from '@/utils/gameDate';
+import { generateAppearance } from '@/engine/appearance';
+import { uuidv7 } from '@/utils/uuidv7';
 
 export const TRAIT_NAMES: TraitName[] = [
   'determination',
@@ -37,13 +39,6 @@ const NATIONALITIES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function uuid(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
-
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -74,13 +69,14 @@ export function generatePersonality(): PersonalityMatrix {
  * Wage = overallRating × 100 pence/week
  */
 export function generatePlayer(position: Position, currentGameDate: Date): Player {
+  const id = uuidv7(); // generate first — used as appearance seed
   const personality = generatePersonality();
   const avgTrait = Object.values(personality).reduce((a, b) => a + b, 0) / TRAIT_NAMES.length;
   const ageYears = 15 + Math.floor(Math.random() * 3); // 15–17
   const overallRating = Math.round((avgTrait / 20) * 100);
 
   return {
-    id: uuid(),
+    id,
     name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
     dateOfBirth: generateDOB(ageYears, currentGameDate),
     age: ageYears,
@@ -90,7 +86,9 @@ export function generatePlayer(position: Position, currentGameDate: Date): Playe
     potential: 1 + Math.floor(Math.random() * 5), // 1–5 stars
     wage: overallRating * 100,                      // pence/week
     personality,
+    appearance: generateAppearance(id, 'PLAYER', ageYears, personality),
     guardianId: null,
+    agentId: null,
     joinedWeek: 1,
     isActive: true,
   };

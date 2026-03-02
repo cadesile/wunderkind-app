@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCoachStore } from '@/stores/coachStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { generateCoachProspects } from '@/engine/recruitment';
+import { Avatar } from '@/components/ui/Avatar';
 import { PixelText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -23,8 +24,9 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
       marginBottom: 10,
       ...pixelShadow,
     }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        <Avatar appearance={coach.appearance} role="COACH" size={44} />
+        <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
           <PixelText size={7} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>
@@ -64,8 +66,9 @@ function ProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
       marginBottom: 10,
       ...pixelShadow,
     }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+        <Avatar appearance={coach.appearance} role="COACH" size={44} />
+        <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
           <PixelText size={7} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>

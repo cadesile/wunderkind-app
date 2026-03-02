@@ -115,7 +115,7 @@ export function OnboardingScreen({ onRegister }: Props) {
           )}
 
           <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 16 }}>
-            YOU'LL RECEIVE 5 YOUTH PLAYERS
+            YOU'LL RECEIVE 20 YOUTH PLAYERS + FULL ACADEMY SETUP
           </PixelText>
 
         </View>

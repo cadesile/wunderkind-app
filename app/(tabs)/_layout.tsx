@@ -1,42 +1,18 @@
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Home, Users, Mail, DollarSign, UserCog, Building2, ChevronsRight } from 'lucide-react-native';
-import { useInboxStore } from '@/stores/inboxStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { Home, Building2, DollarSign, ChevronsRight } from 'lucide-react-native';
 import { AdvanceModal } from '@/components/AdvanceModal';
+import { GlobalHeader } from '@/components/GlobalHeader';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
-import { getGameDateDisplay } from '@/utils/gameDate';
-
-function GameDateBar() {
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const dateStr = getGameDateDisplay(weekNumber);
-
-  return (
-    <View style={{
-      backgroundColor: WK.tealDark,
-      borderBottomWidth: 2,
-      borderBottomColor: WK.border,
-      paddingHorizontal: 14,
-      paddingVertical: 7,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    }}>
-      <PixelText size={7} color={WK.dim}>WK {weekNumber}</PixelText>
-      <PixelText size={7} color={WK.tealLight}>{dateStr}</PixelText>
-    </View>
-  );
-}
 
 export default function TabLayout() {
-  const unreadCount = useInboxStore((s) => s.unreadCount());
   const [advanceVisible, setAdvanceVisible] = useState(false);
 
   return (
     <View style={{ flex: 1 }}>
-      <GameDateBar />
+      <GlobalHeader />
 
       <Tabs
         screenOptions={{
@@ -56,25 +32,12 @@ export default function TabLayout() {
           },
         }}
       >
+        {/* Primary tabs */}
         <Tabs.Screen
           name="index"
           options={{
             title: 'ACADEMY',
             tabBarIcon: ({ color, size }) => <Home size={size - 6} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="squad"
-          options={{
-            title: 'SQUAD',
-            tabBarIcon: ({ color, size }) => <Users size={size - 6} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="coaches"
-          options={{
-            title: 'COACHES',
-            tabBarIcon: ({ color, size }) => <UserCog size={size - 6} color={color} />,
           }}
         />
         <Tabs.Screen
@@ -85,21 +48,13 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="inbox"
-          options={{
-            title: 'INBOX',
-            tabBarIcon: ({ color, size }) => <Mail size={size - 6} color={color} />,
-            tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          }}
-        />
-        <Tabs.Screen
           name="finances"
           options={{
             title: 'FINANCE',
             tabBarIcon: ({ color, size }) => <DollarSign size={size - 6} color={color} />,
           }}
         />
-        {/* Advance — intercepted by custom tabBarButton; advance.tsx is a placeholder */}
+        {/* Advance — intercepted by custom tabBarButton */}
         <Tabs.Screen
           name="advance"
           options={{
@@ -121,6 +76,20 @@ export default function TabLayout() {
               </Pressable>
             ),
           }}
+        />
+
+        {/* Hidden routes — accessible via Academy Hub / GlobalHeader */}
+        <Tabs.Screen
+          name="squad"
+          options={{ tabBarButton: () => null }}
+        />
+        <Tabs.Screen
+          name="coaches"
+          options={{ tabBarButton: () => null }}
+        />
+        <Tabs.Screen
+          name="inbox"
+          options={{ tabBarButton: () => null }}
         />
       </Tabs>
 
