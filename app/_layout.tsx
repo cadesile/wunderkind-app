@@ -1,4 +1,7 @@
+import { enableScreens } from 'react-native-screens';
 import { Stack } from 'expo-router';
+
+enableScreens();
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
