@@ -30,7 +30,7 @@ export default function PlayerDetailScreen() {
         <Text className="text-lg font-bold text-gray-900">{player.name}</Text>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-4" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 px-4 py-4" contentContainerClassName="gap-4">
         <Card>
           <View className="flex-row justify-between items-center mb-2">
             <View>

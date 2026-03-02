@@ -1,4 +1,5 @@
 import { enableScreens } from 'react-native-screens';
+import '../global.css';
 import { Stack } from 'expo-router';
 
 enableScreens();
