@@ -29,6 +29,9 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── app
 │   ├── (tabs)
 │   │   ├── _layout.tsx
+│   │   ├── advance.tsx
+│   │   ├── coaches.tsx
+│   │   ├── facilities.tsx
 │   │   ├── finances.tsx
 │   │   ├── inbox.tsx
 │   │   ├── index.tsx
@@ -55,31 +58,41 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── api
 │   │   ├── endpoints
 │   │   ├── mutations
-│   │   └── client.ts
+│   │   ├── client.ts
+│   │   └── syncQueue.ts
 │   ├── components
 │   │   ├── radar
 │   │   ├── ui
+│   │   ├── AdvanceModal.tsx
 │   │   ├── OnboardingScreen.tsx
 │   │   └── SyncStatusIndicator.tsx
 │   ├── constants
 │   │   └── theme.ts
 │   ├── engine
+│   │   ├── appearance.ts
 │   │   ├── finance.ts
 │   │   ├── GameLoop.ts
-│   │   └── personality.ts
+│   │   ├── personality.ts
+│   │   └── recruitment.ts
 │   ├── hooks
-│   │   └── useAuthFlow.ts
+│   │   ├── useAuthFlow.ts
+│   │   └── useSyncStatus.ts
 │   ├── stores
 │   │   ├── academyStore.ts
 │   │   ├── authStore.ts
+│   │   ├── coachStore.ts
+│   │   ├── facilityStore.ts
 │   │   ├── inboxStore.ts
 │   │   └── squadStore.ts
 │   ├── types
 │   │   ├── academy.ts
 │   │   ├── api.ts
+│   │   ├── coach.ts
+│   │   ├── facility.ts
 │   │   ├── game.ts
 │   │   └── player.ts
 │   └── utils
+│       ├── gameDate.ts
 │       └── storage.ts
 ├── app.json
 ├── babel.config.js
@@ -93,7 +106,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── tailwind.config.js
 └── tsconfig.json
 
-23 directories, 44 files
+23 directories, 57 files
 ```
 
 ---
@@ -130,7 +143,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ### Required Environment Variables
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=http://192.168.1.156:8080
+EXPO_PUBLIC_API_BASE_URL=http://MacBook-Pro.local:8080
 ```
 
 ---
@@ -175,6 +188,9 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+c42c203 Implement optimistic background sync queue
+34ed782 Fix Advance Week lag — fire sync in background
+ba3b63c Implement Academy Growth & Temporal Engine
 7706af9 Fix expo-font version to match Expo SDK 54 (14.0.11)
 8af23e0 Apply pixel-art UI style guide across full app
 56aa2be Implement onboarding flow with personality engine and starter squad
@@ -182,9 +198,6 @@ ba6bdef Add LAN dev proxy to connect Android device to Lando backend
 4330bb7 Pin all packages to exact Expo SDK 54 expected versions
 289e4fb Switch to NativeWind v4 (compatible with RN 0.81 New Architecture)
 22e3bd4 Realign to Expo Go SDK 54 native binary (RN 0.81.5)
-cd9ba12 Downgrade native modules to legacy-arch versions for Expo Go
-3eec1e5 Call enableScreens() to initialise react-native-screens
-494d426 Add missing expo-router peer dependencies
 ```
 
 ---

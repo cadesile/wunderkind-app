@@ -1,4 +1,4 @@
-import { PersonalityMatrix } from './player';
+import { PersonalityMatrix, Appearance } from './player';
 
 export type CoachRole =
   | 'Head Coach'
@@ -14,6 +14,8 @@ export interface Coach {
   salary: number;    // weekly, in pence
   influence: number; // 1–20 scale
   personality: PersonalityMatrix;
+  /** Deterministic visual appearance generated from id. Optional for backward compat. */
+  appearance?: Appearance;
   nationality: string;
   joinedWeek: number;
 }

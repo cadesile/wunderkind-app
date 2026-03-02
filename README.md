@@ -6,12 +6,13 @@ The React Native mobile application for **The Wunderkind Factory**, a football a
 
 | Layer | Technology |
 |---|---|
-| Framework | Expo (managed workflow, Expo Go compatible) |
-| Navigation | Expo Router (file-based) |
+| Framework | Expo SDK 54 (managed workflow, Expo Go compatible) |
+| Navigation | Expo Router v4 (file-based) |
 | State | Zustand + AsyncStorage (persist middleware) |
 | API / Sync | TanStack Query v5 (offline mutations) |
-| Styling | NativeWind (Tailwind CSS for React Native) |
+| Styling | NativeWind v4 (Tailwind CSS for React Native) |
 | Icons | Lucide React Native / Custom SVG Pixel Art |
+| Font | Press Start 2P (pixel art aesthetic) |
 
 ## Architecture: Offline-First "Weekly Tick"
 
@@ -26,14 +27,13 @@ The app is **client-authoritative** to support seamless offline play:
 ### Prerequisites
 
 - Node.js 20.19.6 (`.nvmrc` included — run `nvm use`)
-- Expo CLI: `npm install -g expo-cli`
 - Expo Go app on your device (iOS / Android)
 
 ### Install
 
 ```bash
 nvm use
-npm install
+npm install --legacy-peer-deps
 ```
 
 ### Run
@@ -49,32 +49,86 @@ npx expo start --android
 
 Scan the QR code in Expo Go to load the app on your device.
 
+### Backend / API (Local Dev)
+
+The backend runs via Lando and is only accessible on `127.0.0.1`. Use the dev proxy to expose it on your LAN so a physical device can reach it:
+
+```bash
+# Terminal 1 — start the dev proxy (bridges LAN → Lando)
+npm run proxy
+
+# Terminal 2 — start Metro
+npx expo start
+```
+
+Set the API base URL in `.env`:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://<your-machine-ip>:8080
+```
+
 ## Project Structure
 
 ```
-app/                    # Expo Router screens
-├── _layout.tsx         # Root layout (QueryClient provider)
-├── (tabs)/             # Tab navigator
-│   ├── index.tsx       # Dashboard / Academy overview
-│   ├── squad.tsx       # Player roster
-│   ├── inbox.tsx       # Guardian Inbox
-│   └── finances.tsx    # Financial overview
-└── player/[id].tsx     # Player detail
+app/
+├── _layout.tsx             # Root layout (QueryClient, font loading, auth gate)
+├── (tabs)/
+│   ├── _layout.tsx         # Tab navigator (4 primary + hidden routes)
+│   ├── index.tsx           # Academy Hub (SQUAD / COACHES / SCOUTS top tabs)
+│   ├── advance.tsx         # Advance Week screen
+│   ├── coaches.tsx         # Coaching staff
+│   ├── facilities.tsx      # Facility upgrades
+│   ├── finances.tsx        # Finance Hub (BALANCE / INVESTORS / SPONSORS / LOANS)
+│   ├── inbox.tsx           # Guardian Inbox
+│   └── squad.tsx           # Player roster
+└── player/[id].tsx         # Player detail (bio, radar, trait bars)
 
 src/
-├── components/         # UI components (Button, Card, Badge, PersonalityRadar)
-├── engine/             # Game logic (GameLoop, personality, finance)
-├── stores/             # Zustand stores (academy, squad, inbox)
-├── api/                # Symfony API client + TanStack Query mutations
-├── types/              # TypeScript types (Player, Academy, WeeklyTick…)
-└── utils/              # AsyncStorage adapter for Zustand persist
+├── api/
+│   ├── endpoints/          # auth, marketData
+│   ├── mutations/          # syncMutations
+│   ├── client.ts           # Fetch wrapper (401 → re-login → retry)
+│   └── syncQueue.ts        # Offline mutation queue
+├── components/
+│   ├── radar/              # PersonalityRadar (SVG octagon)
+│   ├── ui/                 # PixelText, PixelTopTabBar, Avatar, etc.
+│   ├── AdvanceModal.tsx
+│   ├── GlobalHeader.tsx    # Persistent top bar (name | week/date | sync + inbox)
+│   ├── OnboardingScreen.tsx
+│   └── SyncStatusIndicator.tsx
+├── constants/
+│   └── theme.ts            # WK color tokens, traitColor(), pixelShadow
+├── engine/
+│   ├── GameLoop.ts         # Weekly Tick processor
+│   ├── finance.ts          # calculateWeeklyFinances(), calculateNetSalePrice()
+│   ├── personality.ts      # generatePlayer() — 8-trait Personality Matrix
+│   ├── recruitment.ts      # generateCoachProspect(), generateScout()
+│   └── appearance.ts       # Player appearance generation
+├── hooks/
+│   ├── useAuthFlow.ts      # Bootstrap: players + coaches + scouts + market data
+│   └── useSyncStatus.ts
+├── stores/
+│   ├── academyStore.ts     # Reputation, balance, tier, sponsorIds, investorId
+│   ├── authStore.ts        # Token, email, userId
+│   ├── coachStore.ts       # Coaches (add/remove)
+│   ├── facilityStore.ts    # Facility levels (0–10)
+│   ├── inboxStore.ts       # Guardian messages + behavioral incidents
+│   ├── loanStore.ts        # Loans, repayments, limits
+│   ├── marketStore.ts      # Readonly API snapshot (agents/scouts/investors/sponsors)
+│   ├── scoutStore.ts       # Scouts (add/remove)
+│   └── squadStore.ts       # Players, setPlayers(), generateStarterSquad()
+├── types/                  # TypeScript types (Player, Coach, Academy, Facility…)
+└── utils/
+    ├── gameDate.ts
+    ├── storage.ts          # Zustand StateStorage adapter for AsyncStorage
+    └── uuidv7.ts           # Timestamp-ordered UUID generator
 
 assets/
 ├── fonts/
 ├── images/
-└── svg/                # Custom pixel art SVG icons
+└── svg/                    # Custom pixel art SVG icons
 ```
 
 ## Related Repositories
 
-- **Wunderkind Backend:** Symfony API (separate repo)
+- **Wunderkind Backend:** Symfony 6.4 API (separate repo) — JWT auth, leaderboard sync, academy management endpoints
