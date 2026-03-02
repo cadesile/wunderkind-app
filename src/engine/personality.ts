@@ -1,5 +1,6 @@
 import { PersonalityMatrix, Player, Position, TraitName } from '@/types/player';
 import { BehavioralIncident } from '@/types/game';
+import { generateDOB } from '@/utils/gameDate';
 
 export const TRAIT_NAMES: TraitName[] = [
   'determination',
@@ -53,13 +54,9 @@ function randomTrait(): number {
 
 // ─── Player generation ────────────────────────────────────────────────────────
 
-/**
- * Generates a randomised youth player for the given position.
- * All 8 personality traits are on a 1–20 scale.
- * Overall rating is derived from the trait average, scaled to 0–100.
- */
-export function generatePlayer(position: Position): Player {
-  const personality: PersonalityMatrix = {
+/** Generates all 8 personality traits with random 1–20 values */
+export function generatePersonality(): PersonalityMatrix {
+  return {
     determination:   randomTrait(),
     professionalism: randomTrait(),
     ambition:        randomTrait(),
@@ -69,18 +66,29 @@ export function generatePlayer(position: Position): Player {
     temperament:     randomTrait(),
     consistency:     randomTrait(),
   };
+}
 
-  const avgTrait =
-    Object.values(personality).reduce((a, b) => a + b, 0) / TRAIT_NAMES.length;
+/**
+ * Generates a randomised youth player for the given position and game date.
+ * DOB = currentGameDate − (ageYears × 365.25 days)
+ * Wage = overallRating × 100 pence/week
+ */
+export function generatePlayer(position: Position, currentGameDate: Date): Player {
+  const personality = generatePersonality();
+  const avgTrait = Object.values(personality).reduce((a, b) => a + b, 0) / TRAIT_NAMES.length;
+  const ageYears = 15 + Math.floor(Math.random() * 3); // 15–17
+  const overallRating = Math.round((avgTrait / 20) * 100);
 
   return {
     id: uuid(),
     name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
-    age: 15 + Math.floor(Math.random() * 3), // 15–17
+    dateOfBirth: generateDOB(ageYears, currentGameDate),
+    age: ageYears,
     position,
     nationality: pick(NATIONALITIES),
-    overallRating: Math.round((avgTrait / 20) * 100),
+    overallRating,
     potential: 1 + Math.floor(Math.random() * 5), // 1–5 stars
+    wage: overallRating * 100,                      // pence/week
     personality,
     guardianId: null,
     joinedWeek: 1,

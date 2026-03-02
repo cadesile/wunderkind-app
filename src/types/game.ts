@@ -6,6 +6,9 @@ export interface WeeklyTick {
   traitShifts: Record<string, Partial<PersonalityMatrix>>;
   incidents: BehavioralIncident[];
   financialSummary: FinancialRecord;
+  weeklyXP: number;
+  reputationDelta: number;
+  injuredPlayerIds: string[];
 }
 
 export interface FinancialRecord {

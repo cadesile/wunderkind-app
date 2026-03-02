@@ -4,7 +4,8 @@ export interface Academy {
   id: string;
   name: string;
   foundedWeek: number;
-  reputation: number; // 0–1000
+  weekNumber: number;    // current game week (1-indexed); drives the game calendar
+  reputation: number;    // 0–1000
   reputationTier: ReputationTier;
   totalCareerEarnings: number;
   hallOfFamePoints: number;

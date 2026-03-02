@@ -3,6 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
+import { useAcademyStore } from '@/stores/academyStore';
+import { useFacilityStore } from '@/stores/facilityStore';
 import { PixelText } from '@/components/ui/PixelText';
 import { PixelAvatar } from '@/components/ui/PixelAvatar';
 import { Badge } from '@/components/ui/Badge';
@@ -10,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { PersonalityRadar } from '@/components/radar/PersonalityRadar';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { TraitName } from '@/types/player';
+import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 
 const TRAIT_LABELS: Record<TraitName, string> = {
   determination:   'DETERMINATION',
@@ -48,6 +51,14 @@ export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const player = useSquadStore((s) => s.players.find((p) => p.id === id));
+  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const analyticsUnlocked = useFacilityStore((s) => s.analyticsUnlocked());
+
+  // Live age: floor((gameDate − DOB) / 365.25), fallback to static age
+  const gameDate = getGameDate(weekNumber);
+  const displayAge = player?.dateOfBirth
+    ? computePlayerAge(player.dateOfBirth, gameDate)
+    : (player?.age ?? '?');
 
   if (!player) {
     return (
@@ -95,7 +106,7 @@ export default function PlayerDetailScreen() {
           <PixelAvatar size={64} />
           <View style={{ flex: 1 }}>
             <PixelText size={10} upper style={{ marginBottom: 4 }} numberOfLines={2}>{player.name}</PixelText>
-            <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {player.age}</PixelText>
+            <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {displayAge}</PixelText>
             <PixelText size={7} dim style={{ marginTop: 2 }}>{player.nationality}</PixelText>
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
               <View>
@@ -104,7 +115,10 @@ export default function PlayerDetailScreen() {
               </View>
               <View>
                 <PixelText size={6} dim>POT</PixelText>
-                <PixelText size={10} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
+                {analyticsUnlocked
+                  ? <PixelText size={10} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
+                  : <PixelText size={8} color={WK.dim}>?????</PixelText>
+                }
               </View>
             </View>
           </View>

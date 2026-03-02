@@ -59,7 +59,10 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 │   ├── components
 │   │   ├── radar
 │   │   ├── ui
+│   │   ├── OnboardingScreen.tsx
 │   │   └── SyncStatusIndicator.tsx
+│   ├── constants
+│   │   └── theme.ts
 │   ├── engine
 │   │   ├── finance.ts
 │   │   ├── GameLoop.ts
@@ -90,7 +93,7 @@ Wunderkind Factory backend API built with Symfony for managing youth football ac
 ├── tailwind.config.js
 └── tsconfig.json
 
-22 directories, 42 files
+23 directories, 44 files
 ```
 
 ---
@@ -172,16 +175,16 @@ lando php bin/console debug:firewall
 ## Recent Development Activity
 
 ```
+7706af9 Fix expo-font version to match Expo SDK 54 (14.0.11)
+8af23e0 Apply pixel-art UI style guide across full app
+56aa2be Implement onboarding flow with personality engine and starter squad
+ba6bdef Add LAN dev proxy to connect Android device to Lando backend
 4330bb7 Pin all packages to exact Expo SDK 54 expected versions
 289e4fb Switch to NativeWind v4 (compatible with RN 0.81 New Architecture)
 22e3bd4 Realign to Expo Go SDK 54 native binary (RN 0.81.5)
 cd9ba12 Downgrade native modules to legacy-arch versions for Expo Go
 3eec1e5 Call enableScreens() to initialise react-native-screens
 494d426 Add missing expo-router peer dependencies
-7677f1a Add expo-linking (required by expo-router)
-ef2d527 Pin tailwindcss to 3.3.2 for NativeWind v2 compatibility
-973cf3c Remove nativewind/preset from tailwind config (v4-only)
-5f6dd91 Switch to NativeWind v2 for Expo Go compatibility
 ```
 
 ---

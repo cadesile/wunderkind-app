@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Player, PersonalityMatrix, Position, TraitName } from '@/types/player';
 import { generatePlayer } from '@/engine/personality';
 import { zustandStorage } from '@/utils/storage';
+import { getGameDate } from '@/utils/gameDate';
 
 const STARTER_POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
 
@@ -52,7 +53,11 @@ export const useSquadStore = create<SquadState>()(
           }),
         })),
       generateStarterSquad: () => {
-        const starters = STARTER_POSITIONS.map((pos) => generatePlayer(pos));
+        // Lazy import to avoid circular dependency
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const weekNumber: number = require('@/stores/academyStore').useAcademyStore.getState().academy.weekNumber ?? 1;
+        const gameDate = getGameDate(weekNumber);
+        const starters = STARTER_POSITIONS.map((pos) => generatePlayer(pos, gameDate));
         set({ players: starters });
       },
     }),

@@ -15,6 +15,7 @@ interface AcademyState {
   setName: (name: string) => void;
   setReputation: (delta: number) => void;
   addEarnings: (amount: number) => void;
+  incrementWeek: () => void;
   applyServerSync: (data: { reputation: number; totalCareerEarnings: number; hallOfFamePoints: number }) => void;
 }
 
@@ -22,6 +23,7 @@ const DEFAULT_ACADEMY: Academy = {
   id: 'academy-1',
   name: 'Wunderkind Factory',
   foundedWeek: 1,
+  weekNumber: 1,
   reputation: 0,
   reputationTier: 'Local',
   totalCareerEarnings: 0,
@@ -52,6 +54,13 @@ export const useAcademyStore = create<AcademyState>()(
           academy: {
             ...state.academy,
             totalCareerEarnings: state.academy.totalCareerEarnings + amount,
+          },
+        })),
+      incrementWeek: () =>
+        set((state) => ({
+          academy: {
+            ...state.academy,
+            weekNumber: (state.academy.weekNumber ?? 1) + 1,
           },
         })),
       applyServerSync: (data) =>
