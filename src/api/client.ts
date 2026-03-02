@@ -4,6 +4,8 @@ import { ApiError, LoginResponse } from '@/types/api';
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://wunderkind-backend.lndo.site';
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 // ─── Token refresh ────────────────────────────────────────────────────────────
 
 async function refreshAuthToken(): Promise<void> {
@@ -31,14 +33,24 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const token = useAuthStore.getState().token;
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  // Enforce a strict 10-second timeout so background syncs never hang indefinitely
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (response.status === 401 && !_isRetry) {
     await refreshAuthToken();

@@ -4,17 +4,17 @@ import { useRouter } from 'expo-router';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { PixelText } from '@/components/ui/PixelText';
 import { PixelAvatar } from '@/components/ui/PixelAvatar';
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator';
-import { processWeeklyTick } from '@/engine/GameLoop';
+import { useSyncStatus } from '@/hooks/useSyncStatus';
 import { WK, pixelShadow } from '@/constants/theme';
 
 export default function DashboardScreen() {
   const academy = useAcademyStore((s) => s.academy);
   const players = useSquadStore((s) => s.players);
   const router = useRouter();
+  const syncStatus = useSyncStatus();
 
   const focusPlayer = players[0] ?? null;
   const repPct = (academy.reputation / 1000) * 100;
@@ -33,7 +33,7 @@ export default function DashboardScreen() {
         paddingVertical: 10,
       }}>
         <PixelText size={10} upper>{academy.name}</PixelText>
-        <SyncStatusIndicator status="synced" />
+        <SyncStatusIndicator status={syncStatus} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 0 }}>
@@ -113,15 +113,6 @@ export default function DashboardScreen() {
           </Card>
         </View>
 
-        {/* Advance week */}
-        <View style={{ marginHorizontal: 10, marginBottom: 20 }}>
-          <Button
-            label="▶ ADVANCE WEEK"
-            variant="yellow"
-            fullWidth
-            onPress={() => processWeeklyTick()}
-          />
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

@@ -2,16 +2,17 @@ import { View } from 'react-native';
 import { PixelText } from './ui/PixelText';
 import { WK } from '@/constants/theme';
 
-type SyncStatus = 'synced' | 'syncing' | 'offline';
+type SyncStatus = 'synced' | 'syncing' | 'pending' | 'offline';
 
 interface Props {
   status: SyncStatus;
 }
 
 const CONFIG: Record<SyncStatus, { label: string; dot: string }> = {
-  synced:  { label: 'LIVE',    dot: WK.green },
-  syncing: { label: 'SYNC…',  dot: WK.yellow },
-  offline: { label: 'OFFLN',  dot: WK.dim },
+  synced:  { label: 'LIVE',  dot: WK.green },
+  syncing: { label: 'SYNC…', dot: WK.yellow },
+  pending: { label: 'PNDG',  dot: WK.orange },
+  offline: { label: 'OFFLN', dot: WK.dim },
 };
 
 export function SyncStatusIndicator({ status }: Props) {

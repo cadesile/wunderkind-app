@@ -3,18 +3,21 @@ import '../global.css';
 import { Stack } from 'expo-router';
 
 enableScreens();
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
+import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 2, staleTime: 1000 * 60 * 5 },
-    mutations: { retry: 3 },
+    // Sync is managed by syncQueue; other mutations (sign coach, etc.) get one retry
+    mutations: { retry: 1 },
   },
 });
 
@@ -29,6 +32,11 @@ function LoadingScreen() {
 function AppNavigator() {
   const [fontsLoaded, fontError] = useFonts({ PressStart2P_400Regular });
   const { isReady, isOnboarding, registerAcademy } = useAuthFlow();
+
+  // Restore any persisted sync queue items from previous sessions
+  useEffect(() => {
+    void syncQueue.init();
+  }, []);
 
   // Wait for both font and auth to be ready
   if ((!fontsLoaded && !fontError) || !isReady) {

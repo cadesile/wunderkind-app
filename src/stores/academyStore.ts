@@ -16,6 +16,8 @@ interface AcademyState {
   setReputation: (delta: number) => void;
   addEarnings: (amount: number) => void;
   incrementWeek: () => void;
+  /** 409 conflict resolution: hard-reset weekNumber to the server's authoritative value */
+  rollbackWeek: (weekNumber: number) => void;
   applyServerSync: (data: { reputation: number; totalCareerEarnings: number; hallOfFamePoints: number }) => void;
 }
 
@@ -62,6 +64,10 @@ export const useAcademyStore = create<AcademyState>()(
             ...state.academy,
             weekNumber: (state.academy.weekNumber ?? 1) + 1,
           },
+        })),
+      rollbackWeek: (weekNumber) =>
+        set((state) => ({
+          academy: { ...state.academy, weekNumber },
         })),
       applyServerSync: (data) =>
         set((state) => ({
