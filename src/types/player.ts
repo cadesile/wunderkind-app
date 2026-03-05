@@ -12,6 +12,13 @@ export type PersonalityMatrix = Record<TraitName, number>; // 1–20 scale
 
 export type Position = 'GK' | 'DEF' | 'MID' | 'FWD';
 
+export type PlayerStatus =
+  | 'active'
+  | 'loaned_out'
+  | 'transferred'
+  | 'transferred_via_agent'
+  | 'retired';
+
 // ─── Appearance system ────────────────────────────────────────────────────────
 
 export type HairStyle = 'buzz' | 'shaggy' | 'afro' | 'crop' | 'bald';
@@ -61,6 +68,8 @@ export interface Player {
   agentId: string | null;
   joinedWeek: number;
   isActive: boolean;
+  /** Lifecycle status — set when a player is transferred, loaned, or retired */
+  status?: PlayerStatus;
   /** Game week when enrollment expires (joinedWeek + 52 by default) */
   enrollmentEndWeek?: number;
   /** Player happiness 0–100 */

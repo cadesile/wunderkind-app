@@ -4,14 +4,96 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useInboxStore, InboxMessage, InboxMessageType } from '@/stores/inboxStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useSquadStore } from '@/stores/squadStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { reactionHandler } from '@/engine/ReactionHandler';
-import { NarrativeMessage, EventChoice } from '@/types/narrative';
+import { handleAcceptAgentOffer, handleRejectAgentOffer } from '@/utils/agentOfferHandlers';
+import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
 import { PixelText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
+import { formatCurrencyCompact } from '@/utils/currency';
 import { WK, pixelShadow } from '@/constants/theme';
+
+// ─── Agent offer card ─────────────────────────────────────────────────────────
+
+function AgentOfferCard({ offer }: { offer: AgentOffer }) {
+  const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
+  const weeksLeft = offer.expiresWeek - currentWeek;
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 4,
+      borderColor: WK.yellow,
+      padding: 12,
+      marginBottom: 10,
+      ...pixelShadow,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Badge label="TRANSFER OFFER" color="yellow" />
+        <PixelText size={6} dim>WK {offer.week}</PixelText>
+      </View>
+
+      <PixelText size={8} upper numberOfLines={2} style={{ marginBottom: 4 }}>
+        {offer.playerName} → {offer.destinationClub}
+      </PixelText>
+      <PixelText size={6} dim style={{ marginBottom: 10 }}>
+        {player?.position ?? '?'} · {offer.agentName} ({offer.agentCommissionRate}% comm.)
+      </PixelText>
+
+      <View style={{ gap: 4, marginBottom: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <PixelText size={6} dim>GROSS FEE</PixelText>
+          <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <PixelText size={6} dim>NET PROCEEDS</PixelText>
+          <PixelText size={6} color={WK.green}>{formatCurrencyCompact(offer.netProceeds)}</PixelText>
+        </View>
+      </View>
+
+      <PixelText size={6} dim style={{ marginBottom: 10 }}>
+        EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
+      </PixelText>
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          onPress={() => handleAcceptAgentOffer(offer.id)}
+          style={{
+            flex: 1,
+            backgroundColor: WK.green,
+            borderWidth: 3,
+            borderColor: WK.border,
+            padding: 10,
+            alignItems: 'center',
+            minHeight: 44,
+            justifyContent: 'center',
+          }}
+        >
+          <PixelText size={7} color={WK.text}>ACCEPT</PixelText>
+        </Pressable>
+        <Pressable
+          onPress={() => handleRejectAgentOffer(offer.id)}
+          style={{
+            flex: 1,
+            backgroundColor: WK.red,
+            borderWidth: 3,
+            borderColor: WK.border,
+            padding: 10,
+            alignItems: 'center',
+            minHeight: 44,
+            justifyContent: 'center',
+          }}
+        >
+          <PixelText size={7} color={WK.text}>DECLINE</PixelText>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 // ─── Type badge config ─────────────────────────────────────────────────────────
 
@@ -26,8 +108,9 @@ const TYPE_CONFIG: Record<InboxMessageType, { label: string; color: 'yellow' | '
 // ─── Unified list item ─────────────────────────────────────────────────────────
 
 type ListItem =
-  | { kind: 'inbox';     message: InboxMessage }
-  | { kind: 'narrative'; message: NarrativeMessage };
+  | { kind: 'inbox';       message: InboxMessage }
+  | { kind: 'narrative';   message: NarrativeMessage }
+  | { kind: 'agent_offer'; offer: AgentOffer };
 
 // ─── Investor offer metadata ───────────────────────────────────────────────────
 
@@ -313,6 +396,7 @@ function NarrativeMessageDetail({
 export default function InboxScreen() {
   const inboxMessages = useInboxStore((s) => s.messages);
   const inboxUnread = useInboxStore((s) => s.unreadCount());
+  const pendingOffers = useInboxStore((s) => s.agentOffers.filter((o) => o.status === 'pending'));
   const narrativeMessages = useNarrativeStore((s) => s.messages);
   const narrativeUnread = useNarrativeStore((s) => s.unreadCount());
 
@@ -330,8 +414,9 @@ export default function InboxScreen() {
   const totalUnread = inboxUnread + narrativeUnread;
   const headerLabel = totalUnread > 0 ? `INBOX (${totalUnread})` : 'INBOX';
 
-  // Unified sorted list: actionable narrative first, then unread, then read
+  // Priority order: pending agent offers → actionable narrative → narrative → inbox
   const listItems: ListItem[] = [
+    ...pendingOffers.map((o): ListItem => ({ kind: 'agent_offer', offer: o })),
     ...narrativeMessages
       .filter((m) => m.isActionable && !m.respondedAt)
       .map((m): ListItem => ({ kind: 'narrative', message: m })),
@@ -372,9 +457,13 @@ export default function InboxScreen() {
       ) : (
         <FlatList
           data={listItems}
-          keyExtractor={(item) => item.message.id}
+          keyExtractor={(item) =>
+            item.kind === 'agent_offer' ? item.offer.id : item.message.id
+          }
           renderItem={({ item }) =>
-            item.kind === 'narrative' ? (
+            item.kind === 'agent_offer' ? (
+              <AgentOfferCard offer={item.offer} />
+            ) : item.kind === 'narrative' ? (
               <NarrativeMessageRow
                 message={item.message}
                 onPress={setSelectedNarrative}

@@ -28,3 +28,18 @@ export interface FinancialTransaction {
   weekNumber: number;
   timestamp: string; // ISO 8601
 }
+
+export interface TransferRecord {
+  id: string;
+  playerId: string;
+  playerName: string;
+  destinationClub: string;
+  /** Gross transfer fee in pence */
+  grossFee: number;
+  /** Agent commission in pence */
+  agentCommission: number;
+  /** Net proceeds (after agent commission) in pence */
+  netProceeds: number;
+  week: number;
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
+}

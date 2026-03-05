@@ -110,3 +110,22 @@ export interface NarrativeMessage {
   readAt?: string;
   respondedAt?: string;
 }
+
+export interface AgentOffer {
+  id: string;
+  eventId: string;
+  agentId: string;
+  agentName: string;
+  /** Percentage, e.g. 10.5 = 10.5% */
+  agentCommissionRate: number;
+  playerId: string;
+  playerName: string;
+  /** Gross transfer fee in pence */
+  estimatedFee: number;
+  /** Net proceeds after agent commission, in pence */
+  netProceeds: number;
+  destinationClub: string;
+  week: number;
+  expiresWeek: number;
+  status: 'pending' | 'accepted' | 'rejected' | 'expired';
+}

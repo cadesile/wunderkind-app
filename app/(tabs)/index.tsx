@@ -205,7 +205,7 @@ function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void
 // ─── Panes ────────────────────────────────────────────────────────────────────
 
 function SquadPane() {
-  const players = useSquadStore((s) => s.players);
+  const players = useSquadStore((s) => s.players.filter((p) => p.isActive));
   if (players.length === 0) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

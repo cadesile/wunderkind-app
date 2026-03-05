@@ -1,10 +1,11 @@
-import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Home, Building2, DollarSign, Store, ChevronsRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { AdvanceModal } from '@/components/AdvanceModal';
+import { processWeeklyTick } from '@/engine/GameLoop';
+import { syncQueue } from '@/api/syncQueue';
+import { useAcademyStore } from '@/stores/academyStore';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -108,22 +109,33 @@ function CustomTabBar({ state, navigation, onAdvance }: CustomTabBarProps) {
         }}
       >
         <ChevronsRight size={20} color={WK.tealDark} />
-        <PixelText size={7} color={WK.tealDark}>ADVANCE</PixelText>
+        <PixelText size={7} color={WK.tealDark}>NEXT WK</PixelText>
       </Pressable>
     </View>
   );
 }
 
-export default function TabLayout() {
-  const [advanceVisible, setAdvanceVisible] = useState(false);
+function handleAdvanceWeek() {
+  const result = processWeeklyTick();
+  const { academy } = useAcademyStore.getState();
+  syncQueue.enqueue({
+    weekNumber:      result.week,
+    clientTimestamp: result.processedAt,
+    earningsDelta:   Math.max(0, result.financialSummary.net),
+    reputationDelta: Math.round(result.reputationDelta),
+    hallOfFamePoints: academy.hallOfFamePoints,
+    transfers: [],
+  });
+}
 
+export default function TabLayout() {
   return (
     <View style={{ flex: 1 }}>
       <GlobalHeader />
 
       <Tabs
         tabBar={(props) => (
-          <CustomTabBar {...props} onAdvance={() => setAdvanceVisible(true)} />
+          <CustomTabBar {...props} onAdvance={handleAdvanceWeek} />
         )}
         screenOptions={{ headerShown: false }}
       >
@@ -139,8 +151,6 @@ export default function TabLayout() {
         <Tabs.Screen name="coaches" options={{ href: null }} />
         <Tabs.Screen name="inbox"   options={{ href: null }} />
       </Tabs>
-
-      <AdvanceModal visible={advanceVisible} onClose={() => setAdvanceVisible(false)} />
     </View>
   );
 }

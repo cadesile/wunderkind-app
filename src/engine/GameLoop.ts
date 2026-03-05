@@ -1,6 +1,7 @@
 import { calculateTraitShifts, generateIncidents } from './personality';
 import { calculateWeeklyFinances } from './finance';
 import { simulationService } from './SimulationService';
+import { generateAgentOffer } from './agentOffers';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -27,7 +28,7 @@ const BASE_INJURY_PROB = 0.05; // 5% per player per week
 export function processWeeklyTick(): WeeklyTick {
   const { players, applyTraitShifts } = useSquadStore.getState();
   const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
-  const { addIncident, addMessage, messages: inboxMessages } = useInboxStore.getState();
+  const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
   const { levels } = useFacilityStore.getState();
   const { processWeeklyRepayments, totalWeeklyRepayment } = useLoanStore.getState();
@@ -174,7 +175,13 @@ export function processWeeklyTick(): WeeklyTick {
   const reputationDelta = 0.5 + levels.mediaCenter * 1.2;
   setReputation(reputationDelta);
 
-  // ── 8. Advance week ───────────────────────────────────────────────────────────
+  // ── 8a. Agent offers: expire stale, generate new ──────────────────────────────
+  expireOldOffers(weekNumber);
+  const { agents: allAgents } = useMarketStore.getState();
+  const agentOffer = generateAgentOffer(weekNumber, players, allAgents, academy.reputation);
+  if (agentOffer) addAgentOffer(agentOffer);
+
+  // ── 8b. Advance week ─────────────────────────────────────────────────────────
   incrementWeek();
 
   // ── 9. Week-1 investor offer ──────────────────────────────────────────────────

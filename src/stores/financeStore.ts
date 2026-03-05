@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
 import { uuidv7 } from '@/utils/uuidv7';
 import { useAcademyStore } from '@/stores/academyStore';
-import type { FinancialTransaction, FinancialCategory } from '@/types/finance';
+import type { FinancialTransaction, FinancialCategory, TransferRecord } from '@/types/finance';
 
 /** Rolling window: ~52 weeks × 7 days */
 const MAX_TRANSACTIONS = 364;
@@ -11,6 +11,7 @@ const ROLLING_WEEKS = 52;
 
 interface FinanceState {
   transactions: FinancialTransaction[];
+  transfers: TransferRecord[];
 
   /** Record a new transaction. ID and timestamp are assigned automatically. */
   addTransaction: (tx: Omit<FinancialTransaction, 'id' | 'timestamp'>) => void;
@@ -26,12 +27,16 @@ interface FinanceState {
 
   /** Prune entries older than 52 weeks. Called once per weekly advancement. */
   clearOldTransactions: () => void;
+
+  /** Record a completed player transfer (agent-assisted or direct sale). */
+  addTransfer: (record: Omit<TransferRecord, 'id'>) => void;
 }
 
 export const useFinanceStore = create<FinanceState>()(
   persist(
     (set, get) => ({
       transactions: [],
+      transfers: [],
 
       addTransaction: (tx) => {
         const newTx: FinancialTransaction = {
@@ -65,6 +70,11 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: state.transactions.filter((tx) => tx.weekNumber >= cutoff),
         }));
       },
+
+      addTransfer: (record) =>
+        set((state) => ({
+          transfers: [{ ...record, id: uuidv7() }, ...state.transfers],
+        })),
     }),
     { name: 'finance-store', storage: zustandStorage },
   ),
