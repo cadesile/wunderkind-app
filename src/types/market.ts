@@ -1,4 +1,7 @@
-import { Appearance } from './player';
+import { Position, PersonalityMatrix } from './player';
+import { CoachRole } from './coach';
+
+// ─── Hired staff types (locally-generated) ────────────────────────────────────
 
 export interface Agent {
   id: string;
@@ -7,6 +10,7 @@ export interface Agent {
   nationality: string;
 }
 
+/** A hired scout on the academy's payroll — distinct from MarketScout (backend entity). */
 export interface Scout {
   id: string;
   name: string;
@@ -15,7 +19,7 @@ export interface Scout {
   successRate: number;    // 0–100
   nationality: string;
   joinedWeek?: number;
-  appearance?: Appearance;
+  appearance?: import('./player').Appearance;
 }
 
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
@@ -44,9 +48,83 @@ export interface Loan {
   takenWeek: number;
 }
 
+/** @deprecated Use MarketData instead */
 export interface MarketDataResponse {
   agents: Agent[];
   scouts: Scout[];
   investors: Investor[];
   sponsors: Sponsor[];
+}
+
+// ─── Backend market entity types ──────────────────────────────────────────────
+
+/** A player available in the backend market — uses firstName/lastName and currentAbility. */
+export interface MarketPlayer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  /** YYYY-MM-DD */
+  dateOfBirth: string;
+  nationality: string;
+  position: Position;
+  /** 1–5 stars */
+  potential: number;
+  /** 0–100 */
+  currentAbility: number;
+  /**
+   * Backend does not include personality data for market players.
+   * Null until the player is recruited and a local personality is generated.
+   */
+  personality: PersonalityMatrix | null;
+  /** Assigned agent, or null if unrepresented */
+  agent: Agent | null;
+}
+
+/** A coach available in the backend market. */
+export interface MarketCoach {
+  id: string;
+  firstName: string;
+  lastName: string;
+  nationality: string;
+  role: CoachRole;
+  /** 1–20 */
+  influence: number;
+  /** Weekly, in pence */
+  salary: number;
+}
+
+/** A scout available in the backend market. */
+export interface MarketScout {
+  id: string;
+  firstName: string;
+  lastName: string;
+  nationality: string;
+  scoutingRange: 'local' | 'national' | 'international';
+  /** 0–100 */
+  successRate: number;
+  /** Weekly, in pence */
+  salary: number;
+}
+
+/** Full market data response from GET /api/market/data. */
+export interface MarketData {
+  players: MarketPlayer[];
+  coaches: MarketCoach[];
+  scouts: MarketScout[];
+  sponsors: Sponsor[];
+  investors: Investor[];
+  agents: Agent[];
+}
+
+/**
+ * Response from POST /api/academy/initialize.
+ * Contains academy metadata only — financial setup (starting balance,
+ * sponsor/investor IDs) is always derived locally from market data.
+ */
+export interface AcademyInitResponse {
+  id: string;
+  name: string;
+  starterBundle: Record<string, unknown>;
+  players: number;
+  staff: number;
 }

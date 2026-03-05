@@ -4,14 +4,14 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { SyncRequest, SyncAcceptedResponse } from '@/types/api';
 
 export function useSyncWeek() {
-  const applyServerSync = useAcademyStore((s) => s.applyServerSync);
+  const updateFromSyncResponse = useAcademyStore((s) => s.updateFromSyncResponse);
 
   return useMutation({
     mutationFn: (payload: SyncRequest) => syncWeek(payload),
     onSuccess: (data) => {
       if (data.accepted) {
-        // Server is authoritative on aggregates — reconcile local state
-        applyServerSync((data as SyncAcceptedResponse).academy);
+        // Server is authoritative — reconcile local state (includes balance if returned)
+        updateFromSyncResponse((data as SyncAcceptedResponse).academy);
       } else {
         // Anti-cheat rejection: week rolled back on server
         console.warn('[sync] Week rollback detected. Server week:', data.currentWeek);

@@ -4,6 +4,7 @@ import { Player, PersonalityMatrix, Position, TraitName } from '@/types/player';
 import { generatePlayer } from '@/engine/personality';
 import { zustandStorage } from '@/utils/storage';
 import { getGameDate } from '@/utils/gameDate';
+import { releasePlayer as releasePlayerApi } from '@/api/endpoints/squad';
 
 const STARTER_POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
 
@@ -13,20 +14,33 @@ interface SquadState {
   removePlayer: (id: string) => void;
   /** Bulk-replace the entire roster (used during bootstrap) */
   setPlayers: (players: Player[]) => void;
+  /** Apply arbitrary top-level field changes to a single player (used by SimulationService). */
+  updatePlayer: (id: string, changes: Partial<Player>) => void;
   updateTrait: (playerId: string, trait: TraitName, delta: number) => void;
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   generateStarterSquad: () => void;
+  /**
+   * Release a player back to the market pool. Removes from local squad immediately
+   * (fat-client model) and fires a best-effort backend call to set academy = null.
+   */
+  releasePlayer: (playerId: string) => Promise<{ success: boolean; playerName?: string; error?: string }>;
 }
 
 export const useSquadStore = create<SquadState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       players: [],
       addPlayer: (player) =>
         set((state) => ({ players: [...state.players, player] })),
       removePlayer: (id) =>
         set((state) => ({ players: state.players.filter((p) => p.id !== id) })),
       setPlayers: (players) => set({ players }),
+      updatePlayer: (id, changes) =>
+        set((state) => ({
+          players: state.players.map((p) =>
+            p.id === id ? { ...p, ...changes } : p,
+          ),
+        })),
       updateTrait: (playerId, trait, delta) =>
         set((state) => ({
           players: state.players.map((p) =>
@@ -55,6 +69,24 @@ export const useSquadStore = create<SquadState>()(
             return { ...p, personality: updated };
           }),
         })),
+      releasePlayer: async (playerId) => {
+        const player = get().players.find((p) => p.id === playerId);
+        if (!player) return { success: false, error: 'Player not found' };
+        const playerName = player.name;
+
+        // Remove locally — local state is authoritative
+        set((state) => ({ players: state.players.filter((p) => p.id !== playerId) }));
+
+        // Best-effort backend sync
+        try {
+          await releasePlayerApi(playerId);
+        } catch {
+          // Backend call failed; local removal already committed. Log silently.
+          console.warn(`[squadStore] releasePlayer backend sync failed for ${playerId}`);
+        }
+
+        return { success: true, playerName };
+      },
       generateStarterSquad: () => {
         // Lazy import to avoid circular dependency
         // eslint-disable-next-line @typescript-eslint/no-var-requires

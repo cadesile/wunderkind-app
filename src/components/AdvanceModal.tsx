@@ -49,7 +49,7 @@ export function AdvanceModal({ visible, onClose }: Props) {
       weekNumber: result.week,
       clientTimestamp: result.processedAt,
       earningsDelta: Math.max(0, result.financialSummary.net),
-      reputationDelta: result.reputationDelta,
+      reputationDelta: Math.round(result.reputationDelta),
       hallOfFamePoints: academy.hallOfFamePoints,
       transfers: [],
     });
@@ -89,7 +89,10 @@ export function AdvanceModal({ visible, onClose }: Props) {
                 <SummaryRow label="XP GAINED" value={`${tick.weeklyXP.toFixed(1)} pts`} color={WK.green} />
                 <SummaryRow
                   label="FINANCES"
-                  value={`${tick.financialSummary.net >= 0 ? '+' : ''}£${tick.financialSummary.net.toLocaleString()}`}
+                  value={(() => {
+                    const netPounds = Math.round(tick.financialSummary.net / 100);
+                    return `${netPounds >= 0 ? '+' : '-'}£${Math.abs(netPounds).toLocaleString()}`;
+                  })()}
                   color={tick.financialSummary.net >= 0 ? WK.green : WK.red}
                 />
                 <SummaryRow label="REP GAINED" value={`+${tick.reputationDelta}`} color={WK.tealLight} />

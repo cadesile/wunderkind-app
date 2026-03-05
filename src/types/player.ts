@@ -61,4 +61,10 @@ export interface Player {
   agentId: string | null;
   joinedWeek: number;
   isActive: boolean;
+  /** Game week when enrollment expires (joinedWeek + 52 by default) */
+  enrollmentEndWeek?: number;
+  /** Player happiness 0–100 */
+  morale?: number;
+  /** Number of times the enrollment has been extended */
+  extensionCount?: number;
 }

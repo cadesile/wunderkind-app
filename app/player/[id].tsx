@@ -1,4 +1,5 @@
-import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { useState } from 'react';
+import { View, ScrollView, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -60,8 +61,22 @@ export default function PlayerDetailScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const player = useSquadStore((s) => s.players.find((p) => p.id === id));
+  const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const analyticsUnlocked = useFacilityStore((s) => s.analyticsUnlocked());
+
+  // Contract metrics
+  const weeksRemaining = player
+    ? Math.max(0, (player.enrollmentEndWeek ?? 0) - weekNumber)
+    : 0;
+  const contractStatus =
+    weeksRemaining >= 52 ? 'ACTIVE' :
+    weeksRemaining >= 12 ? 'EXPIRING' :
+    weeksRemaining > 0   ? 'CRITICAL' : 'NONE';
+  const weeklyFee = Math.round((player?.wage ?? 0) / 100); // pence → pounds
+
+  const [matrixExpanded, setMatrixExpanded] = useState(false);
+  const [breakdownExpanded, setBreakdownExpanded] = useState(false);
 
   const gameDate = getGameDate(weekNumber);
   const displayAge = player?.dateOfBirth
@@ -80,6 +95,32 @@ export default function PlayerDetailScreen() {
   }
 
   const traits = Object.entries(player.personality) as [TraitName, number][];
+
+  function handleRelease() {
+    Alert.alert(
+      'Release Player?',
+      `Release ${player.name} back to the market pool? No transfer fee is received.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Release',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await releasePlayer(player.id);
+            if (result.success) {
+              Alert.alert(
+                'Player Released',
+                `${result.playerName} has been returned to the market pool.`,
+                [{ text: 'OK', onPress: () => router.back() }],
+              );
+            } else {
+              Alert.alert('Error', result.error ?? 'Failed to release player.');
+            }
+          },
+        },
+      ],
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
@@ -137,19 +178,135 @@ export default function PlayerDetailScreen() {
           </View>
         </View>
 
-        {/* Ability Matrix radar — full width */}
-        <Card style={{ alignItems: 'center' }}>
-          <PixelText size={8} upper style={{ marginBottom: 10, alignSelf: 'flex-start' }}>Ability Matrix</PixelText>
-          <PersonalityRadar personality={player.personality} size={radarSize} />
-        </Card>
+        {/* Ability Matrix radar — collapsible */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          ...pixelShadow,
+        }}>
+          <Pressable
+            onPress={() => setMatrixExpanded((v) => !v)}
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 14,
+            }}
+          >
+            <PixelText size={8} upper>Ability Matrix</PixelText>
+            <PixelText size={8} color={WK.tealLight}>{matrixExpanded ? '▼' : '▶'}</PixelText>
+          </Pressable>
+          {matrixExpanded && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, alignItems: 'center' }}>
+              <PersonalityRadar personality={player.personality} size={radarSize - 28} />
+            </View>
+          )}
+        </View>
 
-        {/* Ability Breakdown */}
-        <Card>
-          <PixelText size={8} upper style={{ marginBottom: 4 }}>Ability Breakdown</PixelText>
-          {traits.map(([name, value]) => (
-            <AbilityBar key={name} name={name} value={value} />
-          ))}
-        </Card>
+        {/* Ability Breakdown — collapsible */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          ...pixelShadow,
+        }}>
+          <Pressable
+            onPress={() => setBreakdownExpanded((v) => !v)}
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 14,
+            }}
+          >
+            <PixelText size={8} upper>Ability Breakdown</PixelText>
+            <PixelText size={8} color={WK.tealLight}>{breakdownExpanded ? '▼' : '▶'}</PixelText>
+          </Pressable>
+          {breakdownExpanded && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 4 }}>
+              {traits.map(([name, value]) => (
+                <AbilityBar key={name} name={name} value={value} />
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Contract Info */}
+        {player.enrollmentEndWeek !== undefined && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: contractStatus === 'CRITICAL' ? WK.red : contractStatus === 'EXPIRING' ? WK.orange : WK.yellow,
+            padding: 14,
+            ...pixelShadow,
+          }}>
+            <PixelText size={8} upper style={{ marginBottom: 10 }}>Enrollment Contract</PixelText>
+
+            {/* Status badge row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <View style={{
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                backgroundColor:
+                  contractStatus === 'ACTIVE'   ? WK.green :
+                  contractStatus === 'EXPIRING' ? WK.orange : WK.red,
+              }}>
+                <PixelText size={7} color={WK.text}>
+                  {contractStatus === 'ACTIVE'   ? 'ACTIVE' :
+                   contractStatus === 'EXPIRING' ? 'EXPIRING' : 'CRITICAL'}
+                </PixelText>
+              </View>
+              <PixelText size={7} dim>{weeksRemaining}w remaining</PixelText>
+            </View>
+
+            <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 10, gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <PixelText size={7} dim>WEEKLY FEE</PixelText>
+                <PixelText size={7} color={WK.tealLight}>£{weeklyFee}/wk</PixelText>
+              </View>
+              {player.morale !== undefined && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <PixelText size={7} dim>MORALE</PixelText>
+                  <PixelText size={7} color={player.morale >= 70 ? WK.green : player.morale >= 40 ? WK.orange : WK.red}>
+                    {player.morale}/100
+                  </PixelText>
+                </View>
+              )}
+              {(player.extensionCount ?? 0) > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <PixelText size={7} dim>EXTENSIONS</PixelText>
+                  <PixelText size={7} color={WK.dim}>{player.extensionCount}</PixelText>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Release player */}
+        <View style={{
+          borderWidth: 3,
+          borderColor: WK.red,
+          padding: 14,
+          marginTop: 6,
+        }}>
+          <PixelText size={7} color={WK.red} style={{ marginBottom: 8 }}>RELEASE PLAYER</PixelText>
+          <PixelText size={6} dim style={{ marginBottom: 12 }}>
+            Return {player.name} to the market pool. No transfer fee received.
+          </PixelText>
+          <Pressable
+            onPress={handleRelease}
+            style={{
+              backgroundColor: WK.red,
+              borderWidth: 2,
+              borderColor: '#8b0000',
+              padding: 10,
+              alignItems: 'center',
+            }}
+          >
+            <PixelText size={7} color={WK.text}>RELEASE TO POOL</PixelText>
+          </Pressable>
+        </View>
 
       </ScrollView>
     </SafeAreaView>

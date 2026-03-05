@@ -7,13 +7,12 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { register, login } from '@/api/endpoints/auth';
-import { fetchMarketData } from '@/api/endpoints/marketData';
+import { marketApi } from '@/api/endpoints/market';
 import { generatePlayer } from '@/engine/personality';
 import { generateCoachProspect, generateScout } from '@/engine/recruitment';
 import { getGameDate } from '@/utils/gameDate';
 
-const POSITIONS = ['GK', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'MID', 'FWD', 'FWD',
-                   'GK', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'FWD', 'FWD', 'FWD', 'FWD'] as const;
+const POSITIONS = ['GK', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'FWD', 'FWD', 'GK', 'DEF'] as const;
 
 function generateDeviceEmail(): string {
   const chars = 'abcdef0123456789';
@@ -44,20 +43,21 @@ export interface AuthFlowResult {
 /**
  * Manages the full app auth lifecycle:
  *
- * 1. Token present → ready immediately, no onboarding.
- * 2. Credentials present (token expired) → silent re-login → ready.
+ * 1. Token present → ready immediately; refresh market data in background.
+ * 2. Credentials present (token expired) → silent re-login → ready; refresh market data.
  * 3. First launch (no credentials) → isOnboarding=true; call
  *    registerAcademy(name) from the onboarding screen to complete setup.
  *
  * registerAcademy bootstrap sequence:
  *   1. register() → login() → store JWT
- *   2. fetchMarketData() → marketStore.setMarketData()
- *   3. academyStore.setCreatedAt(), addBalance(50_000), facilityStore.initAllLevels()
- *   4. Generate 20 players with agent assignments → squadStore.setPlayers()
- *   5. Generate 2 coaches → coachStore.addCoach()
- *   6. Generate 2 scouts → scoutStore.addScout()
- *   7. Assign 3 SMALL sponsors, 1 investor from market data
- *   8. setAcademyName(), setIsOnboarding(false)
+ *   2. fetchMarketData() → marketStore (for agents, sponsors, investors pool)
+ *   3. initializeAcademy() → backend-confirmed sponsor/investor IDs (with local fallback)
+ *   4. setCreatedAt(), addBalance(startingBalance), facilityStore.initAllLevels()
+ *   5. Generate 20 players with agent assignments → squadStore.setPlayers()
+ *   6. Generate 2 coaches → coachStore.addCoach()
+ *   7. Generate 2 scouts → scoutStore.addScout()
+ *   8. setSponsorIds(), setInvestorId()
+ *   9. setAcademyName(), setIsOnboarding(false)
  */
 export function useAuthFlow(): AuthFlowResult {
   const { token, email, password, setToken, setCredentials, setUserId } =
@@ -68,7 +68,7 @@ export function useAuthFlow(): AuthFlowResult {
   const { addCoach } = useCoachStore();
   const { addScout } = useScoutStore();
   const { initAllLevels } = useFacilityStore();
-  const { setMarketData } = useMarketStore();
+  const { setMarketData, fetchMarketData } = useMarketStore();
 
   const [isReady, setIsReady] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
@@ -77,6 +77,8 @@ export function useAuthFlow(): AuthFlowResult {
     async function initialize() {
       if (token) {
         setIsReady(true);
+        // Refresh market data in background — respects 5-min cache, safe to fire & forget
+        void fetchMarketData();
         return;
       }
 
@@ -84,6 +86,8 @@ export function useAuthFlow(): AuthFlowResult {
         try {
           const { token: newToken } = await login({ username: email, password });
           setToken(newToken);
+          // Refresh market data after successful re-login
+          void fetchMarketData();
         } catch (err) {
           console.warn('[useAuthFlow] Re-login failed:', err);
         }
@@ -119,53 +123,65 @@ export function useAuthFlow(): AuthFlowResult {
     });
     setToken(newToken);
 
-    // 2. Fetch market data (non-blocking on failure — game still works offline)
-    let marketData = { agents: [], scouts: [], investors: [], sponsors: [] };
+    // 2. Fetch market data — populates agent/sponsor/investor pools for assignment
+    let marketData = { players: [], coaches: [], scouts: [], agents: [], investors: [], sponsors: [] };
     try {
-      marketData = await fetchMarketData();
-      setMarketData(marketData);
+      const fetched = await marketApi.getMarketData();
+      marketData = fetched;
+      setMarketData(fetched);
     } catch (err) {
       console.warn('[useAuthFlow] Market data fetch failed — continuing offline:', err);
     }
 
-    // 3. Academy setup
+    // 3. Register academy server-side — response contains metadata only, no financial data.
+    //    Starting balance and sponsor/investor IDs are always derived locally.
+    try {
+      await marketApi.initializeAcademy(academyName);
+    } catch (err) {
+      console.warn('[useAuthFlow] Academy init failed — continuing offline:', err);
+    }
+
+    const startingBalance = 50_000;
+    // Starter bundle spec: 1 small sponsor, 0 investors at creation.
+    // An investor offer arrives in the inbox after the first week.
+    const smallSponsors = marketData.sponsors.filter((s) => s.companySize === 'SMALL');
+    const sponsorIds = smallSponsors.slice(0, 1).map((s) => s.id);
+    const investorId = null;
+
+    // 4. Academy setup
     setCreatedAt(new Date().toISOString());
-    addBalance(50_000);
+    addBalance(startingBalance);
     initAllLevels();
 
-    // 4. Generate 20 players with agent IDs
+    // 5. Generate 10 players with agent IDs from market pool
     const weekNumber = 1;
     const gameDate = getGameDate(weekNumber);
     const players = POSITIONS.map((pos) => {
       const player = generatePlayer(pos, gameDate);
-      const agentId =
-        marketData.agents.length > 0
-          ? pickRandom(marketData.agents).id
-          : null;
-      return { ...player, agentId };
+      const agentId = marketData.agents.length > 0 ? pickRandom(marketData.agents).id : null;
+      return {
+        ...player,
+        agentId,
+        enrollmentEndWeek: weekNumber + 52,
+        morale: 70,
+        extensionCount: 0,
+      };
     });
     setPlayers(players);
 
-    // 5. Generate 2 coaches
+    // 6. Generate 2 coaches
     for (let i = 0; i < 2; i++) {
       addCoach(generateCoachProspect(weekNumber));
     }
 
-    // 6. Generate 2 scouts
-    for (let i = 0; i < 2; i++) {
-      addScout(generateScout(weekNumber));
-    }
+    // 7. Generate 1 scout (spec: starter bundle includes 1 scout)
+    addScout(generateScout(weekNumber));
 
-    // 7. Assign 3 SMALL sponsors and 1 investor from market data
-    const smallSponsors = marketData.sponsors.filter((s) => s.companySize === 'SMALL');
-    const sponsorIds = smallSponsors.slice(0, 3).map((s) => s.id);
+    // 8. Apply sponsor/investor assignments
     setSponsorIds(sponsorIds);
+    setInvestorId(investorId);
 
-    if (marketData.investors.length > 0) {
-      setInvestorId(pickRandom(marketData.investors).id);
-    }
-
-    // 8. Finalise
+    // 9. Finalise
     setAcademyName(academyName);
     setIsOnboarding(false);
   }

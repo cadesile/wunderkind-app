@@ -2,8 +2,9 @@ import { FinancialRecord, ExpenseItem } from '@/types/game';
 import { Academy } from '@/types/academy';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
-import { FacilityLevels } from '@/types/facility';
+import { FacilityLevels, FacilityType } from '@/types/facility';
 import { Sponsor } from '@/types/market';
+import { calculateFacilityUpkeep } from '@/utils/facilityUpkeep';
 
 const FACILITY_TYPES = [
   'trainingPitch',
@@ -32,7 +33,7 @@ export function calculateNetSalePrice(
  *
  * Income = Σ(sponsor.weeklyPayment) + reputation × 100 pence
  * Outgoings = Σ(PlayerWages) + Σ(CoachSalaries) + Σ(FacilityMaintenance) + weeklyLoanRepayment
- * Maintenance = FacilityLevel × 500 pence per facility
+ * Maintenance = baseCost × 1.5^level per facility (see facilityUpkeep.ts)
  */
 export function calculateWeeklyFinances(
   week: number,
@@ -63,11 +64,11 @@ export function calculateWeeklyFinances(
     breakdown.push({ label: 'Staff wages', amount: staffWages });
   }
 
-  // Facility maintenance: FacilityLevel × 500 pence per facility
+  // Facility maintenance: exponential scaling (baseCost × 1.5^level)
   FACILITY_TYPES.forEach((type) => {
     const level = facilityLevels[type];
     if (level > 0) {
-      const cost = level * 500;
+      const cost = calculateFacilityUpkeep(type as FacilityType, level);
       breakdown.push({ label: `${type} maintenance`, amount: cost });
     }
   });

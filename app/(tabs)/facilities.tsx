@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View, ScrollView, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFacilityStore, facilityUpgradeCost, facilityMaintenanceCost } from '@/stores/facilityStore';
+import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
+import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useFinanceStore } from '@/stores/financeStore';
 import { FACILITY_DEFS, FacilityMeta, FacilityType } from '@/types/facility';
 import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
@@ -40,10 +42,11 @@ const LEVEL_BENEFIT_LABELS: Record<FacilityType, (level: number) => string> = {
 
 function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: number; balance: number }) {
   const { upgradeLevel } = useFacilityStore();
-  const { addBalance } = useAcademyStore();
+  const { addBalance, academy } = useAcademyStore();
 
   const upgradeCost = facilityUpgradeCost(def.type, level);
-  const maintenance = facilityMaintenanceCost(level);
+  const maintenance = calculateFacilityUpkeep(def.type, level);
+  const nextMaintenance = calculateFacilityUpkeep(def.type, level + 1);
   const canAfford = balance >= upgradeCost;
   const atMax = level >= 10;
   const levelPct = (level / 10) * 100;
@@ -63,6 +66,12 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
           onPress: () => {
             upgradeLevel(def.type);
             addBalance(-upgradeCost);
+            useFinanceStore.getState().addTransaction({
+              amount: -upgradeCost,
+              category: 'facility_upgrade',
+              description: `Upgraded ${def.label} to level ${level + 1}`,
+              weekNumber: academy.weekNumber ?? 1,
+            });
           },
         },
       ],
@@ -109,9 +118,14 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
       <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 4 }}>
         ◆ {LEVEL_BENEFIT_LABELS[def.type](level)}
       </PixelText>
-      <PixelText size={6} dim style={{ marginBottom: 12 }}>
-        MAINTENANCE: £{maintenance.toLocaleString()}/WK
+      <PixelText size={6} dim style={{ marginBottom: atMax ? 12 : 4 }}>
+        MAINTENANCE: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/WK`}
       </PixelText>
+      {!atMax && (
+        <PixelText size={6} color={WK.dim} style={{ marginBottom: 12 }}>
+          NEXT LEVEL: £{(nextMaintenance / 100).toFixed(2)}/WK
+        </PixelText>
+      )}
 
       {/* Upgrade button */}
       {atMax ? (
@@ -228,6 +242,21 @@ export default function FacilitiesScreen() {
             balance={balance}
           />
         ))}
+
+        {/* Total weekly upkeep summary */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.yellow,
+          padding: 14,
+          marginTop: 4,
+          ...pixelShadow,
+        }}>
+          <PixelText size={7} dim style={{ marginBottom: 6 }}>TOTAL WEEKLY UPKEEP</PixelText>
+          <PixelText size={14} color={WK.orange}>
+            £{(calculateTotalUpkeep(levels) / 100).toFixed(2)}
+          </PixelText>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

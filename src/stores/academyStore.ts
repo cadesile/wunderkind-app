@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Academy, ReputationTier } from '@/types/academy';
+import { Academy, ReputationTier, ManagerPersonality } from '@/types/academy';
 import { zustandStorage } from '@/utils/storage';
+import type { AcademyStatusResponse, SyncAcceptedResponse } from '@/types/api';
+import { penceToPounds } from '@/utils/currency';
 
 function computeTier(reputation: number): ReputationTier {
   if (reputation >= 75) return 'Elite';
@@ -12,10 +14,13 @@ function computeTier(reputation: number): ReputationTier {
 
 interface AcademyState {
   academy: Academy;
+  managerPersonality: ManagerPersonality | null;
   setName: (name: string) => void;
   setReputation: (delta: number) => void;
   addEarnings: (amount: number) => void;
   addBalance: (amount: number) => void;
+  /** Directly override balance (whole pounds). Use when syncing from API. */
+  setBalance: (balance: number) => void;
   setCreatedAt: (date: string) => void;
   setSponsorIds: (ids: string[]) => void;
   setInvestorId: (id: string | null) => void;
@@ -23,6 +28,18 @@ interface AcademyState {
   /** 409 conflict resolution: hard-reset weekNumber to the server's authoritative value */
   rollbackWeek: (weekNumber: number) => void;
   applyServerSync: (data: { reputation: number; totalCareerEarnings: number; hallOfFamePoints: number }) => void;
+  /**
+   * Sync all academy fields from a GET /api/academy/status response.
+   * Balance is converted from pence to whole pounds.
+   */
+  syncWithApi: (data: AcademyStatusResponse) => void;
+  /**
+   * Apply balance from a sync response alongside the existing aggregates.
+   * Balance is optional (older backend versions omit it).
+   */
+  updateFromSyncResponse: (data: SyncAcceptedResponse['academy']) => void;
+  setManagerPersonality: (personality: ManagerPersonality) => void;
+  updateManagerPersonality: (shifts: Partial<Pick<ManagerPersonality, 'temperament' | 'discipline' | 'ambition'>>) => void;
 }
 
 const DEFAULT_ACADEMY: Academy = {
@@ -46,6 +63,7 @@ export const useAcademyStore = create<AcademyState>()(
   persist(
     (set) => ({
       academy: DEFAULT_ACADEMY,
+      managerPersonality: null,
       setName: (name) =>
         set((state) => ({ academy: { ...state.academy, name } })),
       setReputation: (delta) =>
@@ -73,6 +91,8 @@ export const useAcademyStore = create<AcademyState>()(
             balance: (state.academy.balance ?? 0) + amount,
           },
         })),
+      setBalance: (balance) =>
+        set((state) => ({ academy: { ...state.academy, balance } })),
       setCreatedAt: (date) =>
         set((state) => ({ academy: { ...state.academy, createdAt: date } })),
       setSponsorIds: (ids) =>
@@ -100,6 +120,55 @@ export const useAcademyStore = create<AcademyState>()(
             hallOfFamePoints: data.hallOfFamePoints,
           },
         })),
+      syncWithApi: (data) =>
+        set((state) => ({
+          academy: {
+            ...state.academy,
+            reputation: data.reputation,
+            reputationTier: computeTier(data.reputation),
+            weekNumber: data.weekNumber,
+            totalCareerEarnings: data.totalCareerEarnings,
+            hallOfFamePoints: data.hallOfFamePoints,
+            // API returns balance in pence — convert to whole pounds for local store
+            balance: penceToPounds(data.balance),
+          },
+        })),
+      updateFromSyncResponse: (data) =>
+        set((state) => ({
+          academy: {
+            ...state.academy,
+            reputation: data.reputation,
+            reputationTier: computeTier(data.reputation),
+            totalCareerEarnings: data.totalCareerEarnings,
+            hallOfFamePoints: data.hallOfFamePoints,
+            // balance is optional — only update if the server returned it (pence → pounds)
+            ...(data.balance !== undefined
+              ? { balance: penceToPounds(data.balance) }
+              : {}),
+          },
+        })),
+      setManagerPersonality: (personality) =>
+        set({ managerPersonality: personality }),
+
+      updateManagerPersonality: (shifts) =>
+        set((state) => {
+          if (!state.managerPersonality) return state;
+          const clamp = (v: number) => Math.max(0, Math.min(100, v));
+          return {
+            managerPersonality: {
+              ...state.managerPersonality,
+              temperament: shifts.temperament !== undefined
+                ? clamp(state.managerPersonality.temperament + shifts.temperament)
+                : state.managerPersonality.temperament,
+              discipline: shifts.discipline !== undefined
+                ? clamp(state.managerPersonality.discipline + shifts.discipline)
+                : state.managerPersonality.discipline,
+              ambition: shifts.ambition !== undefined
+                ? clamp(state.managerPersonality.ambition + shifts.ambition)
+                : state.managerPersonality.ambition,
+            },
+          };
+        }),
     }),
     { name: 'academy-store', storage: zustandStorage }
   )

@@ -1,5 +1,12 @@
 export type ReputationTier = 'Local' | 'Regional' | 'National' | 'Elite';
 
+export interface ManagerPersonality {
+  paName: string;
+  temperament: number; // 0–100
+  discipline: number;  // 0–100
+  ambition: number;    // 0–100
+}
+
 export interface Academy {
   id: string;
   name: string;

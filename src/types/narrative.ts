@@ -1,0 +1,112 @@
+export enum EventCategory {
+  PLAYER = 'PLAYER',
+  FACILITY = 'FACILITY',
+  STAFF = 'STAFF',
+  FINANCE = 'FINANCE',
+}
+
+export enum TargetType {
+  PLAYER = 'player',
+  FACILITY = 'facility',
+  STAFF = 'staff',
+  SQUAD_WIDE = 'squad_wide',
+}
+
+export enum StatOperator {
+  ADD = 'add',
+  SUBTRACT = 'subtract',
+  SET = 'set',
+}
+
+export enum RelationshipType {
+  RIVALRY = 'rivalry',
+  FRIENDSHIP = 'friendship',
+}
+
+export interface SelectionLogic {
+  target_type: TargetType;
+  filter?: {
+    position?: string;
+    /** isActive=true only */
+    active_only?: boolean;
+    max_age?: number;
+    min_age?: number;
+    max_level?: number;
+  };
+  count: number;
+}
+
+export interface StatChange {
+  /** 'player_1', 'player_2', 'squad_wide', 'facility_1', etc. */
+  target: string;
+  /** For players: a top-level Player field (e.g. 'overallRating'). For squad_wide same. */
+  field: string;
+  operator: StatOperator;
+  value: number;
+}
+
+export interface Relationship {
+  type: RelationshipType;
+  player_1_ref: string;
+  player_2_ref: string;
+  intensity: number;
+}
+
+export interface DurationConfig {
+  ticks: number;
+  tick_effect?: StatChange;
+  completion_event_slug: string;
+}
+
+export interface ManagerShift {
+  temperament: number;
+  discipline: number;
+  ambition: number;
+}
+
+export interface EventChoice {
+  emoji: string;
+  label: string;
+  stat_changes: StatChange[];
+  manager_shift: ManagerShift;
+}
+
+export interface EventImpacts {
+  selection_logic?: SelectionLogic;
+  stat_changes?: StatChange[];
+  relationships?: Relationship[];
+  duration_config?: DurationConfig;
+  choices?: EventChoice[];
+}
+
+export interface GameEventTemplate {
+  id: string;
+  slug: string;
+  category: EventCategory;
+  weight: number;
+  title: string;
+  bodyTemplate: string;
+  impacts: EventImpacts;
+}
+
+export interface ActiveEffect {
+  id: string;
+  slug: string;
+  affectedEntityId: string;
+  ticksRemaining: number;
+  tickEffect?: StatChange;
+  completionEventSlug: string;
+  startedAt: string;
+}
+
+export interface NarrativeMessage {
+  id: string;
+  title: string;
+  body: string;
+  isActionable: boolean;
+  choices?: EventChoice[];
+  affectedEntities: string[];
+  createdAt: string;
+  readAt?: string;
+  respondedAt?: string;
+}

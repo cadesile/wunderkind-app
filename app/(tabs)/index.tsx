@@ -7,6 +7,9 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useFacilityStore } from '@/stores/facilityStore';
+import { useFinanceStore } from '@/stores/financeStore';
+import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { generateCoachProspects, generateScoutProspects } from '@/engine/recruitment';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { PixelText } from '@/components/ui/PixelText';
@@ -84,7 +87,7 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`INF ${coach.influence}`} color="yellow" />
-          <PixelText size={6} dim>£{coach.salary.toLocaleString()}/wk</PixelText>
+          <PixelText size={6} dim>£{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
         </View>
       </View>
       <View style={{ marginTop: 8 }}>
@@ -118,7 +121,7 @@ function CoachProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void
         </View>
         <Badge label={`INF ${coach.influence}`} color="green" />
       </View>
-      <PixelText size={6} dim>SALARY: £{coach.salary.toLocaleString()}/wk</PixelText>
+      <PixelText size={6} dim>SALARY: £{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
       <View style={{ marginTop: 8 }}>
         <Button label="SIGN" variant="yellow" fullWidth onPress={onSign} />
       </View>
@@ -155,7 +158,7 @@ function ScoutCard({ scout, onFire }: { scout: Scout; onFire: () => void }) {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${scout.successRate}%`} color="yellow" />
-          <PixelText size={6} dim>£{scout.salary.toLocaleString()}/wk</PixelText>
+          <PixelText size={6} dim>£{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
         </View>
       </View>
       <View style={{ marginTop: 8 }}>
@@ -191,7 +194,7 @@ function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void
         </View>
         <Badge label={`${scout.successRate}%`} color="green" />
       </View>
-      <PixelText size={6} dim>SALARY: £{scout.salary.toLocaleString()}/wk</PixelText>
+      <PixelText size={6} dim>SALARY: £{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
       <View style={{ marginTop: 8 }}>
         <Button label="RECRUIT" variant="yellow" fullWidth onPress={onSign} />
       </View>
@@ -246,11 +249,36 @@ function CoachesPane() {
     setProspects((prev) => prev.filter((p) => p.id !== coach.id));
   }
 
-  function fireCoach(id: string) {
-    Alert.alert('Release Coach', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Release', style: 'destructive', onPress: () => removeCoach(id) },
-    ]);
+  function fireCoach(coach: Coach) {
+    const penaltyPence = Math.floor(coach.salary * 26 * 0.25);
+    const penaltyPounds = Math.round(penaltyPence / 100);
+    const currentBalance = academy.balance ?? 0;
+
+    Alert.alert(
+      'Release Coach?',
+      `Release ${coach.name}?\n\nEarly termination fee: £${penaltyPounds.toLocaleString()}\n(25% of 26 remaining weeks @ £${Math.round(coach.salary / 100)}/wk)`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Release',
+          style: 'destructive',
+          onPress: () => {
+            if (currentBalance < penaltyPounds) {
+              Alert.alert('Insufficient Funds', `You need £${penaltyPounds.toLocaleString()} to release this coach.`);
+              return;
+            }
+            addBalance(-penaltyPounds);
+            useFinanceStore.getState().addTransaction({
+              amount: -penaltyPence,
+              category: 'contract_termination',
+              description: `Released ${coach.name} (25% early termination)`,
+              weekNumber,
+            });
+            removeCoach(coach.id);
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -263,12 +291,12 @@ function CoachesPane() {
         </Card>
         <Card style={{ flex: 1, alignItems: 'center' }}>
           <PixelText size={6} dim>WEEKLY COST</PixelText>
-          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{totalSalary.toLocaleString()}</PixelText>
+          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{Math.round(totalSalary / 100).toLocaleString()}</PixelText>
         </Card>
       </View>
 
       <View style={{ marginHorizontal: 10, marginBottom: 10 }}>
-        <Button label="◈ SCOUT PROSPECTS" variant="green" fullWidth onPress={openScout} />
+        <Button label="◈ FIND A COACH" variant="green" fullWidth onPress={openScout} />
       </View>
 
       {coaches.length === 0 ? (
@@ -279,7 +307,7 @@ function CoachesPane() {
         <FlatList
           data={coaches}
           keyExtractor={(c) => c.id}
-          renderItem={({ item }) => <CoachCard coach={item} onFire={() => fireCoach(item.id)} />}
+          renderItem={({ item }) => <CoachCard coach={item} onFire={() => fireCoach(item)} />}
           contentContainerStyle={{ padding: 10 }}
         />
       )}
@@ -347,11 +375,36 @@ function ScoutsPane() {
     setProspects((prev) => prev.filter((p) => p.id !== scout.id));
   }
 
-  function fireScout(id: string) {
-    Alert.alert('Release Scout', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Release', style: 'destructive', onPress: () => removeScout(id) },
-    ]);
+  function fireScout(scout: Scout) {
+    const penaltyPence = Math.floor(scout.salary * 26 * 0.25);
+    const penaltyPounds = Math.round(penaltyPence / 100);
+    const currentBalance = academy.balance ?? 0;
+
+    Alert.alert(
+      'Release Scout?',
+      `Release ${scout.name}?\n\nEarly termination fee: £${penaltyPounds.toLocaleString()}\n(25% of 26 remaining weeks @ £${Math.round(scout.salary / 100)}/wk)`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Release',
+          style: 'destructive',
+          onPress: () => {
+            if (currentBalance < penaltyPounds) {
+              Alert.alert('Insufficient Funds', `You need £${penaltyPounds.toLocaleString()} to release this scout.`);
+              return;
+            }
+            addBalance(-penaltyPounds);
+            useFinanceStore.getState().addTransaction({
+              amount: -penaltyPence,
+              category: 'contract_termination',
+              description: `Released ${scout.name} (25% early termination)`,
+              weekNumber,
+            });
+            removeScout(scout.id);
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -364,7 +417,7 @@ function ScoutsPane() {
         </Card>
         <Card style={{ flex: 1, alignItems: 'center' }}>
           <PixelText size={6} dim>WEEKLY COST</PixelText>
-          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{totalSalary.toLocaleString()}</PixelText>
+          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{Math.round(totalSalary / 100).toLocaleString()}</PixelText>
         </Card>
       </View>
 
@@ -380,7 +433,7 @@ function ScoutsPane() {
         <FlatList
           data={scouts}
           keyExtractor={(s) => s.id}
-          renderItem={({ item }) => <ScoutCard scout={item} onFire={() => fireScout(item.id)} />}
+          renderItem={({ item }) => <ScoutCard scout={item} onFire={() => fireScout(item)} />}
           contentContainerStyle={{ padding: 10 }}
         />
       )}
@@ -425,6 +478,34 @@ function ScoutsPane() {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
+function UpkeepWarningBanner() {
+  const balance = useAcademyStore((s) => s.academy.balance ?? 0);
+  const levels = useFacilityStore((s) => s.levels);
+  const totalUpkeep = calculateTotalUpkeep(levels);
+
+  if (totalUpkeep === 0) return null;
+  const weeksUntilBroke = Math.floor(balance / totalUpkeep);
+  if (weeksUntilBroke >= 10) return null;
+
+  return (
+    <View style={{
+      backgroundColor: WK.red,
+      borderBottomWidth: 3,
+      borderBottomColor: '#8b0000',
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    }}>
+      <PixelText size={6} color={WK.text}>HIGH UPKEEP</PixelText>
+      <PixelText size={6} color={WK.text}>
+        £{totalUpkeep.toLocaleString()}/WK · {weeksUntilBroke}WK LEFT
+      </PixelText>
+    </View>
+  );
+}
+
 export default function AcademyHubScreen() {
   const [activeTab, setActiveTab] = useState<AcademyTab>('SQUAD');
 
@@ -436,6 +517,7 @@ export default function AcademyHubScreen() {
         active={activeTab}
         onChange={(tab) => setActiveTab(tab as AcademyTab)}
       />
+      <UpkeepWarningBanner />
 
       {activeTab === 'SQUAD' && <SquadPane />}
       {activeTab === 'COACHES' && <CoachesPane />}
