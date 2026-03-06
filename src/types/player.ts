@@ -46,6 +46,20 @@ export interface Appearance {
   kitTrim: string;
 }
 
+// ─── Player Attributes ────────────────────────────────────────────────────────
+
+/** 6-attribute football skill model — 0–100 scale */
+export interface PlayerAttributes {
+  pace:      number;
+  technical: number;
+  vision:    number;
+  power:     number;
+  stamina:   number;
+  heart:     number;
+}
+
+export type AttributeName = keyof PlayerAttributes;
+
 // ─── Player ───────────────────────────────────────────────────────────────────
 
 export interface Player {
@@ -76,4 +90,6 @@ export interface Player {
   morale?: number;
   /** Number of times the enrollment has been extended */
   extensionCount?: number;
+  /** Granular football attributes — generated on first tick after joining */
+  attributes?: PlayerAttributes;
 }

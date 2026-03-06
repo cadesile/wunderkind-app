@@ -1,5 +1,5 @@
 import { Player, Position } from '@/types/player';
-import { Coach, CoachRole } from '@/types/coach';
+import { Coach, CoachRole, CoachSpecialism, CoachSpecialisms } from '@/types/coach';
 import { Scout } from '@/types/market';
 import { generatePlayer, generatePersonality, TRAIT_NAMES } from './personality';
 import { generateAppearance } from './appearance';
@@ -37,6 +37,25 @@ const SCOUTING_RANGES: Scout['scoutingRange'][] = ['local', 'national', 'interna
 
 const POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'FWD'];
 
+/** Primary specialisms by coach role — each role gets 1–2 relevant attributes */
+const ROLE_SPECIALISMS: Record<CoachRole, CoachSpecialism[]> = {
+  'Head Coach':       ['vision', 'heart'],
+  'Fitness Coach':    ['stamina', 'power'],
+  'Youth Coach':      ['technical', 'heart'],
+  'GK Coach':         ['power', 'stamina'],
+  'Tactical Analyst': ['vision', 'technical'],
+};
+
+function generateSpecialisms(role: CoachRole, influence: number): CoachSpecialisms {
+  const attrs = ROLE_SPECIALISMS[role];
+  const specialism: CoachSpecialisms = {};
+  attrs.forEach((attr) => {
+    // Specialism strength scales with influence: influence 1–20 → 30–95 range
+    specialism[attr] = Math.round(30 + (influence / 20) * 65);
+  });
+  return specialism;
+}
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -60,16 +79,19 @@ export function generateCoachProspect(currentWeek: number): Coach {
   const influence = 1 + Math.floor(Math.random() * 20); // 1–20
   const age = 28 + Math.floor(Math.random() * 31); // 28–58
 
+  const role = pick(COACH_ROLES);
+
   return {
     id,
     name: `${pick(COACH_FIRST_NAMES)} ${pick(COACH_LAST_NAMES)}`,
-    role: pick(COACH_ROLES),
+    role,
     salary: influence * 500,
     influence,
     personality,
     appearance: generateAppearance(id, 'COACH', age, personality),
     nationality: pick(COACH_NATIONALITIES),
     joinedWeek: currentWeek,
+    specialisms: generateSpecialisms(role, influence),
   };
 }
 

@@ -21,6 +21,8 @@ import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
+import { ArchetypeBadge } from '@/components/ArchetypeBadge';
+import { moraleEmoji } from '@/utils/morale';
 
 const ACADEMY_TABS = ['SQUAD', 'COACHES', 'SCOUTS'] as const;
 type AcademyTab = typeof ACADEMY_TABS[number];
@@ -48,7 +50,10 @@ function PlayerCard({ player }: { player: Player }) {
         <Avatar appearance={player.appearance} role="PLAYER" size={44} />
         <View style={{ flex: 1 }}>
           <PixelText size={9} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
-          <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {player.age}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {player.age}</PixelText>
+            <ArchetypeBadge player={player} />
+          </View>
           <PixelText size={7} dim>{player.nationality}</PixelText>
           <View style={{ marginTop: 6, flexDirection: 'row', gap: 2 }}>
             {traits.map((v, i) => (
@@ -57,9 +62,9 @@ function PlayerCard({ player }: { player: Player }) {
           </View>
           <PixelText size={7} dim style={{ marginTop: 3 }}>AVG TRAIT: {avgTrait}/20</PixelText>
         </View>
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${player.overallRating}`} color="yellow" />
-          <PixelText size={8} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
+          <PixelText size={12}>{moraleEmoji(player.morale ?? 70)}</PixelText>
         </View>
       </View>
     </Pressable>
@@ -95,6 +100,21 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
           <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
         </View>
       </View>
+      {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
+        <View style={{ flexDirection: 'row', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
+          {(Object.entries(coach.specialisms) as [string, number][]).map(([attr, strength]) => (
+            <View key={attr} style={{
+              paddingHorizontal: 5,
+              paddingVertical: 2,
+              backgroundColor: WK.tealDark,
+              borderWidth: 1,
+              borderColor: WK.yellow,
+            }}>
+              <PixelText size={6} color={WK.yellow}>{attr.toUpperCase()} {strength}</PixelText>
+            </View>
+          ))}
+        </View>
+      )}
       <Pressable onPress={onFire} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
         <PixelText size={6} color={WK.red}>[ RELEASE ]</PixelText>
       </Pressable>
@@ -204,22 +224,62 @@ function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void
 
 // ─── Panes ────────────────────────────────────────────────────────────────────
 
+const POSITION_FILTERS = ['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const;
+type PositionFilter = typeof POSITION_FILTERS[number];
+
 function SquadPane() {
-  const players = useSquadStore((s) => s.players.filter((p) => p.isActive));
-  if (players.length === 0) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <PixelText size={8} dim>NO PLAYERS YET</PixelText>
-      </View>
-    );
-  }
+  const [posFilter, setPosFilter] = useState<PositionFilter>('ALL');
+  const allPlayers = useSquadStore((s) => s.players);
+
+  const players = allPlayers
+    .filter((p) => p.isActive && (posFilter === 'ALL' || p.position === posFilter))
+    .sort((a, b) => b.overallRating - a.overallRating);
+
   return (
-    <FlatList
-      data={players}
-      keyExtractor={(p) => p.id}
-      renderItem={({ item }) => <PlayerCard player={item} />}
-      contentContainerStyle={{ padding: 10 }}
-    />
+    <View style={{ flex: 1 }}>
+      {/* Position filter bar */}
+      <View style={{
+        flexDirection: 'row',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+      }}>
+        {POSITION_FILTERS.map((pos) => {
+          const active = posFilter === pos;
+          return (
+            <Pressable
+              key={pos}
+              onPress={() => setPosFilter(pos)}
+              style={{
+                flex: 1,
+                paddingVertical: 6,
+                backgroundColor: active ? WK.yellow : WK.tealCard,
+                borderWidth: 2,
+                borderColor: active ? WK.yellow : WK.border,
+                alignItems: 'center',
+              }}
+            >
+              <PixelText size={6} color={active ? WK.border : WK.dim}>{pos}</PixelText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {players.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <PixelText size={8} dim>NO PLAYERS</PixelText>
+        </View>
+      ) : (
+        <FlatList
+          data={players}
+          keyExtractor={(p) => p.id}
+          renderItem={({ item }) => <PlayerCard player={item} />}
+          contentContainerStyle={{ padding: 10 }}
+        />
+      )}
+    </View>
   );
 }
 
@@ -296,7 +356,7 @@ function CoachesPane() {
       </View>
 
       <View style={{ marginHorizontal: 10, marginBottom: 10 }}>
-        <Button label="◈ FIND A COACH" variant="green" fullWidth onPress={openScout} />
+        <Button label="◈ RECRUIT COACHES" variant="green" fullWidth onPress={openScout} />
       </View>
 
       {coaches.length === 0 ? (

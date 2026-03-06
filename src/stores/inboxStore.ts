@@ -53,6 +53,12 @@ interface InboxState {
   rejectAgentOffer: (offerId: string) => void;
   /** Mark as expired any offers whose expiresWeek <= currentWeek. */
   expireOldOffers: (currentWeek: number) => void;
+  /** Delete a single message. Blocked if requiresResponse and no response yet. */
+  deleteMessage: (id: string) => void;
+  /** Mark all messages as read. */
+  markAllRead: () => void;
+  /** Remove all messages that don't require a pending decision. */
+  clearDeletable: () => void;
   unreadCount: () => number;
 }
 
@@ -107,6 +113,25 @@ export const useInboxStore = create<InboxState>()(
               ? { ...o, status: 'expired' as const }
               : o
           ),
+        })),
+
+      deleteMessage: (id) =>
+        set((state) => ({
+          messages: state.messages.filter((m) => {
+            if (m.id !== id) return true;
+            // Block deletion if awaiting a decision
+            return m.requiresResponse && !m.response;
+          }),
+        })),
+
+      markAllRead: () =>
+        set((state) => ({
+          messages: state.messages.map((m) => ({ ...m, isRead: true })),
+        })),
+
+      clearDeletable: () =>
+        set((state) => ({
+          messages: state.messages.filter((m) => m.requiresResponse && !m.response),
         })),
 
       unreadCount: () => {

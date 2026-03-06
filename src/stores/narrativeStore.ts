@@ -9,6 +9,12 @@ interface NarrativeState {
   addMessage: (message: NarrativeMessage) => void;
   markAsRead: (id: string) => void;
   markAsResponded: (id: string) => void;
+  /** Delete a single message. Blocked if actionable and not yet responded. */
+  deleteMessage: (id: string) => void;
+  /** Mark all narrative messages as read. */
+  markAllRead: () => void;
+  /** Remove all messages that don't require a pending decision. */
+  clearDeletable: () => void;
   unreadCount: () => number;
   getActionableMessages: () => NarrativeMessage[];
   clearAll: () => void;
@@ -34,6 +40,27 @@ export const useNarrativeStore = create<NarrativeState>()(
           messages: state.messages.map((m) =>
             m.id === id ? { ...m, respondedAt: new Date().toISOString() } : m,
           ),
+        })),
+
+      deleteMessage: (id) =>
+        set((state) => ({
+          messages: state.messages.filter((m) => {
+            if (m.id !== id) return true;
+            // Block deletion if awaiting a decision
+            return m.isActionable && !m.respondedAt;
+          }),
+        })),
+
+      markAllRead: () =>
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.readAt ? m : { ...m, readAt: new Date().toISOString() },
+          ),
+        })),
+
+      clearDeletable: () =>
+        set((state) => ({
+          messages: state.messages.filter((m) => m.isActionable && !m.respondedAt),
         })),
 
       unreadCount: () =>

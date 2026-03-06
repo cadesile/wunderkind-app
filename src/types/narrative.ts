@@ -99,6 +99,14 @@ export interface ActiveEffect {
   startedAt: string;
 }
 
+export interface StatImpact {
+  /** Human-readable label, e.g. "Malik Nakamura MORALE" */
+  label: string;
+  delta: number;   // signed, e.g. -5 or +8
+  from: number;
+  to: number;
+}
+
 export interface NarrativeMessage {
   id: string;
   title: string;
@@ -106,6 +114,7 @@ export interface NarrativeMessage {
   isActionable: boolean;
   choices?: EventChoice[];
   affectedEntities: string[];
+  statImpacts?: StatImpact[];
   createdAt: string;
   readAt?: string;
   respondedAt?: string;

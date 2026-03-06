@@ -7,6 +7,11 @@ export type CoachRole =
   | 'GK Coach'
   | 'Tactical Analyst';
 
+export type CoachSpecialism = 'pace' | 'technical' | 'vision' | 'power' | 'stamina' | 'heart';
+
+/** Specialism strength 1–100 per attribute the coach can develop */
+export type CoachSpecialisms = Partial<Record<CoachSpecialism, number>>;
+
 export interface Coach {
   id: string;
   name: string;
@@ -18,4 +23,6 @@ export interface Coach {
   appearance?: Appearance;
   nationality: string;
   joinedWeek: number;
+  /** 1–2 attribute specialisms this coach develops in players */
+  specialisms?: CoachSpecialisms;
 }

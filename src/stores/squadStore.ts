@@ -1,12 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Player, PersonalityMatrix, Position, TraitName } from '@/types/player';
+import { Player, PersonalityMatrix, PlayerAttributes, Position, TraitName } from '@/types/player';
 import { generatePlayer } from '@/engine/personality';
 import { zustandStorage } from '@/utils/storage';
 import { getGameDate } from '@/utils/gameDate';
 import { releasePlayer as releasePlayerApi } from '@/api/endpoints/squad';
 
 const STARTER_POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
+
+/** Per-player development update (attributes + recalculated overallRating). */
+export interface PlayerDevelopmentUpdate {
+  attributes: PlayerAttributes;
+  overallRating: number;
+}
 
 interface SquadState {
   players: Player[];
@@ -17,6 +23,16 @@ interface SquadState {
   /** Apply arbitrary top-level field changes to a single player (used by SimulationService). */
   updatePlayer: (id: string, changes: Partial<Player>) => void;
   updateTrait: (playerId: string, trait: TraitName, delta: number) => void;
+  /**
+   * Applies trait shifts AND attribute development in a single set() call.
+   * This is the ONLY squads store mutation that should happen per weekly tick,
+   * preventing multiple rapid updates that break useSyncExternalStore consistency.
+   */
+  applyWeeklyPlayerUpdates: (
+    traitShifts: Record<string, Partial<PersonalityMatrix>>,
+    devUpdates: Record<string, PlayerDevelopmentUpdate>,
+  ) => void;
+  /** @deprecated Use applyWeeklyPlayerUpdates instead */
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   generateStarterSquad: () => void;
   /**
@@ -55,6 +71,33 @@ export const useSquadStore = create<SquadState>()(
               : p
           ),
         })),
+      applyWeeklyPlayerUpdates: (traitShifts, devUpdates) =>
+        set((state) => ({
+          players: state.players.map((p) => {
+            const playerShifts = traitShifts[p.id];
+            const dev = devUpdates[p.id];
+            if (!playerShifts && !dev) return p;
+
+            let next = p;
+
+            if (playerShifts) {
+              const updatedPersonality = { ...next.personality };
+              (Object.entries(playerShifts) as [TraitName, number][]).forEach(
+                ([trait, delta]) => {
+                  updatedPersonality[trait] = Math.max(1, Math.min(20, updatedPersonality[trait] + delta));
+                },
+              );
+              next = { ...next, personality: updatedPersonality };
+            }
+
+            if (dev) {
+              next = { ...next, attributes: dev.attributes, overallRating: dev.overallRating };
+            }
+
+            return next;
+          }),
+        })),
+
       applyTraitShifts: (shifts) =>
         set((state) => ({
           players: state.players.map((p) => {

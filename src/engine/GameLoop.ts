@@ -2,6 +2,7 @@ import { calculateTraitShifts, generateIncidents } from './personality';
 import { calculateWeeklyFinances } from './finance';
 import { simulationService } from './SimulationService';
 import { generateAgentOffer } from './agentOffers';
+import { computePlayerDevelopment } from './DevelopmentService';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -26,7 +27,7 @@ const BASE_INJURY_PROB = 0.05; // 5% per player per week
  * Mutates Zustand stores; returns a WeeklyTick for sync queuing.
  */
 export function processWeeklyTick(): WeeklyTick {
-  const { players, applyTraitShifts } = useSquadStore.getState();
+  const { players, applyWeeklyPlayerUpdates } = useSquadStore.getState();
   const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
   const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
@@ -62,7 +63,8 @@ export function processWeeklyTick(): WeeklyTick {
       injuredPlayerIds.push(player.id);
     }
   });
-  applyTraitShifts(traitShifts);
+
+  // Trait shifts are applied later alongside development updates (single set() call).
 
   // ── 4. Behavioral incidents ───────────────────────────────────────────────────
   const incidents = players.flatMap((p) => generateIncidents(p, weekNumber));
@@ -169,6 +171,14 @@ export function processWeeklyTick(): WeeklyTick {
   }
 
   clearOldTransactions();
+
+  // ── 6b. Player development + trait shifts — ONE combined set() ──────────────
+  // Compute development updates first (pure calculation, no store writes),
+  // then apply BOTH trait shifts and attribute gains in a single Zustand set().
+  // This prevents multiple rapid squad store updates which break
+  // useSyncExternalStore's tearing-prevention consistency check.
+  const devUpdates = computePlayerDevelopment(players, coaches, levels, weekNumber);
+  applyWeeklyPlayerUpdates(traitShifts, devUpdates);
 
   // ── 7. Reputation ─────────────────────────────────────────────────────────────
   // Scaled for 0–100: base 0.5 + Media Center level × 1.2 per week

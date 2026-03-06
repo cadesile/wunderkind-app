@@ -1,4 +1,4 @@
-import { PersonalityMatrix, Player, Position, TraitName } from '@/types/player';
+import { PersonalityMatrix, Player, PlayerAttributes, Position, TraitName } from '@/types/player';
 import { BehavioralIncident } from '@/types/game';
 import { generateDOB } from '@/utils/gameDate';
 import { generateAppearance } from '@/engine/appearance';
@@ -47,6 +47,36 @@ function randomTrait(): number {
   return 1 + Math.floor(Math.random() * 20);
 }
 
+// ─── Attribute generation ─────────────────────────────────────────────────────
+
+/** Base attribute ranges per position [min, max] */
+const POSITION_ATTR_RANGES: Record<Position, Record<keyof PlayerAttributes, [number, number]>> = {
+  GK:  { pace: [20,40], technical: [25,45], vision: [30,50], power: [35,55], stamina: [35,55], heart: [30,55] },
+  DEF: { pace: [25,50], technical: [25,45], vision: [25,45], power: [35,55], stamina: [35,55], heart: [25,50] },
+  MID: { pace: [25,50], technical: [30,55], vision: [35,55], power: [25,45], stamina: [30,55], heart: [30,55] },
+  FWD: { pace: [30,55], technical: [30,55], vision: [25,50], power: [25,50], stamina: [25,50], heart: [30,55] },
+};
+
+/**
+ * Generates initial 6-attribute block for a youth player.
+ * Values are position-biased, 0–100 scale.
+ */
+export function generateAttributes(position: Position): PlayerAttributes {
+  const ranges = POSITION_ATTR_RANGES[position];
+  function roll(attr: keyof PlayerAttributes): number {
+    const [min, max] = ranges[attr];
+    return min + Math.floor(Math.random() * (max - min + 1));
+  }
+  return {
+    pace:      roll('pace'),
+    technical: roll('technical'),
+    vision:    roll('vision'),
+    power:     roll('power'),
+    stamina:   roll('stamina'),
+    heart:     roll('heart'),
+  };
+}
+
 // ─── Player generation ────────────────────────────────────────────────────────
 
 /** Generates all 8 personality traits with random 1–20 values */
@@ -75,6 +105,8 @@ export function generatePlayer(position: Position, currentGameDate: Date): Playe
   const ageYears = 15 + Math.floor(Math.random() * 3); // 15–17
   const overallRating = Math.round((avgTrait / 20) * 100);
 
+  const attributes = generateAttributes(position);
+
   return {
     id,
     name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
@@ -86,7 +118,9 @@ export function generatePlayer(position: Position, currentGameDate: Date): Playe
     potential: 1 + Math.floor(Math.random() * 5), // 1–5 stars
     wage: overallRating * 100,                      // pence/week
     personality,
+    attributes,
     appearance: generateAppearance(id, 'PLAYER', ageYears, personality),
+    morale: 70,
     guardianId: null,
     agentId: null,
     joinedWeek: 1,

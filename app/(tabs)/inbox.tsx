@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, FlatList, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Trash2 } from 'lucide-react-native';
 import { useInboxStore, InboxMessage, InboxMessageType } from '@/stores/inboxStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useAcademyStore } from '@/stores/academyStore';
@@ -14,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { formatCurrencyCompact } from '@/utils/currency';
+import { moraleEmoji } from '@/utils/morale';
 import { WK, pixelShadow } from '@/constants/theme';
 
 // ─── Agent offer card ─────────────────────────────────────────────────────────
@@ -151,12 +153,15 @@ function OfferRow({ label, value }: { label: string; value: string }) {
 function InboxMessageRow({
   message,
   onPress,
+  onDelete,
 }: {
   message: InboxMessage;
   onPress: (m: InboxMessage) => void;
+  onDelete: (m: InboxMessage) => void;
 }) {
   const isUnread = !message.isRead;
   const typeConf = TYPE_CONFIG[message.type] ?? TYPE_CONFIG.system;
+  const canDelete = !(message.requiresResponse && !message.response);
 
   return (
     <Pressable onPress={() => onPress(message)}>
@@ -181,6 +186,11 @@ function InboxMessageRow({
             {message.subject.toUpperCase()}
           </PixelText>
           {isUnread && <Badge label="NEW" color="yellow" />}
+          {canDelete && (
+            <Pressable onPress={(e) => { e.stopPropagation?.(); onDelete(message); }} hitSlop={8}>
+              <Trash2 size={14} color={WK.dim} />
+            </Pressable>
+          )}
         </View>
         <PixelText size={7} dim numberOfLines={2}>{message.body}</PixelText>
         <PixelText size={7} dim style={{ marginTop: 6 }}>WK {message.week}</PixelText>
@@ -194,12 +204,15 @@ function InboxMessageRow({
 function NarrativeMessageRow({
   message,
   onPress,
+  onDelete,
 }: {
   message: NarrativeMessage;
   onPress: (m: NarrativeMessage) => void;
+  onDelete: (m: NarrativeMessage) => void;
 }) {
   const isUnread = !message.readAt;
   const isPending = message.isActionable && !message.respondedAt;
+  const canDelete = !isPending;
   const borderColor = isPending ? WK.green : isUnread ? WK.yellow : WK.border;
 
   return (
@@ -226,6 +239,11 @@ function NarrativeMessageRow({
           </PixelText>
           {isPending && <Badge label="ACT" color="green" />}
           {isUnread && !isPending && <Badge label="NEW" color="yellow" />}
+          {canDelete && (
+            <Pressable onPress={(e) => { e.stopPropagation?.(); onDelete(message); }} hitSlop={8}>
+              <Trash2 size={14} color={WK.dim} />
+            </Pressable>
+          )}
         </View>
         <PixelText size={7} dim numberOfLines={2}>{message.body}</PixelText>
       </View>
@@ -364,6 +382,45 @@ function NarrativeMessageDetail({
         <PixelText size={9} upper style={{ marginBottom: 14 }}>{message.title}</PixelText>
         <PixelText size={7} style={{ lineHeight: 16, color: WK.dim }}>{message.body}</PixelText>
 
+        {message.statImpacts && message.statImpacts.length > 0 && (
+          <View style={{
+            marginTop: 14,
+            borderWidth: 2,
+            borderColor: WK.border,
+            padding: 10,
+            gap: 6,
+          }}>
+            <PixelText size={6} dim style={{ marginBottom: 4 }}>STAT IMPACT</PixelText>
+            {message.statImpacts.map((impact, i) => {
+              const isMorale = impact.label.toUpperCase().includes('MORALE');
+              return (
+                <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <PixelText size={6} dim>{impact.label}</PixelText>
+                  {isMorale ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <PixelText size={14}>{moraleEmoji(impact.from)}</PixelText>
+                      <PixelText size={6} dim>→</PixelText>
+                      <PixelText size={14}>{moraleEmoji(impact.to)}</PixelText>
+                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>
+                        ({impact.delta >= 0 ? '+' : ''}{impact.delta})
+                      </PixelText>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <PixelText size={6} dim>{impact.from}</PixelText>
+                      <PixelText size={6} dim>→</PixelText>
+                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>{impact.to}</PixelText>
+                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>
+                        ({impact.delta >= 0 ? '+' : ''}{impact.delta})
+                      </PixelText>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {message.respondedAt && (
           <View style={{
             marginTop: 16, paddingVertical: 8, paddingHorizontal: 12,
@@ -396,12 +453,16 @@ function NarrativeMessageDetail({
 export default function InboxScreen() {
   const inboxMessages = useInboxStore((s) => s.messages);
   const inboxUnread = useInboxStore((s) => s.unreadCount());
-  const pendingOffers = useInboxStore((s) => s.agentOffers.filter((o) => o.status === 'pending'));
+  const { markAllRead: inboxMarkAllRead, clearDeletable: inboxClearDeletable, deleteMessage: inboxDelete } = useInboxStore();
+  const agentOffers = useInboxStore((s) => s.agentOffers);
+  const pendingOffers = agentOffers.filter((o) => o.status === 'pending');
   const narrativeMessages = useNarrativeStore((s) => s.messages);
   const narrativeUnread = useNarrativeStore((s) => s.unreadCount());
+  const { markAllRead: narrativeMarkAllRead, clearDeletable: narrativeClearDeletable, deleteMessage: narrativeDelete } = useNarrativeStore();
 
   const [selectedInbox, setSelectedInbox] = useState<InboxMessage | null>(null);
   const [selectedNarrative, setSelectedNarrative] = useState<NarrativeMessage | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   // Keep selections in sync with live store updates
   const selectedInboxLive = selectedInbox
@@ -431,6 +492,31 @@ export default function InboxScreen() {
     setSelectedNarrative(null);
   }
 
+  function handleMarkAllRead() {
+    inboxMarkAllRead();
+    narrativeMarkAllRead();
+  }
+
+  function handleClearInbox() {
+    setConfirmingClear(true);
+  }
+
+  function confirmClear() {
+    inboxClearDeletable();
+    narrativeClearDeletable();
+    setConfirmingClear(false);
+  }
+
+  function handleDeleteInbox(m: InboxMessage) {
+    inboxDelete(m.id);
+  }
+
+  function handleDeleteNarrative(m: NarrativeMessage) {
+    narrativeDelete(m.id);
+  }
+
+  const isListView = !selectedInboxLive && !selectedNarrativeLive;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
       <PitchBackground />
@@ -443,6 +529,55 @@ export default function InboxScreen() {
         paddingVertical: 10,
       }}>
         <PixelText size={10} upper>{headerLabel}</PixelText>
+
+        {isListView && listItems.length > 0 && (
+          confirmingClear ? (
+            <View style={{ marginTop: 8, borderWidth: 2, borderColor: WK.red, padding: 10, gap: 8 }}>
+              <PixelText size={6} color={WK.red}>DELETE ALL DELETABLE MESSAGES?</PixelText>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  onPress={() => setConfirmingClear(false)}
+                  style={{
+                    flex: 1, paddingVertical: 6, backgroundColor: WK.tealCard,
+                    borderWidth: 2, borderColor: WK.border, alignItems: 'center',
+                  }}
+                >
+                  <PixelText size={6} dim>CANCEL</PixelText>
+                </Pressable>
+                <Pressable
+                  onPress={confirmClear}
+                  style={{
+                    flex: 1, paddingVertical: 6, backgroundColor: WK.red,
+                    borderWidth: 2, borderColor: '#8b0000', alignItems: 'center',
+                  }}
+                >
+                  <PixelText size={6} color={WK.text}>CONFIRM DELETE</PixelText>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              <Pressable
+                onPress={handleMarkAllRead}
+                style={{
+                  flex: 1, paddingVertical: 6, backgroundColor: WK.tealCard,
+                  borderWidth: 2, borderColor: WK.border, alignItems: 'center',
+                }}
+              >
+                <PixelText size={6} dim>MARK ALL READ</PixelText>
+              </Pressable>
+              <Pressable
+                onPress={handleClearInbox}
+                style={{
+                  flex: 1, paddingVertical: 6, backgroundColor: WK.tealCard,
+                  borderWidth: 2, borderColor: WK.red, alignItems: 'center',
+                }}
+              >
+                <PixelText size={6} color={WK.red}>DELETE INBOX</PixelText>
+              </Pressable>
+            </View>
+          )
+        )}
       </View>
 
       {selectedInboxLive ? (
@@ -467,11 +602,13 @@ export default function InboxScreen() {
               <NarrativeMessageRow
                 message={item.message}
                 onPress={setSelectedNarrative}
+                onDelete={handleDeleteNarrative}
               />
             ) : (
               <InboxMessageRow
                 message={item.message}
                 onPress={setSelectedInbox}
+                onDelete={handleDeleteInbox}
               />
             )
           }

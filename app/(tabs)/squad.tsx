@@ -51,10 +51,7 @@ function PlayerCard({ player }: { player: Player }) {
           <PixelText size={7} dim style={{ marginTop: 3 }}>AVG TRAIT: {avgTrait}/20</PixelText>
         </View>
 
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          <Badge label={`${player.overallRating}`} color="yellow" />
-          <PixelText size={8} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
-        </View>
+        <Badge label={`${player.overallRating}`} color="yellow" />
       </View>
     </Pressable>
   );

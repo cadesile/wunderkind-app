@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
 import { useNarrativeSync } from '@/hooks/useNarrativeSync';
+import { useArchetypeSync } from '@/hooks/useArchetypeSync';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
 import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
@@ -35,6 +36,7 @@ function AppNavigator() {
   const [fontsLoaded, fontError] = useFonts({ PressStart2P_400Regular });
   const { isReady, isOnboarding, registerAcademy } = useAuthFlow();
   useNarrativeSync();
+  useArchetypeSync();
 
   // Restore any persisted sync queue items from previous sessions
   useEffect(() => {

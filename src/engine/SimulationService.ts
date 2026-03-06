@@ -11,6 +11,7 @@ import {
   ActiveEffect,
   NarrativeMessage,
   StatChange,
+  StatImpact,
   SelectionLogic,
   TargetType,
   StatOperator,
@@ -54,11 +55,40 @@ class SimulationService {
     const template = useEventStore.getState().getWeightedRandomTemplate();
     if (!template) return;
 
-    const entityMap = this.resolveTargets(template.impacts.selection_logic);
+    let entityMap = this.resolveTargets(template.impacts.selection_logic);
     // If the template requires specific targets but none were resolved, skip.
     if (template.impacts.selection_logic && Object.keys(entityMap).length === 0) return;
 
-    const message = this.generateMessage(template, entityMap);
+    // If the body references {player} but no player was resolved (e.g. no selection_logic),
+    // pick a random active player so the placeholder is always substituted.
+    if (/\{player/i.test(template.bodyTemplate) && !entityMap['player_1']) {
+      const active = this.filterPlayers(undefined).filter((p) => p.isActive);
+      if (active.length === 0) return;
+      const picked = this.randomSample(active, 1);
+      entityMap = { ...entityMap, player_1: picked[0].id };
+    }
+
+    // Same for {facility} — pick a random facility if none resolved.
+    if (/\{facility/i.test(template.bodyTemplate) && !entityMap['facility_1']) {
+      const facilities = this.filterFacilities(undefined);
+      if (facilities.length > 0) {
+        const picked = this.randomSample(facilities, 1);
+        entityMap = { ...entityMap, facility_1: picked[0].type };
+      }
+    }
+
+    const autoChanges = template.impacts.stat_changes ?? [];
+    const isActionable = (template.impacts.choices?.length ?? 0) > 0;
+
+    // For non-actionable events, compute impacts BEFORE applying (capture from-values),
+    // then auto-apply them so the game state actually reflects the event.
+    let statImpacts: StatImpact[] = [];
+    if (!isActionable && autoChanges.length > 0) {
+      statImpacts = this.computeStatImpacts(autoChanges, entityMap);
+      this.applyStatChanges(autoChanges, entityMap);
+    }
+
+    const message = this.generateMessage(template, entityMap, statImpacts);
     useNarrativeStore.getState().addMessage(message);
   }
 
@@ -68,7 +98,10 @@ class SimulationService {
     if (!logic) return {};
     const entityMap: Record<string, string> = {};
 
-    switch (logic.target_type) {
+    // Normalise target_type to lowercase so backend casing ('PLAYER' vs 'player') never breaks matching
+    const targetType = (logic.target_type as string).toLowerCase() as TargetType;
+
+    switch (targetType) {
       case TargetType.PLAYER: {
         const players = this.filterPlayers(logic.filter);
         const selected = this.randomSample(players, logic.count);
@@ -133,6 +166,7 @@ class SimulationService {
   private generateMessage(
     template: GameEventTemplate,
     entityMap: Record<string, string>,
+    statImpacts: StatImpact[] = [],
   ): NarrativeMessage {
     const { managerPersonality } = useAcademyStore.getState();
     const { players } = useSquadStore.getState();
@@ -151,9 +185,17 @@ class SimulationService {
       }
     });
 
+    // Add bare aliases so templates can use {player}, {player2}, etc.
+    // as shorthand for {player_1}, {player_2}, etc. — consistent across all templates.
+    if (replacements['player_1']) replacements['player'] = replacements['player_1'];
+    if (replacements['player_2']) replacements['player2'] = replacements['player_2'];
+    if (replacements['facility_1']) replacements['facility'] = replacements['facility_1'];
+
+    // Interpolate — handles {{key}}, {key} and the bare aliases above uniformly
     let body = template.bodyTemplate;
     Object.entries(replacements).forEach(([key, value]) => {
       body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+      body = body.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
     });
 
     return {
@@ -163,8 +205,41 @@ class SimulationService {
       isActionable: (template.impacts.choices?.length ?? 0) > 0,
       choices: template.impacts.choices,
       affectedEntities: Object.values(entityMap),
+      statImpacts: statImpacts.length > 0 ? statImpacts : undefined,
       createdAt: new Date().toISOString(),
     };
+  }
+
+  /** Compute stat impacts (before/after values) WITHOUT mutating the store. */
+  private computeStatImpacts(
+    changes: StatChange[],
+    entityMap: Record<string, string>,
+  ): StatImpact[] {
+    const { players } = useSquadStore.getState();
+    const impacts: StatImpact[] = [];
+
+    for (const change of changes) {
+      if (change.target === 'squad_wide') continue;
+
+      const entityId = entityMap[change.target];
+      if (!entityId || !change.target.startsWith('player_')) continue;
+
+      const player = players.find((p) => p.id === entityId);
+      if (!player) continue;
+
+      const current = player[change.field as keyof typeof player];
+      if (typeof current !== 'number') continue;
+
+      const next = this.applyOperator(current, change.operator, change.value);
+      impacts.push({
+        label: `${player.name} ${change.field.toUpperCase()}`,
+        delta: next - current,
+        from: current,
+        to: next,
+      });
+    }
+
+    return impacts;
   }
 
   private formatFacilityLabel(type: string): string {

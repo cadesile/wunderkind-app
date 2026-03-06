@@ -9,40 +9,41 @@ import { useFacilityStore } from '@/stores/facilityStore';
 import { PixelText } from '@/components/ui/PixelText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
 import { PitchBackground } from '@/components/ui/PitchBackground';
-import { PersonalityRadar } from '@/components/radar/PersonalityRadar';
+import { AttributesRadar } from '@/components/radar/AttributesRadar';
 import { WK, pixelShadow } from '@/constants/theme';
-import { TraitName } from '@/types/player';
+import { AttributeName } from '@/types/player';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
+import { moraleEmoji } from '@/utils/morale';
+import { ScoutReportCard } from '@/components/ScoutReportCard';
 
-const TRAIT_LABELS: Record<TraitName, string> = {
-  determination:   'DETERMINATION',
-  professionalism: 'PROFESSIONALISM',
-  ambition:        'AMBITION',
-  loyalty:         'LOYALTY',
-  adaptability:    'ADAPTABILITY',
-  pressure:        'PRESSURE',
-  temperament:     'TEMPERAMENT',
-  consistency:     'CONSISTENCY',
+// ─── Attribute bars (football skills) ────────────────────────────────────────
+
+const ATTR_LABELS: Record<AttributeName, string> = {
+  pace:      'PACE',
+  technical: 'TECHNICAL',
+  vision:    'VISION',
+  power:     'POWER',
+  stamina:   'STAMINA',
+  heart:     'HEART',
 };
 
-/** Colour for ability values: yellow ≥70% of 20 (14+), teal 40–70% (8–13), red <40% (<8) */
-function abilityColor(value: number): string {
-  if (value >= 14) return WK.yellow;
-  if (value >= 8)  return WK.tealLight;
+/** Color for 0–100 scale: ≥70 yellow, ≥40 teal, <40 red */
+function attrColor(value: number): string {
+  if (value >= 70) return WK.yellow;
+  if (value >= 40) return WK.tealLight;
   return WK.red;
 }
 
-function AbilityBar({ name, value }: { name: TraitName; value: number }) {
-  const pct = (value / 20) * 100;
-  const color = abilityColor(value);
+function AttributeBar({ name, value }: { name: AttributeName; value: number }) {
+  const pct = value;
+  const color = attrColor(value);
 
   return (
-    <View style={{ paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-        <PixelText size={9} dim>{TRAIT_LABELS[name]}</PixelText>
-        <PixelText size={9} color={color}>{value}/20</PixelText>
+    <View style={{ paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+        <PixelText size={9} dim>{ATTR_LABELS[name]}</PixelText>
+        <PixelText size={9} color={color}>{Math.round(value)}</PixelText>
       </View>
       <View style={{
         height: 6,
@@ -75,8 +76,8 @@ export default function PlayerDetailScreen() {
     weeksRemaining > 0   ? 'CRITICAL' : 'NONE';
   const weeklyFee = Math.round((player?.wage ?? 0) / 100); // pence → pounds
 
+  const [attrsExpanded, setAttrsExpanded] = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
-  const [breakdownExpanded, setBreakdownExpanded] = useState(false);
 
   const gameDate = getGameDate(weekNumber);
   const displayAge = player?.dateOfBirth
@@ -94,7 +95,9 @@ export default function PlayerDetailScreen() {
     );
   }
 
-  const traits = Object.entries(player.personality) as [TraitName, number][];
+  const attrEntries = player.attributes
+    ? (Object.entries(player.attributes) as [AttributeName, number][])
+    : null;
 
   function handleRelease() {
     Alert.alert(
@@ -159,7 +162,10 @@ export default function PlayerDetailScreen() {
         }}>
           <Avatar appearance={player.appearance} role="PLAYER" size={64} />
           <View style={{ flex: 1 }}>
-            <PixelText size={10} upper style={{ marginBottom: 4 }} numberOfLines={2}>{player.name}</PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <PixelText size={10} upper style={{ flex: 1 }} numberOfLines={2}>{player.name}</PixelText>
+              <PixelText size={14}>{moraleEmoji(player.morale ?? 70)}</PixelText>
+            </View>
             <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {displayAge}</PixelText>
             <PixelText size={7} dim style={{ marginTop: 2 }}>{player.nationality}</PixelText>
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
@@ -167,16 +173,39 @@ export default function PlayerDetailScreen() {
                 <PixelText size={6} dim>OVR</PixelText>
                 <PixelText size={14} color={WK.tealLight}>{player.overallRating}</PixelText>
               </View>
-              <View>
-                <PixelText size={6} dim>POT</PixelText>
-                {analyticsUnlocked
-                  ? <PixelText size={10} color={WK.yellow}>{'★'.repeat(player.potential)}</PixelText>
-                  : <PixelText size={8} color={WK.dim}>?????</PixelText>
-                }
-              </View>
             </View>
           </View>
         </View>
+
+        {/* Football Attributes — collapsible */}
+        {attrEntries && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.border,
+            ...pixelShadow,
+          }}>
+            <Pressable
+              onPress={() => setAttrsExpanded((v) => !v)}
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 14,
+              }}
+            >
+              <PixelText size={8} upper>Attributes</PixelText>
+              <PixelText size={8} color={WK.tealLight}>{attrsExpanded ? '▼' : '▶'}</PixelText>
+            </Pressable>
+            {attrsExpanded && (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 4 }}>
+                {attrEntries.map(([name, value]) => (
+                  <AttributeBar key={name} name={name} value={value} />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Ability Matrix radar — collapsible */}
         <View style={{
@@ -197,40 +226,20 @@ export default function PlayerDetailScreen() {
             <PixelText size={8} upper>Ability Matrix</PixelText>
             <PixelText size={8} color={WK.tealLight}>{matrixExpanded ? '▼' : '▶'}</PixelText>
           </Pressable>
-          {matrixExpanded && (
+          {matrixExpanded && player.attributes && (
             <View style={{ paddingHorizontal: 14, paddingBottom: 14, alignItems: 'center' }}>
-              <PersonalityRadar personality={player.personality} size={radarSize - 28} />
+              <AttributesRadar attributes={player.attributes} size={radarSize - 28} />
+            </View>
+          )}
+          {matrixExpanded && !player.attributes && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <PixelText size={7} dim>No attribute data yet.</PixelText>
             </View>
           )}
         </View>
 
-        {/* Ability Breakdown — collapsible */}
-        <View style={{
-          backgroundColor: WK.tealCard,
-          borderWidth: 3,
-          borderColor: WK.border,
-          ...pixelShadow,
-        }}>
-          <Pressable
-            onPress={() => setBreakdownExpanded((v) => !v)}
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: 14,
-            }}
-          >
-            <PixelText size={8} upper>Ability Breakdown</PixelText>
-            <PixelText size={8} color={WK.tealLight}>{breakdownExpanded ? '▼' : '▶'}</PixelText>
-          </Pressable>
-          {breakdownExpanded && (
-            <View style={{ paddingHorizontal: 14, paddingBottom: 4 }}>
-              {traits.map(([name, value]) => (
-                <AbilityBar key={name} name={name} value={value} />
-              ))}
-            </View>
-          )}
-        </View>
+        {/* Scout Report — personality archetype (no raw numbers) */}
+        <ScoutReportCard player={player} />
 
         {/* Contract Info */}
         {player.enrollmentEndWeek !== undefined && (
@@ -266,11 +275,9 @@ export default function PlayerDetailScreen() {
                 <PixelText size={7} color={WK.tealLight}>£{weeklyFee}/wk</PixelText>
               </View>
               {player.morale !== undefined && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <PixelText size={7} dim>MORALE</PixelText>
-                  <PixelText size={7} color={player.morale >= 70 ? WK.green : player.morale >= 40 ? WK.orange : WK.red}>
-                    {player.morale}/100
-                  </PixelText>
+                  <PixelText size={16}>{moraleEmoji(player.morale)}</PixelText>
                 </View>
               )}
               {(player.extensionCount ?? 0) > 0 && (
