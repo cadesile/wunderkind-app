@@ -418,6 +418,32 @@ export default function MarketScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
       <PitchBackground />
 
+      {/* Tab navigation */}
+      <PixelTopTabBar
+        tabs={['PLAYERS', 'COACHES', 'SCOUTS']}
+        active={activeTab}
+        onChange={(t) => setActiveTab(t as MarketTab)}
+      />
+
+      {/* Title section */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 4,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <PixelText size={10} upper>Market</PixelText>
+        <PixelText size={7} color={WK.yellow}>
+          {activeTab === 'PLAYERS' ? `${players.length} AVAILABLE`
+            : activeTab === 'COACHES' ? `${coaches.length} AVAILABLE`
+            : `${marketScouts.length} AVAILABLE`}
+        </PixelText>
+      </View>
+
       {/* Entity count strip */}
       <View style={{ flexDirection: 'row', marginHorizontal: 10, marginTop: 10, gap: 10 }}>
         <Card style={{ flex: 1, alignItems: 'center' }}>
@@ -433,13 +459,6 @@ export default function MarketScreen() {
           <PixelText size={14} color={WK.orange} style={{ marginTop: 4 }}>{marketScouts.length}</PixelText>
         </Card>
       </View>
-
-      {/* Sub-nav */}
-      <PixelTopTabBar
-        tabs={['PLAYERS', 'COACHES', 'SCOUTS']}
-        active={activeTab}
-        onChange={(t) => setActiveTab(t as MarketTab)}
-      />
 
       {/* Pane content */}
       <View style={{ flex: 1 }}>

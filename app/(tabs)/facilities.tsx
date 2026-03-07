@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Alert, Pressable } from 'react-native';
+import { View, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
@@ -7,6 +7,7 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { FACILITY_DEFS, FacilityMeta, FacilityType } from '@/types/facility';
 import { PixelText } from '@/components/ui/PixelText';
+import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -145,57 +146,6 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
   );
 }
 
-// ─── Category subnav ─────────────────────────────────────────────────────────
-
-function CategoryNav({
-  active,
-  onChange,
-}: {
-  active: FacilityCategory;
-  onChange: (c: FacilityCategory) => void;
-}) {
-  return (
-    <View style={{
-      flexDirection: 'row',
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      gap: 8,
-    }}>
-      {CATEGORIES.map(({ id, label }) => {
-        const isActive = id === active;
-        return (
-          <Pressable
-            key={id}
-            onPress={() => onChange(id)}
-            style={{
-              flex: 1,
-              paddingVertical: 8,
-              alignItems: 'center',
-              backgroundColor: isActive ? WK.yellow : WK.tealMid,
-              borderWidth: 3,
-              borderColor: WK.border,
-              ...(isActive ? {
-                shadowColor: '#000',
-                shadowOffset: { width: 2, height: 2 },
-                shadowOpacity: 0.4,
-                shadowRadius: 0,
-                elevation: 3,
-              } : {}),
-            }}
-          >
-            <PixelText
-              size={7}
-              color={isActive ? '#3a2000' : WK.dim}
-            >
-              {label}
-            </PixelText>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function FacilitiesScreen() {
@@ -215,6 +165,12 @@ export default function FacilitiesScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
       <PitchBackground />
 
+      <PixelTopTabBar
+        tabs={CATEGORIES.map((c) => c.label)}
+        active={activeCategory}
+        onChange={(t) => setActiveCategory(t as FacilityCategory)}
+      />
+
       {/* Header */}
       <View style={{
         backgroundColor: WK.tealMid,
@@ -229,9 +185,6 @@ export default function FacilitiesScreen() {
         <PixelText size={10} upper>Facilities</PixelText>
         <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
       </View>
-
-      {/* Category subnav */}
-      <CategoryNav active={activeCategory} onChange={setActiveCategory} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }}>
         {visibleDefs.map((def) => (
