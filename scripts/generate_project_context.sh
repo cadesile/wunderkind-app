@@ -1,57 +1,67 @@
 #!/bin/bash
 
 # generate_project_context.sh
-# Generates a comprehensive ${OUTPUT_FILE} file for Claude.ai integration
+# Generates a comprehensive context file for Claude.ai integration
+# Tailored for the Wunderkind Factory React Native / Expo app
 
 set -e
 
-# Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Get the repository name from the current directory
 REPO_NAME=$(basename "$PWD")
-# Define the output path using the repo name
 OUTPUT_FILE="${REPO_NAME}-context.md"
 
-echo -e "${BLUE}Generating ${OUTPUT_FILE}...${NC}"
+echo -e "${BLUE}Generating docs/${OUTPUT_FILE}...${NC}"
 
-# Ensure docs directory exists
 mkdir -p docs
 
-# Start building the context file
-cat > docs/${OUTPUT_FILE} << 'EOF'
-# Wunderkind Backend - Project Context
+# ─── Header ───────────────────────────────────────────────────────────────────
 
-> Last Updated: $(date +"%Y-%m-%d %H:%M:%S")
+cat > docs/${OUTPUT_FILE} << EOF
+# Wunderkind Factory — React Native App Context
+
+> Last updated: $(date +"%Y-%m-%d %H:%M:%S")
 
 ## Overview
-Wunderkind Factory backend API built with Symfony for managing youth football academies and leaderboard systems.
+Expo-managed React Native app for **The Wunderkind Factory** — a football academy
+management strategy game. Offline-first, client-authoritative weekly tick engine,
+Zustand state management, NativeWind v4 styling, Symfony backend sync.
 
 ---
 
 ## Technology Stack
 
-### Core Framework
-- **Symfony**: 6.4
-- **PHP**: 8.x
-- **Database**: MySQL/MariaDB
-- **Local Dev**: Lando
+| Layer | Tech |
+|---|---|
+| Framework | Expo SDK 54 (managed, Expo Go compatible) |
+| Navigation | Expo Router v4 (file-based, \`app/\` directory) |
+| State | Zustand + AsyncStorage persist middleware |
+| API / Sync | TanStack Query v5 (offline mutations) |
+| Styling | NativeWind v4 (Tailwind CSS for React Native) |
+| Language | TypeScript |
+| Icons | Lucide React Native + react-native-svg |
+| Font | Press Start 2P (pixel-art) |
 
-### Key Packages
+---
+
+## npm Dependencies
+
+\`\`\`json
 EOF
 
-# Add composer packages
-echo "- Extracting Composer dependencies..."
-cat >> docs/${OUTPUT_FILE} << 'EOF'
-
-```json
-EOF
-
-if [ -f "composer.json" ]; then
-    cat composer.json | jq -r '.require' >> docs/${OUTPUT_FILE} 2>/dev/null || \
-    grep -A 50 '"require"' composer.json | grep -B 50 '}' | head -n -1 >> docs/${OUTPUT_FILE}
+if [ -f "package.json" ]; then
+    node -e "
+const pkg = require('./package.json');
+const deps = { ...pkg.dependencies };
+const devDeps = { ...pkg.devDependencies };
+console.log('// dependencies');
+Object.entries(deps).forEach(([k,v]) => console.log(\`\${k}: \${v}\`));
+console.log('// devDependencies');
+Object.entries(devDeps).forEach(([k,v]) => console.log(\`\${k}: \${v}\`));
+" 2>/dev/null >> docs/${OUTPUT_FILE} || \
+    cat package.json | grep -A 200 '"dependencies"' | head -80 >> docs/${OUTPUT_FILE}
 fi
 
 cat >> docs/${OUTPUT_FILE} << 'EOF'
@@ -64,13 +74,17 @@ cat >> docs/${OUTPUT_FILE} << 'EOF'
 ```
 EOF
 
-# Add directory tree (limited depth)
 echo "- Building directory structure..."
 if command -v tree &> /dev/null; then
-    tree -L 3 -I 'vendor|var|node_modules' --dirsfirst >> docs/${OUTPUT_FILE}
+    tree -L 4 -I 'node_modules|.expo|.git|dist|build|*.lock|*.log' \
+         --dirsfirst \
+         -F \
+         app src scripts docs 2>/dev/null >> docs/${OUTPUT_FILE} || \
+    find . -type d \( -path '*/node_modules' -o -path '*/.expo' -o -path '*/.git' \) -prune \
+         -o -type f -print | head -60 >> docs/${OUTPUT_FILE}
 else
-    echo "Note: 'tree' command not found. Install with: brew install tree (macOS) or apt-get install tree (Linux)" >> docs/${OUTPUT_FILE}
-    find . -type d -not -path '*/vendor/*' -not -path '*/var/*' -not -path '*/node_modules/*' -not -path '*/.git/*' | head -30 >> docs/${OUTPUT_FILE}
+    find . \( -path '*/node_modules' -o -path '*/.expo' -o -path '*/.git' \) -prune \
+         -o -type f -print | grep -v '.lock' | head -60 >> docs/${OUTPUT_FILE}
 fi
 
 cat >> docs/${OUTPUT_FILE} << 'EOF'
@@ -78,26 +92,55 @@ cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## Database Entities
+## Navigation Architecture
+
+### Tab Routes (`app/(tabs)/`)
 
 EOF
 
-# List all entities
-echo "- Scanning entities..."
-if [ -d "src/Entity" ]; then
-    echo "### Available Entities" >> docs/${OUTPUT_FILE}
-    echo "" >> docs/${OUTPUT_FILE}
-    for entity in src/Entity/*.php; do
-        if [ -f "$entity" ]; then
-            entity_name=$(basename "$entity" .php)
-            echo "#### $entity_name" >> docs/${OUTPUT_FILE}
-            echo '```php' >> docs/${OUTPUT_FILE}
-            # Extract class definition and properties
-            sed -n '/^class /,/^{/p' "$entity" >> docs/${OUTPUT_FILE}
-            grep -E '^\s*(private|protected|public)\s+' "$entity" | head -20 >> docs/${OUTPUT_FILE}
-            echo '```' >> docs/${OUTPUT_FILE}
-            echo "" >> docs/${OUTPUT_FILE}
-        fi
+echo "- Scanning tab routes..."
+if [ -d "app/(tabs)" ]; then
+    for f in "app/(tabs)"/*.tsx; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f" .tsx)
+        echo "- \`$name\` — $(head -5 "$f" | grep -o '"[^"]*"' | head -1 | tr -d '"' || echo '')" >> docs/${OUTPUT_FILE}
+    done
+fi
+
+cat >> docs/${OUTPUT_FILE} << 'EOF'
+
+### Other Routes
+
+EOF
+
+# Non-tab routes
+find app -name "*.tsx" -not -path "*/\(tabs\)/*" -not -name "_layout.tsx" 2>/dev/null | sort | while read f; do
+    echo "- \`$f\`" >> docs/${OUTPUT_FILE}
+done
+
+cat >> docs/${OUTPUT_FILE} << 'EOF'
+
+---
+
+## Zustand Stores (`src/stores/`)
+
+EOF
+
+echo "- Scanning Zustand stores..."
+if [ -d "src/stores" ]; then
+    for store in src/stores/*.ts; do
+        [ -f "$store" ] || continue
+        store_name=$(basename "$store" .ts)
+        echo "### $store_name" >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
+        echo '```typescript' >> docs/${OUTPUT_FILE}
+        # Extract exported interfaces/types and the state interface
+        grep -E '^\s*(export interface|export type|interface [A-Z])' "$store" | head -10 >> docs/${OUTPUT_FILE}
+        echo "// Actions:" >> docs/${OUTPUT_FILE}
+        # Extract action names from the state interface or create() call
+        grep -E '^\s+[a-z][a-zA-Z]+\s*[:(]' "$store" | grep -v '//' | head -20 >> docs/${OUTPUT_FILE}
+        echo '```' >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
     done
 fi
 
@@ -105,45 +148,22 @@ cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## API Routes
+## Game Engine (`src/engine/`)
 
 EOF
 
-# Get API routes
-echo "- Extracting API routes..."
-if command -v lando &> /dev/null; then
-    echo '```' >> docs/${OUTPUT_FILE}
-    lando php bin/console debug:router 2>/dev/null | grep -E '^[a-z_]' | head -50 >> docs/${OUTPUT_FILE} || echo "Run 'lando php bin/console debug:router' to see routes" >> docs/${OUTPUT_FILE}
-    echo '```' >> docs/${OUTPUT_FILE}
-else
-    echo '```' >> docs/${OUTPUT_FILE}
-    echo "Lando not available. Routes can be found via:" >> docs/${OUTPUT_FILE}
-    echo "php bin/console debug:router" >> docs/${OUTPUT_FILE}
-    echo '```' >> docs/${OUTPUT_FILE}
-fi
-
-cat >> docs/${OUTPUT_FILE} << 'EOF'
-
----
-
-## Controllers
-
-EOF
-
-# List controllers with their methods
-echo "- Scanning controllers..."
-if [ -d "src/Controller" ]; then
-    for controller in src/Controller/*.php; do
-        if [ -f "$controller" ]; then
-            controller_name=$(basename "$controller" .php)
-            echo "### $controller_name" >> docs/${OUTPUT_FILE}
-            echo "" >> docs/${OUTPUT_FILE}
-            echo '```php' >> docs/${OUTPUT_FILE}
-            # Extract public methods (route handlers)
-            grep -E '^\s*#\[Route\(|^\s*public function' "$controller" | head -20 >> docs/${OUTPUT_FILE}
-            echo '```' >> docs/${OUTPUT_FILE}
-            echo "" >> docs/${OUTPUT_FILE}
-        fi
+echo "- Scanning engine files..."
+if [ -d "src/engine" ]; then
+    for eng in src/engine/*.ts; do
+        [ -f "$eng" ] || continue
+        eng_name=$(basename "$eng" .ts)
+        echo "### $eng_name" >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
+        echo '```typescript' >> docs/${OUTPUT_FILE}
+        # Extract exported functions and interfaces
+        grep -E '^export (function|const|interface|type|class)' "$eng" | head -15 >> docs/${OUTPUT_FILE}
+        echo '```' >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
     done
 fi
 
@@ -151,25 +171,21 @@ cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## Services
+## TypeScript Types (`src/types/`)
 
 EOF
 
-# List services
-echo "- Scanning services..."
-if [ -d "src/Service" ]; then
-    for service in src/Service/*.php; do
-        if [ -f "$service" ]; then
-            service_name=$(basename "$service" .php)
-            echo "### $service_name" >> docs/${OUTPUT_FILE}
-            echo "" >> docs/${OUTPUT_FILE}
-            echo '```php' >> docs/${OUTPUT_FILE}
-            # Extract class definition and public methods
-            sed -n '/^class /,/^{/p' "$service" >> docs/${OUTPUT_FILE}
-            grep -E '^\s*public function' "$service" | head -10 >> docs/${OUTPUT_FILE}
-            echo '```' >> docs/${OUTPUT_FILE}
-            echo "" >> docs/${OUTPUT_FILE}
-        fi
+echo "- Scanning type definitions..."
+if [ -d "src/types" ]; then
+    for types in src/types/*.ts; do
+        [ -f "$types" ] || continue
+        type_name=$(basename "$types" .ts)
+        echo "### $type_name" >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
+        echo '```typescript' >> docs/${OUTPUT_FILE}
+        grep -E '^(export interface|export type|export enum)' "$types" | head -20 >> docs/${OUTPUT_FILE}
+        echo '```' >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
     done
 fi
 
@@ -177,34 +193,91 @@ cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## Security Configuration
+## API Layer (`src/api/`)
+
+### Endpoints
 
 EOF
 
-# Add security.yaml
-echo "- Extracting security configuration..."
-if [ -f "config/packages/security.yaml" ]; then
-    echo '```yaml' >> docs/${OUTPUT_FILE}
-    cat config/packages/security.yaml >> docs/${OUTPUT_FILE}
-    echo '```' >> docs/${OUTPUT_FILE}
+echo "- Scanning API endpoints..."
+if [ -d "src/api/endpoints" ]; then
+    for ep in src/api/endpoints/*.ts; do
+        [ -f "$ep" ] || continue
+        ep_name=$(basename "$ep" .ts)
+        echo "#### $ep_name" >> docs/${OUTPUT_FILE}
+        echo '```typescript' >> docs/${OUTPUT_FILE}
+        grep -E '^export (async function|function|const)' "$ep" | head -10 >> docs/${OUTPUT_FILE}
+        echo '```' >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
+    done
+fi
+
+cat >> docs/${OUTPUT_FILE} << 'EOF'
+
+### Mutations (TanStack Query)
+
+EOF
+
+if [ -d "src/api/mutations" ]; then
+    for mut in src/api/mutations/*.ts; do
+        [ -f "$mut" ] || continue
+        mut_name=$(basename "$mut" .ts)
+        echo "#### $mut_name" >> docs/${OUTPUT_FILE}
+        echo '```typescript' >> docs/${OUTPUT_FILE}
+        grep -E '^export (function|const)' "$mut" | head -10 >> docs/${OUTPUT_FILE}
+        echo '```' >> docs/${OUTPUT_FILE}
+        echo "" >> docs/${OUTPUT_FILE}
+    done
 fi
 
 cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## Environment Configuration
-
-### Required Environment Variables
+## UI Components (`src/components/`)
 
 EOF
 
-# Extract .env.example or .env variables
-if [ -f ".env.example" ]; then
-    echo '```bash' >> docs/${OUTPUT_FILE}
-    grep -v '^#' .env.example | grep -v '^$' >> docs/${OUTPUT_FILE}
+echo "- Scanning components..."
+find src/components -name "*.tsx" 2>/dev/null | sort | while read comp; do
+    comp_name=$(basename "$comp" .tsx)
+    rel_path="${comp#src/components/}"
+    echo "- \`$rel_path\` — $(grep -m1 'export.*function\|export default' "$comp" 2>/dev/null | sed 's/export default function //' | sed 's/export function //' | cut -c1-60 || echo '')" >> docs/${OUTPUT_FILE}
+done
+
+cat >> docs/${OUTPUT_FILE} << 'EOF'
+
+---
+
+## Design System
+
+### Color Tokens (`src/constants/theme.ts`)
+
+EOF
+
+if [ -f "src/constants/theme.ts" ]; then
+    echo '```typescript' >> docs/${OUTPUT_FILE}
+    grep -E '^\s+[a-zA-Z]+:' src/constants/theme.ts | head -30 >> docs/${OUTPUT_FILE}
+    grep -E '^export' src/constants/theme.ts | head -10 >> docs/${OUTPUT_FILE}
     echo '```' >> docs/${OUTPUT_FILE}
-elif [ -f ".env" ]; then
+fi
+
+cat >> docs/${OUTPUT_FILE} << 'EOF'
+
+### Key Design Rules
+- Background: `#1a5c2a` (greenDark) · Cards: `#1d5c52` (tealCard)
+- Accent: `#f5c842` (yellow) · Border: `#0d2e28`
+- Font: `PressStart2P_400Regular` · `borderRadius: 0` · `borderWidth: 3`
+- `pixelShadow`: elevation 4, shadowRadius 0, offset (3,3)
+
+---
+
+## Environment Variables
+
+EOF
+
+echo "- Extracting env variables..."
+if [ -f ".env" ]; then
     echo '```bash' >> docs/${OUTPUT_FILE}
     grep -v '^#' .env | grep -v '^$' | sed 's/=.*/=***/' >> docs/${OUTPUT_FILE}
     echo '```' >> docs/${OUTPUT_FILE}
@@ -214,89 +287,83 @@ cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## Development Setup
-
-### Local Development with Lando
+## Development Commands
 
 ```bash
-# Start the environment
-lando start
+# Use correct Node version
+nvm use
 
-# Install dependencies
-lando composer install
+# Install dependencies (legacy peer deps required for SDK 54)
+npm install --legacy-peer-deps
 
-# Database setup
-lando php bin/console doctrine:database:create
-lando php bin/console doctrine:migrations:migrate
+# Start Metro bundler + Expo Go QR
+npx expo start
 
-# Clear cache
-lando php bin/console cache:clear
-```
+# iOS simulator
+npx expo start --ios
 
-### Useful Commands
+# Android simulator
+npx expo start --android
 
-```bash
-# View logs
-lando logs -s appserver
-
-# Run tests
-lando php bin/phpunit
-
-# Debug routes
-lando php bin/console debug:router
-
-# Debug firewall
-lando php bin/console debug:firewall
+# Start dev proxy (bridges Lando backend to LAN)
+npm run proxy
 ```
 
 ---
 
-## Recent Development Activity
+## Backend API Contract
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/register` | Register new academy |
+| POST | `/api/login` | Login → JWT token |
+| GET | `/api/market/data` | Fetch market entities |
+| POST | `/api/market/assign` | Assign entity to academy |
+| POST | `/api/academy/initialize` | Initialize academy on backend |
+| GET | `/api/academy/status` | Reputation, balance (pence) |
+| GET | `/api/squad` | Squad reconciliation |
+| GET | `/api/staff` | Staff reconciliation |
+| GET | `/api/facilities` | Facility levels + costs (pence) |
+| POST | `/api/facilities/:type/upgrade` | Upgrade a facility |
+| GET | `/api/inbox` | Inbox messages |
+| POST | `/api/inbox/:id/accept\|reject\|read` | Respond to message |
+| POST | `/api/sync` | Weekly tick sync |
+
+> **Balance convention**: backend uses pence; local stores use whole pounds.
+> Use `penceToPounds()` / `poundsToPence()` from `src/utils/currency.ts`.
+
+---
+
+## Recent Git Activity
 
 EOF
 
-# Add recent git commits
 echo "- Extracting recent commits..."
 echo '```' >> docs/${OUTPUT_FILE}
-git log --oneline -10 2>/dev/null >> docs/${OUTPUT_FILE} || echo "Git history not available" >> docs/${OUTPUT_FILE}
+git log --oneline -15 2>/dev/null >> docs/${OUTPUT_FILE} || echo "Git history not available" >> docs/${OUTPUT_FILE}
 echo '```' >> docs/${OUTPUT_FILE}
 
 cat >> docs/${OUTPUT_FILE} << 'EOF'
 
 ---
 
-## Notes for AI Context
+## Key Architecture Notes
 
-### Current Focus Areas
-- JWT Authentication implementation
-- Leaderboard sync endpoints
-- Admin UI development
-- Academy management system
-
-### Key Design Patterns
-- Repository pattern for data access
-- Service layer for business logic
-- DTO pattern for API requests/responses
-- Event-driven architecture where applicable
-
-### Testing Strategy
-- Unit tests for services
-- Integration tests for repositories
-- API tests for controllers
-
----
-
-## Additional Resources
-
-- [Symfony Documentation](https://symfony.com/doc/current/index.html)
-- [Doctrine ORM](https://www.doctrine-project.org/projects/doctrine-orm/en/latest/)
-- [JWT Authentication Bundle](https://github.com/lexik/LexikJWTAuthenticationBundle)
+- **Fat client / offline-first**: all game simulation runs on-device; backend receives opaque JSON deltas via `/api/sync`
+- **Weekly tick** (`src/engine/GameLoop.ts`): traits, attributes, finances, loans, rep, morale, scouting, relationships — all computed in one pass
+- **Personality Matrix**: 8 traits (determination, professionalism, ambition, loyalty, adaptability, pressure, temperament, consistency) on 1–20 scale
+- **Attribute model**: 6 attributes (pace, technical, vision, power, stamina, heart) on 0–100 scale; capped at `potential × 20`
+- **Overall Rating**: increments by avg attribute gain per tick (not reset to attribute average)
+- **Scouting**: Fog of War — `hidden → scouting → revealed` over 2 weeks; gem discovery via `ScoutingService.checkGemDiscovery()`
+- **Relationships**: −100 to +100 ledger between players/coaches/scouts/manager
+- **Morale**: 0–100; <40 halves coach `effectiveInfluence`
+- **Path aliases**: `@/*` → `src/*`
 
 EOF
 
-echo -e "${GREEN}✓ ${OUTPUT_FILE} generated successfully at docs/${OUTPUT_FILE}${NC}"
+echo -e "${GREEN}✓ Generated docs/${OUTPUT_FILE}${NC}"
 echo ""
 echo "Next steps:"
 echo "1. Review docs/${OUTPUT_FILE}"
 echo "2. Upload to Claude.ai project knowledge base"
-echo "3. Re-run this script whenever major changes occur"
+echo "3. Re-run whenever major structural changes occur"
