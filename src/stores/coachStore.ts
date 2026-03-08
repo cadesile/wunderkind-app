@@ -7,6 +7,7 @@ interface CoachState {
   coaches: Coach[];
   addCoach: (coach: Coach) => void;
   removeCoach: (id: string) => void;
+  updateCoach: (id: string, changes: Partial<Coach>) => void;
 }
 
 export const useCoachStore = create<CoachState>()(
@@ -17,6 +18,10 @@ export const useCoachStore = create<CoachState>()(
         set((state) => ({ coaches: [...state.coaches, coach] })),
       removeCoach: (id) =>
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== id) })),
+      updateCoach: (id, changes) =>
+        set((state) => ({
+          coaches: state.coaches.map((c) => c.id === id ? { ...c, ...changes } : c),
+        })),
     }),
     { name: 'coach-store', storage: zustandStorage }
   )

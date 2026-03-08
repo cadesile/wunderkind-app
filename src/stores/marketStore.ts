@@ -14,6 +14,17 @@ import { marketApi } from '@/api/endpoints/market';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+function calculateAgentOffer(baseValue: number): number {
+  const roll = Math.random();
+  if (roll < 0.70) {
+    return Math.round(baseValue * (0.90 + Math.random() * 0.20));
+  }
+  const isCheap = Math.random() < 0.5;
+  return Math.round(baseValue * (isCheap
+    ? (0.40 + Math.random() * 0.20)
+    : (1.40 + Math.random() * 0.20)));
+}
+
 // ─── State shape ──────────────────────────────────────────────────────────────
 
 interface MarketState {
@@ -47,6 +58,8 @@ interface MarketState {
    * be signed twice. Call immediately after a local recruit action.
    */
   removeFromMarket: (entityType: 'player' | 'coach' | 'scout', id: string) => void;
+  updateMarketPlayer: (id: string, changes: Partial<MarketPlayer>) => void;
+  addMarketPlayer: (player: MarketPlayer) => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -64,16 +77,39 @@ export const useMarketStore = create<MarketState>()(
       isLoading: false,
       error: null,
 
-      setMarketData: (data) =>
+      setMarketData: (data) => {
+        const existingPlayers = get().players;
+        const playersWithScouting = data.players.map((p) => {
+          const existing = existingPlayers.find((e) => e.id === p.id);
+          if (existing?.scoutingStatus) {
+            return {
+              ...p,
+              scoutingStatus: existing.scoutingStatus,
+              scoutingProgress: existing.scoutingProgress ?? 0,
+              marketValue: existing.marketValue ?? p.currentAbility * 1000,
+              currentOffer: existing.currentOffer ?? calculateAgentOffer(p.currentAbility * 1000),
+              perceivedAbility: existing.perceivedAbility,
+              assignedScoutId: existing.assignedScoutId,
+            };
+          }
+          return {
+            ...p,
+            scoutingStatus: 'hidden' as const,
+            scoutingProgress: 0,
+            marketValue: p.currentAbility * 1000,
+            currentOffer: calculateAgentOffer(p.currentAbility * 1000),
+          };
+        });
         set({
-          players: data.players,
+          players: playersWithScouting,
           coaches: data.coaches,
           marketScouts: data.scouts,
           agents: data.agents,
           sponsors: data.sponsors,
           investors: data.investors,
           lastFetchedAt: new Date().toISOString(),
-        }),
+        });
+      },
 
       fetchMarketData: async () => {
         const { lastFetchedAt, isLoading } = get();
@@ -105,6 +141,12 @@ export const useMarketStore = create<MarketState>()(
           set((s) => ({ marketScouts: s.marketScouts.filter((sc) => sc.id !== id) }));
         }
       },
+      updateMarketPlayer: (id, changes) =>
+        set((state) => ({
+          players: state.players.map((p) => p.id === id ? { ...p, ...changes } : p),
+        })),
+      addMarketPlayer: (player) =>
+        set((state) => ({ players: [...state.players, player] })),
     }),
     {
       name: 'market-store',

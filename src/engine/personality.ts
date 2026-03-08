@@ -121,6 +121,7 @@ export function generatePlayer(position: Position, currentGameDate: Date): Playe
     attributes,
     appearance: generateAppearance(id, 'PLAYER', ageYears, personality),
     morale: 70,
+    relationships: [],
     guardianId: null,
     agentId: null,
     joinedWeek: 1,

@@ -12,6 +12,13 @@ export type PersonalityMatrix = Record<TraitName, number>; // 1–20 scale
 
 export type Position = 'GK' | 'DEF' | 'MID' | 'FWD';
 
+export interface Relationship {
+  id: string;
+  type: 'player' | 'coach' | 'scout';
+  value: number;       // -100 to +100
+  lastInteraction?: number; // game week
+}
+
 export type PlayerStatus =
   | 'active'
   | 'loaned_out'
@@ -92,4 +99,5 @@ export interface Player {
   extensionCount?: number;
   /** Granular football attributes — generated on first tick after joining */
   attributes?: PlayerAttributes;
+  relationships?: Relationship[];
 }

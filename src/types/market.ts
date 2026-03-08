@@ -20,6 +20,8 @@ export interface Scout {
   nationality: string;
   joinedWeek?: number;
   appearance?: import('./player').Appearance;
+  assignedPlayerIds?: string[];
+  morale?: number;
 }
 
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
@@ -78,6 +80,12 @@ export interface MarketPlayer {
   personality: PersonalityMatrix | null;
   /** Assigned agent, or null if unrepresented */
   agent: Agent | null;
+  scoutingStatus?: 'hidden' | 'scouting' | 'revealed';
+  scoutingProgress?: number;
+  marketValue?: number;     // pence = currentAbility * 1000
+  currentOffer?: number;    // agent's asking price in pence
+  perceivedAbility?: number; // revealed ability with scout error applied
+  assignedScoutId?: string;
 }
 
 /** A coach available in the backend market. */
@@ -104,6 +112,13 @@ export interface MarketScout {
   successRate: number;
   /** Weekly, in pence */
   salary: number;
+}
+
+export interface ScoutingTask {
+  playerId: string;
+  scoutId: string;
+  startedWeek: number;
+  progressWeeks: number;
 }
 
 /** Full market data response from GET /api/market/data. */

@@ -3,6 +3,8 @@ import { calculateWeeklyFinances } from './finance';
 import { simulationService } from './SimulationService';
 import { generateAgentOffer } from './agentOffers';
 import { computePlayerDevelopment } from './DevelopmentService';
+import { processScoutingTasks, checkGemDiscovery, refreshMarketOffers } from './ScoutingService';
+import { processWeeklyMoraleDecay, processOrganicRelationshipGrowth } from './RelationshipService';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -224,6 +226,15 @@ export function processWeeklyTick(): WeeklyTick {
       }
     }
   }
+
+  // ── 10. Scouting progression ──────────────────────────────────────────────────
+  processScoutingTasks();
+  checkGemDiscovery();
+  refreshMarketOffers();
+
+  // ── 11. Relationship & morale ─────────────────────────────────────────────────
+  processWeeklyMoraleDecay();
+  processOrganicRelationshipGrowth();
 
   return {
     week: weekNumber,

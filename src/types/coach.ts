@@ -25,4 +25,6 @@ export interface Coach {
   joinedWeek: number;
   /** 1–2 attribute specialisms this coach develops in players */
   specialisms?: CoachSpecialisms;
+  morale?: number;
+  relationships?: import('./player').Relationship[];
 }

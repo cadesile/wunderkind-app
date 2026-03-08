@@ -102,18 +102,33 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const addPlayer = useSquadStore((s) => s.addPlayer);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
+  const scouts = useScoutStore((s) => s.scouts);
+  const coaches = useCoachStore((s) => s.coaches);
   const [signing, setSigning] = useState(false);
+  const [showScoutPicker, setShowScoutPicker] = useState(false);
+
+  const status = player.scoutingStatus ?? 'hidden';
+  const isRevealed = status === 'revealed';
+  const isScouting = status === 'scouting';
+  const displayAbility = isRevealed ? (player.perceivedAbility ?? player.currentAbility) : null;
+  const weeklyWage = isRevealed ? (player.perceivedAbility ?? player.currentAbility) : null;
+  const offer = player.currentOffer ?? player.marketValue ?? player.currentAbility * 1000;
+
+  // Get head coach opinion (highest influence coach)
+  const headCoach = coaches.length > 0
+    ? coaches.reduce((best, c) => c.influence > best.influence ? c : best, coaches[0])
+    : null;
 
   const gameDate = getGameDate(weekNumber);
   const age = player.dateOfBirth ? computePlayerAge(player.dateOfBirth, gameDate) : '?';
-  // wage = currentAbility × 100 pence ÷ 100 = currentAbility pounds
-  const weeklyWage = player.currentAbility;
 
   async function handleRecruit() {
     setSigning(true);
     try {
       await marketApi.assignEntity('player', player.id);
       const newPlayer = marketPlayerToPlayer(player, weekNumber);
+      newPlayer.relationships = [];
+      newPlayer.morale = 70;
       addPlayer(newPlayer);
       removeFromMarket('player', player.id);
       Alert.alert('Recruited!', `${player.firstName} ${player.lastName} has joined the academy.`);
@@ -124,23 +139,50 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
     }
   }
 
+  // Status badge info
+  const statusBadge =
+    status === 'hidden' ? { label: 'UNSCOUTED', color: WK.dim } :
+    status === 'scouting' ? { label: `SCOUTING ${player.scoutingProgress ?? 0}/2`, color: WK.yellow } :
+    { label: 'SCOUTED', color: WK.green };
+
+  // Available scouts for assignment (morale >= 40, not at full capacity)
+  const availableScouts = scouts.filter(
+    (s) => (s.morale ?? 70) >= 40 && (s.assignedPlayerIds ?? []).length < 5
+  );
+
   return (
     <View style={{
       backgroundColor: WK.tealCard,
       borderWidth: 3,
-      borderColor: WK.border,
+      borderColor: isRevealed ? WK.tealLight : WK.border,
       padding: 12,
       marginBottom: 10,
       ...pixelShadow,
     }}>
-      <PixelText size={8} upper numberOfLines={1}>
-        {player.firstName} {player.lastName}
-      </PixelText>
-      <PixelText size={6} dim style={{ marginTop: 4 }}>
-        AGE {age} · {player.nationality}
-      </PixelText>
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1 }}>
+          <PixelText size={8} upper numberOfLines={1}>
+            {player.firstName} {player.lastName}
+          </PixelText>
+          <PixelText size={6} dim style={{ marginTop: 4 }}>
+            AGE {age} · {player.nationality}
+          </PixelText>
+        </View>
+        {/* Status badge */}
+        <View style={{
+          backgroundColor: statusBadge.color + '33',
+          borderWidth: 2,
+          borderColor: statusBadge.color,
+          paddingHorizontal: 6,
+          paddingVertical: 3,
+          marginLeft: 8,
+        }}>
+          <PixelText size={6} color={statusBadge.color}>{statusBadge.label}</PixelText>
+        </View>
+      </View>
 
-      {/* Position · wage · OVR row */}
+      {/* Position · ability row */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -157,22 +199,115 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
           }}>
             <PixelText size={7} color={WK.tealLight}>{player.position}</PixelText>
           </View>
-          <PixelText size={7} color={WK.yellow}>£{weeklyWage}/wk</PixelText>
+          {isRevealed && weeklyWage !== null && (
+            <PixelText size={7} color={WK.yellow}>£{weeklyWage}/wk</PixelText>
+          )}
         </View>
-        <Badge label={`OVR ${player.currentAbility}`} color="yellow" />
+        {isRevealed && displayAbility !== null ? (
+          <Badge label={`OVR ${displayAbility}`} color="yellow" />
+        ) : (
+          <Badge label="OVR ??" color="dim" />
+        )}
       </View>
 
-      <StatBar value={player.currentAbility} max={100} />
+      {/* Ability bar */}
+      {isRevealed && displayAbility !== null ? (
+        <StatBar value={displayAbility} max={100} />
+      ) : (
+        <View style={{
+          height: 5,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          borderWidth: 2,
+          borderColor: WK.border,
+          marginTop: 8,
+        }}>
+          <View style={{ height: '100%', width: '33%', backgroundColor: WK.dim }} />
+        </View>
+      )}
 
-      <View style={{ marginTop: 10 }}>
-        <Button
-          label={signing ? 'SIGNING...' : 'RECRUIT'}
-          variant="green"
-          fullWidth
-          onPress={handleRecruit}
-          disabled={signing}
-        />
+      {/* Offer price */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+        <PixelText size={6} dim>ASKING PRICE</PixelText>
+        <PixelText size={7} color={WK.orange}>
+          {isRevealed ? `£${Math.round(offer / 100).toLocaleString()}` : '??'}
+        </PixelText>
       </View>
+
+      {/* Coach opinion (only when revealed and coach available) */}
+      {isRevealed && headCoach && (() => {
+        const { getCoachOpinion } = require('@/engine/CoachValuation');
+        const opinion = getCoachOpinion(player, headCoach);
+        const opinionColor =
+          opinion.verdict === 'great_deal' ? WK.yellow :
+          opinion.verdict === 'poor_deal' ? WK.red : WK.tealLight;
+        return (
+          <PixelText size={6} color={opinionColor} style={{ marginTop: 6 }}>
+            {'\u25C6'} {opinion.note}
+          </PixelText>
+        );
+      })()}
+
+      {/* Scout picker (hidden/scouting only) */}
+      {!isRevealed && (
+        <View style={{ marginTop: 10 }}>
+          <Button
+            label={showScoutPicker ? 'CANCEL' : (isScouting ? 'REASSIGN SCOUT' : 'ASSIGN SCOUT')}
+            variant="teal"
+            fullWidth
+            onPress={() => setShowScoutPicker((v) => !v)}
+            disabled={availableScouts.length === 0}
+          />
+          {availableScouts.length === 0 && !showScoutPicker && (
+            <PixelText size={6} dim style={{ marginTop: 4, textAlign: 'center' }}>
+              NO SCOUTS AVAILABLE
+            </PixelText>
+          )}
+          {showScoutPicker && (
+            <View style={{ marginTop: 8, gap: 6 }}>
+              {availableScouts.map((scout) => (
+                <View key={scout.id} style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  backgroundColor: WK.tealMid,
+                  padding: 8,
+                  borderWidth: 2,
+                  borderColor: WK.border,
+                }}>
+                  <View>
+                    <PixelText size={6}>{scout.name}</PixelText>
+                    <PixelText size={6} dim>
+                      {scout.successRate}% · {(scout.assignedPlayerIds ?? []).length}/5
+                    </PixelText>
+                  </View>
+                  <Button
+                    label="ASSIGN"
+                    variant="yellow"
+                    onPress={() => {
+                      const { assignScoutToPlayer } = require('@/engine/ScoutingService');
+                      assignScoutToPlayer(scout.id, player.id);
+                      setShowScoutPicker(false);
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Recruit button (revealed only) */}
+      {isRevealed && (
+        <View style={{ marginTop: 10 }}>
+          <Button
+            label={signing ? 'SIGNING...' : 'RECRUIT'}
+            variant="green"
+            fullWidth
+            onPress={handleRecruit}
+            disabled={signing}
+          />
+        </View>
+      )}
     </View>
   );
 }

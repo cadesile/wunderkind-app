@@ -241,6 +241,49 @@ export default function PlayerDetailScreen() {
         {/* Scout Report — personality archetype (no raw numbers) */}
         <ScoutReportCard player={player} />
 
+        {/* Social Graph */}
+        {(player.relationships ?? []).length > 0 && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.border,
+            padding: 14,
+            ...pixelShadow,
+          }}>
+            <PixelText size={8} upper style={{ marginBottom: 10 }}>Social Graph</PixelText>
+            {(player.relationships ?? []).map((rel) => {
+              const name = (() => {
+                if (rel.type === 'coach') {
+                  const c = require('@/stores/coachStore').useCoachStore.getState().coaches.find((x: { id: string }) => x.id === rel.id);
+                  return c ? `${c.name} (Coach)` : 'Unknown Coach';
+                }
+                if (rel.type === 'scout') {
+                  const s = require('@/stores/scoutStore').useScoutStore.getState().scouts.find((x: { id: string }) => x.id === rel.id);
+                  return s ? `${s.name} (Scout)` : 'Unknown Scout';
+                }
+                const p = require('@/stores/squadStore').useSquadStore.getState().players.find((x: { id: string }) => x.id === rel.id);
+                return p ? p.name : 'Unknown Player';
+              })();
+              const isPositive = rel.value >= 0;
+              return (
+                <View key={rel.id} style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingVertical: 8,
+                  borderBottomWidth: 2,
+                  borderBottomColor: WK.border,
+                }}>
+                  <PixelText size={6} style={{ flex: 1 }} numberOfLines={1}>{name}</PixelText>
+                  <PixelText size={6} color={isPositive ? WK.green : WK.red}>
+                    {isPositive ? `TRUST +${rel.value}` : `CONFLICT ${rel.value}`}
+                  </PixelText>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* Contract Info */}
         {player.enrollmentEndWeek !== undefined && (
           <View style={{
