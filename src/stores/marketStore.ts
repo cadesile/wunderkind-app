@@ -11,6 +11,12 @@ import {
 } from '@/types/market';
 import { zustandStorage } from '@/utils/storage';
 import { marketApi } from '@/api/endpoints/market';
+import { useCoachStore } from './coachStore';
+import { useSquadStore } from './squadStore';
+import { useScoutStore } from './scoutStore';
+import { useAcademyStore } from './academyStore';
+import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
+import { updateCoachRelationship } from '@/engine/RelationshipService';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -60,6 +66,10 @@ interface MarketState {
   removeFromMarket: (entityType: 'player' | 'coach' | 'scout', id: string) => void;
   updateMarketPlayer: (id: string, changes: Partial<MarketPlayer>) => void;
   addMarketPlayer: (player: MarketPlayer) => void;
+  signPlayer: (playerId: string) => void;
+  rejectPlayer: (playerId: string) => void;
+  hireCoach: (coachId: string, weekNumber: number) => void;
+  hireScout: (scoutId: string, weekNumber: number) => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -147,6 +157,153 @@ export const useMarketStore = create<MarketState>()(
         })),
       addMarketPlayer: (player) =>
         set((state) => ({ players: [...state.players, player] })),
+
+      signPlayer: (playerId) => {
+        const player = get().players.find((p) => p.id === playerId);
+        if (!player) return;
+
+        const { coaches } = useCoachStore.getState();
+        const headCoach = getHeadCoach(coaches);
+
+        // Coach opinion and morale effects
+        if (headCoach && player.marketValue && player.currentOffer) {
+          try {
+            const opinion = getCoachPerception(player, headCoach);
+            if (opinion.verdict === 'insulting') {
+              useCoachStore.getState().updateMorale(headCoach.id, -10);
+              updateCoachRelationship(headCoach.id, 'manager', 'manager', -15);
+            } else if (opinion.verdict === 'steal') {
+              useCoachStore.getState().updateMorale(headCoach.id, 5);
+            }
+          } catch { /* ignore valuation errors */ }
+        }
+
+        // Generate scouting report if player was revealed
+        let scoutingReport: import('@/types/player').ScoutingReport | undefined;
+        if (player.scoutingStatus === 'revealed' && player.perceivedAbility != null) {
+          const diff = Math.abs(player.currentAbility - player.perceivedAbility);
+          scoutingReport = {
+            scoutId: player.assignedScoutId ?? 'unknown',
+            scoutName: 'Scout',
+            perceivedOverall: player.perceivedAbility,
+            perceivedPotential: player.potential,
+            actualOverall: player.currentAbility,
+            actualPotential: player.potential,
+            accuracyPercent: Math.max(0, 100 - diff * 2),
+            revealedAt: useAcademyStore.getState().academy.weekNumber ?? 1,
+          };
+        }
+
+        // Add to squad with true stats, stripped of market fields
+        const { addPlayer } = useSquadStore.getState();
+        const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { generatePersonality } = require('@/engine/personality');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { generateAppearance } = require('@/engine/appearance');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { computePlayerAge, getGameDate } = require('@/utils/gameDate');
+        const gameDate = getGameDate(weekNumber);
+        const ageRaw = player.dateOfBirth ? computePlayerAge(player.dateOfBirth, gameDate) : 17;
+        const age = typeof ageRaw === 'number' ? ageRaw : 17;
+        const personality = generatePersonality();
+
+        addPlayer({
+          id: player.id,
+          name: `${player.firstName} ${player.lastName}`,
+          dateOfBirth: player.dateOfBirth,
+          age,
+          position: player.position,
+          nationality: player.nationality,
+          overallRating: player.currentAbility,
+          potential: player.potential,
+          wage: player.currentAbility * 100,
+          personality,
+          appearance: generateAppearance(player.id, 'PLAYER', age, personality),
+          guardianId: null,
+          agentId: player.agent?.id ?? null,
+          joinedWeek: weekNumber,
+          isActive: true,
+          morale: 70,
+          relationships: [],
+          scoutingReport,
+        });
+
+        set((state) => ({
+          players: state.players.filter((p) => p.id !== playerId),
+        }));
+      },
+
+      rejectPlayer: (playerId) => {
+        const player = get().players.find((p) => p.id === playerId);
+        if (!player) return;
+
+        const { coaches } = useCoachStore.getState();
+        const headCoach = getHeadCoach(coaches);
+
+        if (headCoach && player.marketValue && player.currentOffer) {
+          try {
+            const opinion = getCoachPerception(player, headCoach);
+            if (opinion.verdict === 'steal') {
+              // Rejected a deal coach wanted
+              useCoachStore.getState().updateMorale(headCoach.id, -5);
+            } else if (opinion.verdict === 'insulting') {
+              // Agreed to reject an overpriced player
+              updateCoachRelationship(headCoach.id, 'manager', 'manager', 10);
+              useCoachStore.getState().updateMorale(headCoach.id, 3);
+            }
+          } catch { /* ignore */ }
+        }
+
+        set((state) => ({
+          players: state.players.filter((p) => p.id !== playerId),
+        }));
+      },
+
+      hireCoach: (coachId, weekNumber) => {
+        const marketCoach = get().coaches.find((c) => c.id === coachId);
+        if (!marketCoach) return;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { generatePersonality } = require('@/engine/personality');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { generateAppearance } = require('@/engine/appearance');
+        const personality = generatePersonality();
+        useCoachStore.getState().addCoach({
+          id: marketCoach.id,
+          name: `${marketCoach.firstName} ${marketCoach.lastName}`,
+          role: marketCoach.role,
+          salary: marketCoach.salary,
+          influence: marketCoach.influence,
+          personality,
+          appearance: generateAppearance(marketCoach.id, 'COACH', 35, personality),
+          nationality: marketCoach.nationality,
+          joinedWeek: weekNumber,
+          morale: 70,
+          relationships: [],
+        });
+        set((state) => ({ coaches: state.coaches.filter((c) => c.id !== coachId) }));
+      },
+
+      hireScout: (scoutId, weekNumber) => {
+        const marketScout = get().marketScouts.find((s) => s.id === scoutId);
+        if (!marketScout) return;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { generateAppearance } = require('@/engine/appearance');
+        useScoutStore.getState().addScout({
+          id: marketScout.id,
+          name: `${marketScout.firstName} ${marketScout.lastName}`,
+          salary: marketScout.salary,
+          scoutingRange: marketScout.scoutingRange,
+          successRate: marketScout.successRate,
+          nationality: marketScout.nationality,
+          joinedWeek: weekNumber,
+          appearance: generateAppearance(marketScout.id, 'SCOUT', 35),
+          morale: 70,
+          relationships: [],
+          assignedPlayerIds: [],
+        });
+        set((state) => ({ marketScouts: state.marketScouts.filter((s) => s.id !== scoutId) }));
+      },
     }),
     {
       name: 'market-store',

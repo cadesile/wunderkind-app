@@ -163,6 +163,14 @@ export interface SyncRequest {
     discipline: number;
     ambition: number;
   };
+  /** Opaque relationship/morale snapshot — stored by backend as JSON, returned in future syncs */
+  playerRelationships?: Record<string, import('./player').Relationship[]>;
+  coachRelationships?: Record<string, import('./player').Relationship[]>;
+  scoutRelationships?: Record<string, import('./player').Relationship[]>;
+  playerMorale?: Record<string, number>;
+  coachMorale?: Record<string, number>;
+  scoutMorale?: Record<string, number>;
+  scoutingTasks?: Record<string, string[]>;
 }
 
 export interface SyncAcceptedResponse {

@@ -14,9 +14,20 @@ export type Position = 'GK' | 'DEF' | 'MID' | 'FWD';
 
 export interface Relationship {
   id: string;
-  type: 'player' | 'coach' | 'scout';
+  type: 'player' | 'coach' | 'scout' | 'manager';
   value: number;       // -100 to +100
   lastInteraction?: number; // game week
+}
+
+export interface ScoutingReport {
+  scoutId: string;
+  scoutName: string;
+  perceivedOverall: number;
+  perceivedPotential: number;
+  actualOverall: number;
+  actualPotential: number;
+  accuracyPercent: number;
+  revealedAt: number; // game week
 }
 
 export type PlayerStatus =
@@ -100,4 +111,8 @@ export interface Player {
   /** Granular football attributes — generated on first tick after joining */
   attributes?: PlayerAttributes;
   relationships?: Relationship[];
+  /** ID of the coach currently training this player */
+  assignedCoachId?: string;
+  /** Post-signing accuracy comparison between scout report and true stats */
+  scoutingReport?: ScoutingReport;
 }

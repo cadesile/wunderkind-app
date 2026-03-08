@@ -23,6 +23,8 @@ interface SquadState {
   /** Apply arbitrary top-level field changes to a single player (used by SimulationService). */
   updatePlayer: (id: string, changes: Partial<Player>) => void;
   updateTrait: (playerId: string, trait: TraitName, delta: number) => void;
+  assignCoach: (playerId: string, coachId: string) => void;
+  updateMorale: (playerId: string, delta: number) => void;
   /**
    * Applies trait shifts AND attribute development in a single set() call.
    * This is the ONLY squads store mutation that should happen per weekly tick,
@@ -112,6 +114,22 @@ export const useSquadStore = create<SquadState>()(
             return { ...p, personality: updated };
           }),
         })),
+      assignCoach: (playerId, coachId) =>
+        set((state) => ({
+          players: state.players.map((p) =>
+            p.id === playerId ? { ...p, assignedCoachId: coachId } : p,
+          ),
+        })),
+
+      updateMorale: (playerId, delta) =>
+        set((state) => ({
+          players: state.players.map((p) =>
+            p.id === playerId
+              ? { ...p, morale: Math.max(0, Math.min(100, (p.morale ?? 70) + delta)) }
+              : p,
+          ),
+        })),
+
       releasePlayer: async (playerId) => {
         const player = get().players.find((p) => p.id === playerId);
         if (!player) return { success: false, error: 'Player not found' };

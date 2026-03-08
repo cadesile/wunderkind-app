@@ -241,6 +241,40 @@ export default function PlayerDetailScreen() {
         {/* Scout Report — personality archetype (no raw numbers) */}
         <ScoutReportCard player={player} />
 
+        {/* Scouting Accuracy Report */}
+        {player.scoutingReport && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.tealLight,
+            padding: 14,
+            ...pixelShadow,
+          }}>
+            <PixelText size={8} upper style={{ marginBottom: 10 }}>Scout Accuracy Report</PixelText>
+            <PixelText size={6} dim style={{ marginBottom: 8 }}>
+              Scouted by {player.scoutingReport.scoutName} · {player.scoutingReport.accuracyPercent}% accurate
+            </PixelText>
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={6} dim>OVERALL RATING</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <PixelText size={6} color={WK.dim}>{player.scoutingReport.perceivedOverall}</PixelText>
+                  <PixelText size={6} dim>→</PixelText>
+                  <PixelText size={7} color={WK.green}>{player.scoutingReport.actualOverall}</PixelText>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+                <PixelText size={6} dim>POTENTIAL</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <PixelText size={6} color={WK.dim}>{player.scoutingReport.perceivedPotential}</PixelText>
+                  <PixelText size={6} dim>→</PixelText>
+                  <PixelText size={7} color={WK.green}>{player.scoutingReport.actualPotential}</PixelText>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Social Graph */}
         {(player.relationships ?? []).length > 0 && (
           <View style={{
@@ -283,6 +317,36 @@ export default function PlayerDetailScreen() {
             })}
           </View>
         )}
+
+        {/* Assigned Coach */}
+        {player.assignedCoachId && (() => {
+          const assignedCoach = require('@/stores/coachStore').useCoachStore.getState().coaches.find(
+            (c: { id: string }) => c.id === player.assignedCoachId,
+          );
+          if (!assignedCoach) return null;
+          const bond = (player.relationships ?? []).find((r) => r.id === assignedCoach.id);
+          return (
+            <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+              <PixelText size={8} upper style={{ marginBottom: 8 }}>Assigned Coach</PixelText>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <PixelText size={7}>{assignedCoach.name}</PixelText>
+                  <PixelText size={6} dim>{assignedCoach.role}</PixelText>
+                </View>
+                {bond && (
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <PixelText size={7} color={bond.value >= 0 ? WK.green : WK.red}>
+                      {bond.value >= 0 ? `+${bond.value}` : `${bond.value}`}
+                    </PixelText>
+                    <PixelText size={6} dim>
+                      {bond.value >= 0 ? `+${Math.round(bond.value / 2)}% XP` : `${Math.round(bond.value / 2)}% XP`}
+                    </PixelText>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Contract Info */}
         {player.enrollmentEndWeek !== undefined && (

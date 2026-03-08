@@ -8,11 +8,15 @@ interface ScoutState {
   addScout: (scout: Scout) => void;
   removeScout: (id: string) => void;
   updateScout: (id: string, changes: Partial<Scout>) => void;
+  assignPlayer: (scoutId: string, playerId: string) => void;
+  removeAssignment: (scoutId: string, playerId: string) => void;
+  getWorkload: (scoutId: string) => number;
+  updateMorale: (scoutId: string, delta: number) => void;
 }
 
 export const useScoutStore = create<ScoutState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       scouts: [],
       addScout: (scout) =>
         set((state) => ({ scouts: [...state.scouts, scout] })),
@@ -21,6 +25,39 @@ export const useScoutStore = create<ScoutState>()(
       updateScout: (id, changes) =>
         set((state) => ({
           scouts: state.scouts.map((s) => s.id === id ? { ...s, ...changes } : s),
+        })),
+
+      assignPlayer: (scoutId, playerId) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) => {
+            if (s.id !== scoutId) return s;
+            const assigned = s.assignedPlayerIds ?? [];
+            if (assigned.includes(playerId) || assigned.length >= 5) return s;
+            return { ...s, assignedPlayerIds: [...assigned, playerId] };
+          }),
+        })),
+
+      removeAssignment: (scoutId, playerId) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) =>
+            s.id === scoutId
+              ? { ...s, assignedPlayerIds: (s.assignedPlayerIds ?? []).filter((id) => id !== playerId) }
+              : s,
+          ),
+        })),
+
+      getWorkload: (scoutId) => {
+        const scout = get().scouts.find((s) => s.id === scoutId);
+        return scout?.assignedPlayerIds?.length ?? 0;
+      },
+
+      updateMorale: (scoutId, delta) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) =>
+            s.id === scoutId
+              ? { ...s, morale: Math.max(0, Math.min(100, (s.morale ?? 70) + delta)) }
+              : s,
+          ),
         })),
     }),
     { name: 'scout-store', storage: zustandStorage }

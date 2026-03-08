@@ -25,7 +25,7 @@ export function hasNegativeRelations(entity: RelationshipEntity): boolean {
 export function updatePlayerRelationship(
   playerId: string,
   targetId: string,
-  targetType: 'player' | 'coach' | 'scout',
+  targetType: 'player' | 'coach' | 'scout' | 'manager',
   delta: number,
 ): void {
   const { players, updatePlayer } = useSquadStore.getState();
@@ -56,7 +56,7 @@ export function updatePlayerRelationship(
 export function updateCoachRelationship(
   coachId: string,
   targetId: string,
-  targetType: 'player' | 'coach' | 'scout',
+  targetType: 'player' | 'coach' | 'scout' | 'manager',
   delta: number,
 ): void {
   const { coaches, updateCoach } = useCoachStore.getState();

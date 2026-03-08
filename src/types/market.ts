@@ -22,6 +22,7 @@ export interface Scout {
   appearance?: import('./player').Appearance;
   assignedPlayerIds?: string[];
   morale?: number;
+  relationships?: import('./player').Relationship[];
 }
 
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
