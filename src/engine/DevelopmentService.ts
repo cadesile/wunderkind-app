@@ -94,8 +94,11 @@ export function computePlayerDevelopment(
       updated[attr] = Math.round((currentAttrs[attr] + gain) * 10) / 10;
     });
 
-    const avgAttr = ATTRIBUTE_NAMES.reduce((s, a) => s + updated[a], 0) / ATTRIBUTE_NAMES.length;
-    const overallRating = Math.round(avgAttr);
+    // Increment OVR by average gain this tick — avoids resetting from attribute average
+    // which would cause a first-tick drop for players whose OVR was trait-seeded.
+    const totalGain = ATTRIBUTE_NAMES.reduce((s, a) => s + (gains[a] ?? 0), 0);
+    const avgGain = totalGain / ATTRIBUTE_NAMES.length;
+    const overallRating = Math.min(100, Math.round(player.overallRating + avgGain));
 
     devUpdates[player.id] = { attributes: updated, overallRating };
 

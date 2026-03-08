@@ -7,6 +7,10 @@ import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFinanceStore } from '@/stores/financeStore';
+import { useMarketStore } from '@/stores/marketStore';
+import { useCoachStore } from '@/stores/coachStore';
+import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
+import { MarketPlayer } from '@/types/market';
 import { reactionHandler } from '@/engine/ReactionHandler';
 import { handleAcceptAgentOffer, handleRejectAgentOffer } from '@/utils/agentOfferHandlers';
 import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
@@ -18,82 +22,235 @@ import { formatCurrencyCompact } from '@/utils/currency';
 import { moraleEmoji } from '@/utils/morale';
 import { WK, pixelShadow } from '@/constants/theme';
 
-// ─── Agent offer card ─────────────────────────────────────────────────────────
+// ─── Agent offer card (list item) ────────────────────────────────────────────
 
-function AgentOfferCard({ offer }: { offer: AgentOffer }) {
+function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer: (o: AgentOffer) => void }) {
   const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
   const weeksLeft = offer.expiresWeek - currentWeek;
 
   return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 4,
-      borderColor: WK.yellow,
-      padding: 12,
-      marginBottom: 10,
-      ...pixelShadow,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <Badge label="TRANSFER OFFER" color="yellow" />
-        <PixelText size={6} dim>WK {offer.week}</PixelText>
-      </View>
-
-      <PixelText size={8} upper numberOfLines={2} style={{ marginBottom: 4 }}>
-        {offer.playerName} → {offer.destinationClub}
-      </PixelText>
-      <PixelText size={6} dim style={{ marginBottom: 10 }}>
-        {player?.position ?? '?'} · {offer.agentName} ({offer.agentCommissionRate}% comm.)
-      </PixelText>
-
-      <View style={{ gap: 4, marginBottom: 10 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <PixelText size={6} dim>GROSS FEE</PixelText>
-          <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
+    <Pressable onPress={() => onViewOffer(offer)}>
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 4,
+        borderColor: WK.yellow,
+        padding: 12,
+        marginBottom: 10,
+        ...pixelShadow,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <Badge label="TRANSFER OFFER" color="yellow" />
+          <PixelText size={6} dim>WK {offer.week}</PixelText>
         </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <PixelText size={6} dim>NET PROCEEDS</PixelText>
-          <PixelText size={6} color={WK.green}>{formatCurrencyCompact(offer.netProceeds)}</PixelText>
+
+        <PixelText size={8} upper numberOfLines={2} style={{ marginBottom: 4 }}>
+          {offer.playerName} → {offer.destinationClub}
+        </PixelText>
+        <PixelText size={6} dim style={{ marginBottom: 10 }}>
+          {player?.position ?? '?'} · {offer.agentName} ({offer.agentCommissionRate}% comm.)
+        </PixelText>
+
+        <View style={{ gap: 4, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <PixelText size={6} dim>GROSS FEE</PixelText>
+            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <PixelText size={6} dim>NET PROCEEDS</PixelText>
+            <PixelText size={6} color={WK.green}>{formatCurrencyCompact(offer.netProceeds)}</PixelText>
+          </View>
         </View>
+
+        <PixelText size={6} dim style={{ marginBottom: 12 }}>
+          EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
+        </PixelText>
+
+        <Button label="VIEW OFFER →" variant="yellow" fullWidth onPress={() => onViewOffer(offer)} />
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── Agent offer detail screen ────────────────────────────────────────────────
+
+function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => void }) {
+  const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
+  const coaches = useCoachStore((s) => s.coaches);
+  const headCoach = getHeadCoach(coaches);
+  const weeksLeft = offer.expiresWeek - currentWeek;
+
+  // Coach opinion: compare offer fee against player's estimated market value
+  const coachOpinion = player && headCoach
+    ? getCoachPerception(
+        {
+          // Agent fee formula: OVR × ~100 whole pounds (OVR × 100 × 100 pence at mid multiplier)
+          // Use same basis so coach opinion reflects fair/steal/overpriced vs actual offer
+          marketValue: player.overallRating * 100,
+          currentOffer: Math.round(offer.estimatedFee / 100),
+          currentAbility: player.overallRating,
+        } as MarketPlayer,
+        headCoach,
+      )
+    : null;
+
+  const verdictColorMap: Record<string, string> = {
+    green: WK.green,
+    red: WK.red,
+    white: WK.text,
+  };
+
+  const age = player?.dateOfBirth
+    ? Math.floor((Date.now() - new Date(player.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+    : player?.age ?? null;
+
+  function handleAccept() {
+    handleAcceptAgentOffer(offer.id);
+    onBack();
+  }
+
+  function handleDecline() {
+    handleRejectAgentOffer(offer.id);
+    onBack();
+  }
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10 }}>
+      <Pressable onPress={onBack} style={{ marginBottom: 4 }}>
+        <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
+      </Pressable>
+
+      {/* ── Player mini-profile ─────────────────────────────────────────── */}
+      {player && (
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          ...pixelShadow,
+        }}>
+          <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 8 }}>PLAYER</PixelText>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <PixelText size={9} upper style={{ flex: 1 }}>{player.name}</PixelText>
+            <View style={{ borderWidth: 2, borderColor: WK.yellow, paddingHorizontal: 6, paddingVertical: 3 }}>
+              <PixelText size={7} color={WK.yellow}>{player.position}</PixelText>
+            </View>
+          </View>
+
+          {age !== null && (
+            <PixelText size={6} dim style={{ marginBottom: 8 }}>
+              AGE {age} · {player.nationality}
+            </PixelText>
+          )}
+
+          {/* OVR + ability bar */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <View style={{ borderWidth: 2, borderColor: WK.tealLight, paddingHorizontal: 6, paddingVertical: 3 }}>
+              <PixelText size={8} color={WK.tealLight}>OVR {player.overallRating}</PixelText>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                <View style={{ height: '100%', width: `${player.overallRating}%`, backgroundColor: WK.tealLight }} />
+              </View>
+            </View>
+          </View>
+
+          {/* Morale */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <PixelText size={14}>{moraleEmoji(player.morale ?? 70)}</PixelText>
+            <PixelText size={6} dim>MORALE {player.morale ?? 70}</PixelText>
+          </View>
+        </View>
+      )}
+
+      {/* ── Offer details ────────────────────────────────────────────────── */}
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 4,
+        borderColor: WK.yellow,
+        padding: 14,
+        ...pixelShadow,
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <Badge label="TRANSFER OFFER" color="yellow" />
+          <PixelText size={6} dim>WK {offer.week}</PixelText>
+        </View>
+
+        <PixelText size={8} upper style={{ marginBottom: 4 }}>
+          {offer.playerName} → {offer.destinationClub}
+        </PixelText>
+        <PixelText size={6} dim style={{ marginBottom: 12 }}>
+          {offer.agentName} · {offer.agentCommissionRate}% COMMISSION
+        </PixelText>
+
+        <View style={{ gap: 6, marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+            <PixelText size={6} dim>GROSS FEE</PixelText>
+            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+            <PixelText size={6} dim>AGENT COMMISSION</PixelText>
+            <PixelText size={6} color={WK.red}>
+              -{formatCurrencyCompact(offer.estimatedFee - offer.netProceeds)}
+            </PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+            <PixelText size={6} color={WK.green}>NET PROCEEDS</PixelText>
+            <PixelText size={7} color={WK.green}>{formatCurrencyCompact(offer.netProceeds)}</PixelText>
+          </View>
+        </View>
+
+        <PixelText size={6} dim>
+          EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
+        </PixelText>
       </View>
 
-      <PixelText size={6} dim style={{ marginBottom: 10 }}>
-        EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
-      </PixelText>
+      {/* ── Coach opinion ─────────────────────────────────────────────────── */}
+      {coachOpinion && headCoach && (
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          ...pixelShadow,
+        }}>
+          <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 10 }}>COACH OPINION</PixelText>
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Pressable
-          onPress={() => handleAcceptAgentOffer(offer.id)}
-          style={{
-            flex: 1,
-            backgroundColor: WK.green,
-            borderWidth: 3,
-            borderColor: WK.border,
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <PixelText size={6} dim>HEAD COACH</PixelText>
+            <PixelText size={6} color={WK.text}>{headCoach.name}</PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <PixelText size={6} dim>EST. MARKET VALUE</PixelText>
+            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(coachOpinion.perceivedValue * 100)}</PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+            <PixelText size={6} dim>OFFER vs VALUATION</PixelText>
+            <PixelText size={6} color={coachOpinion.deltaPercent < -10 ? WK.green : coachOpinion.deltaPercent > 10 ? WK.red : WK.text}>
+              {coachOpinion.deltaPercent > 0 ? '+' : ''}{coachOpinion.deltaPercent.toFixed(0)}%
+            </PixelText>
+          </View>
+
+          <View style={{
+            borderWidth: 2,
+            borderColor: verdictColorMap[coachOpinion.verdictColor] ?? WK.border,
             padding: 10,
-            alignItems: 'center',
-            minHeight: 44,
-            justifyContent: 'center',
-          }}
-        >
-          <PixelText size={7} color={WK.text}>ACCEPT</PixelText>
-        </Pressable>
-        <Pressable
-          onPress={() => handleRejectAgentOffer(offer.id)}
-          style={{
-            flex: 1,
-            backgroundColor: WK.red,
-            borderWidth: 3,
-            borderColor: WK.border,
-            padding: 10,
-            alignItems: 'center',
-            minHeight: 44,
-            justifyContent: 'center',
-          }}
-        >
-          <PixelText size={7} color={WK.text}>DECLINE</PixelText>
-        </Pressable>
+          }}>
+            <PixelText size={7} color={verdictColorMap[coachOpinion.verdictColor] ?? WK.text}>
+              "{coachOpinion.coachNote}"
+            </PixelText>
+          </View>
+        </View>
+      )}
+
+      {/* ── Actions ──────────────────────────────────────────────────────── */}
+      <View style={{ gap: 8, paddingBottom: 16 }}>
+        <Button label="✓ ACCEPT OFFER" variant="yellow" fullWidth onPress={handleAccept} />
+        <Button label="✗ DECLINE OFFER" variant="teal" fullWidth onPress={handleDecline} />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -128,6 +285,133 @@ function isInvestorMeta(meta: unknown): meta is InvestorOfferMeta {
     typeof meta === 'object' &&
     meta !== null &&
     typeof (meta as InvestorOfferMeta).investmentAmount === 'number'
+  );
+}
+
+// ─── Gem discovery metadata ────────────────────────────────────────────────────
+
+interface GemPlayerMeta {
+  playerId: string;
+}
+
+function isGemMeta(meta: unknown): meta is GemPlayerMeta {
+  return (
+    typeof meta === 'object' &&
+    meta !== null &&
+    typeof (meta as GemPlayerMeta).playerId === 'string'
+  );
+}
+
+// ─── Gem player card ───────────────────────────────────────────────────────────
+
+function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: string }) {
+  const player = useMarketStore((s) => s.players.find((p) => p.id === playerId));
+  const { signPlayer } = useMarketStore.getState();
+  const { respond } = useInboxStore.getState();
+  const [recruited, setRecruited] = useState(false);
+
+  // Already signed (player removed from market) or just signed this session
+  if (!player || recruited) {
+    return (
+      <View style={{
+        marginTop: 12,
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: WK.green,
+        padding: 16,
+        alignItems: 'center',
+        gap: 6,
+        ...pixelShadow,
+      }}>
+        <PixelText size={8} color={WK.green}>✓ PLAYER SIGNED</PixelText>
+        <PixelText size={6} dim>CHECK YOUR SQUAD</PixelText>
+      </View>
+    );
+  }
+
+  // Compute age from dateOfBirth
+  const age = player.dateOfBirth
+    ? Math.floor((Date.now() - new Date(player.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+    : null;
+
+  const ovr = player.perceivedAbility ?? player.currentAbility;
+  const stars = '★'.repeat(player.potential ?? 0) + '☆'.repeat(5 - (player.potential ?? 0));
+  const askingPrice = player.currentOffer ?? player.marketValue ?? 0;
+
+  function handleRecruit() {
+    signPlayer(playerId);
+    respond(messageId, 'accepted');
+    setRecruited(true);
+  }
+
+  return (
+    <View style={{
+      marginTop: 12,
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.tealLight,
+      padding: 14,
+      ...pixelShadow,
+    }}>
+      <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 8 }}>GEM PROSPECT</PixelText>
+
+      {/* Name + position */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <PixelText size={8} upper style={{ flex: 1 }}>
+          {player.firstName} {player.lastName}
+        </PixelText>
+        <View style={{
+          borderWidth: 2,
+          borderColor: WK.yellow,
+          paddingHorizontal: 6,
+          paddingVertical: 3,
+        }}>
+          <PixelText size={7} color={WK.yellow}>{player.position}</PixelText>
+        </View>
+      </View>
+
+      {/* Age / nationality */}
+      {(age !== null || player.nationality) && (
+        <PixelText size={6} dim style={{ marginBottom: 8 }}>
+          {[age !== null ? `AGE ${age}` : null, player.nationality].filter(Boolean).join(' · ')}
+        </PixelText>
+      )}
+
+      {/* Potential stars */}
+      <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8 }}>{stars}</PixelText>
+
+      {/* OVR badge + ability bar */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <View style={{
+          borderWidth: 2,
+          borderColor: WK.green,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+        }}>
+          <PixelText size={9} color={WK.green}>OVR {ovr}</PixelText>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{
+            height: 8,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            borderWidth: 2,
+            borderColor: WK.border,
+          }}>
+            <View style={{ height: '100%', width: `${ovr}%`, backgroundColor: WK.green }} />
+          </View>
+        </View>
+      </View>
+
+      {/* Asking price */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+        <PixelText size={6} dim>ASKING PRICE</PixelText>
+        <PixelText size={6} color={WK.text}>
+          {askingPrice === 0 ? 'FREE' : `£${askingPrice.toLocaleString()}`}
+        </PixelText>
+      </View>
+
+      <Button label="✓ RECRUIT" variant="yellow" fullWidth onPress={handleRecruit} />
+    </View>
   );
 }
 
@@ -270,6 +554,7 @@ function InboxMessageDetail({
   const typeConf = TYPE_CONFIG[message.type] ?? TYPE_CONFIG.system;
   const canRespond = message.requiresResponse && !message.response;
   const investorMeta = isInvestorMeta(message.metadata) ? message.metadata : null;
+  const gemMeta = !investorMeta && isGemMeta(message.metadata) ? message.metadata : null;
 
   function handleAccept() {
     if (message.type === 'investor' && message.entityId && investorMeta) {
@@ -330,6 +615,10 @@ function InboxMessageDetail({
           </View>
         )}
       </View>
+
+      {gemMeta && (
+        <GemPlayerCard playerId={gemMeta.playerId} messageId={message.id} />
+      )}
 
       {canRespond && (
         <View style={{ marginTop: 12, gap: 8 }}>
@@ -462,6 +751,7 @@ export default function InboxScreen() {
 
   const [selectedInbox, setSelectedInbox] = useState<InboxMessage | null>(null);
   const [selectedNarrative, setSelectedNarrative] = useState<NarrativeMessage | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<AgentOffer | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
 
   // Keep selections in sync with live store updates
@@ -490,6 +780,7 @@ export default function InboxScreen() {
   function handleBack() {
     setSelectedInbox(null);
     setSelectedNarrative(null);
+    setSelectedOffer(null);
   }
 
   function handleMarkAllRead() {
@@ -515,7 +806,7 @@ export default function InboxScreen() {
     narrativeDelete(m.id);
   }
 
-  const isListView = !selectedInboxLive && !selectedNarrativeLive;
+  const isListView = !selectedInboxLive && !selectedNarrativeLive && !selectedOffer;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
@@ -580,7 +871,9 @@ export default function InboxScreen() {
         )}
       </View>
 
-      {selectedInboxLive ? (
+      {selectedOffer ? (
+        <AgentOfferDetail offer={selectedOffer} onBack={handleBack} />
+      ) : selectedInboxLive ? (
         <InboxMessageDetail message={selectedInboxLive} onBack={handleBack} />
       ) : selectedNarrativeLive ? (
         <NarrativeMessageDetail message={selectedNarrativeLive} onBack={handleBack} />
@@ -597,7 +890,7 @@ export default function InboxScreen() {
           }
           renderItem={({ item }) =>
             item.kind === 'agent_offer' ? (
-              <AgentOfferCard offer={item.offer} />
+              <AgentOfferCard offer={item.offer} onViewOffer={setSelectedOffer} />
             ) : item.kind === 'narrative' ? (
               <NarrativeMessageRow
                 message={item.message}

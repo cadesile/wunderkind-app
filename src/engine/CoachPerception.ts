@@ -33,14 +33,15 @@ export function getCoachPerception(player: MarketPlayer, coach: Coach): CoachOpi
   let verdictColor: 'green' | 'white' | 'red';
   let coachNote: string;
 
+  // formatCurrencyWhole expects pence; currentOffer is in whole pounds
   if (deltaPercent < -10) {
     verdict = 'steal';
     verdictColor = 'green';
-    coachNote = `${coach.name}: steal at ${formatCurrencyWhole(currentOffer)}`;
+    coachNote = `${coach.name}: steal at ${formatCurrencyWhole(currentOffer * 100)}`;
   } else if (deltaPercent > 10) {
     verdict = 'insulting';
     verdictColor = 'red';
-    coachNote = `${coach.name}: overpriced at ${formatCurrencyWhole(currentOffer)}`;
+    coachNote = `${coach.name}: overpriced at ${formatCurrencyWhole(currentOffer * 100)}`;
   } else {
     verdict = 'fair';
     verdictColor = 'white';

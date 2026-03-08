@@ -145,8 +145,9 @@ export function checkGemDiscovery(): void {
         type: 'system',
         week: weekNumber,
         subject: `${scout.name} has found a gem!`,
-        body: `Your scout has identified ${gemMarketPlayer.firstName} ${gemMarketPlayer.lastName}, a highly-rated ${gemMarketPlayer.position} prospect. Review in Market > Players.`,
+        body: `Your scout has identified ${gemMarketPlayer.firstName} ${gemMarketPlayer.lastName}, a highly-rated ${gemMarketPlayer.position} prospect.`,
         isRead: false,
+        metadata: { playerId: gemMarketPlayer.id },
       });
     }
   });
