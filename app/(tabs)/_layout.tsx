@@ -6,6 +6,8 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
 import { syncQueue } from '@/api/syncQueue';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useFinanceStore } from '@/stores/financeStore';
+import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -118,13 +120,30 @@ function CustomTabBar({ state, navigation, onAdvance }: CustomTabBarProps) {
 function handleAdvanceWeek() {
   const result = processWeeklyTick();
   const { academy } = useAcademyStore.getState();
+
+  // GameLoop records ledger entries under nextWeek (result.week + 1), so filter accordingly.
+  // Transfers are recorded at acceptance time using the current weekNumber, so filter matches result.week.
+  const { transactions, transfers } = useFinanceStore.getState();
+  const ledgerWeek = result.week + 1;
+
+  const weekTransfers: SyncTransfer[] = transfers
+    .filter((t) => t.week === result.week)
+    .map(({ playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type }) => ({
+      playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type,
+    }));
+
+  const weekLedger: SyncLedgerEntry[] = transactions
+    .filter((tx) => tx.weekNumber === ledgerWeek)
+    .map(({ category, amount, description }) => ({ category, amount, description }));
+
   syncQueue.enqueue({
-    weekNumber:      result.week,
-    clientTimestamp: result.processedAt,
-    earningsDelta:   Math.max(0, result.financialSummary.net),
-    reputationDelta: Math.round(result.reputationDelta),
+    weekNumber:       result.week,
+    clientTimestamp:  result.processedAt,
+    earningsDelta:    Math.max(0, result.financialSummary.net),
+    reputationDelta:  Math.round(result.reputationDelta),
     hallOfFamePoints: academy.hallOfFamePoints,
-    transfers: [],
+    transfers:        weekTransfers,
+    ledger:           weekLedger,
   });
 }
 

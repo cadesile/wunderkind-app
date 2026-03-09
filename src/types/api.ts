@@ -1,4 +1,5 @@
 export type { MarketDataResponse } from './market';
+import type { FinancialCategory } from './finance';
 
 // ─── Academy Status ───────────────────────────────────────────────────────────
 
@@ -150,13 +151,30 @@ export interface LoginResponse {
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────
 
+export interface SyncTransfer {
+  playerId: string;
+  playerName: string;
+  destinationClub: string;
+  grossFee: number;        // pence
+  agentCommission: number; // pence
+  netProceeds: number;     // pence
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
+}
+
+export interface SyncLedgerEntry {
+  category: FinancialCategory;
+  amount: number;      // whole pounds, negative = expense
+  description: string;
+}
+
 export interface SyncRequest {
   weekNumber: number;
   clientTimestamp: string; // ISO 8601
   earningsDelta: number;   // sponsor income − loan interest this week (pence)
   reputationDelta: number; // can be negative
   hallOfFamePoints: number;
-  transfers: never[];      // pass [] until transfer syncing is implemented
+  transfers: SyncTransfer[];
+  ledger: SyncLedgerEntry[];
   /** Cumulative manager personality shifts this week — optional, ignored by older backend versions */
   managerShifts?: {
     temperament: number;
