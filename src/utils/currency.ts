@@ -54,3 +54,13 @@ export const penceToPounds = (pence: number): number => Math.floor(pence / 100);
 
 /** Convert whole pounds to pence. */
 export const poundsToPence = (pounds: number): number => Math.round(pounds * 100);
+
+/**
+ * Derive a player's asking price in whole pounds from their market fields.
+ * currentOffer and marketValue are stored in pence; falls back to currentAbility × 10 if absent.
+ */
+export const getPlayerAskingPrice = (player: {
+  currentOffer?: number | null;
+  marketValue?: number | null;
+  currentAbility: number;
+}): number => Math.round((player.currentOffer ?? player.marketValue ?? player.currentAbility * 1000) / 100);

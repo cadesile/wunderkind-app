@@ -18,7 +18,7 @@ import { PixelText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
-import { formatCurrencyCompact } from '@/utils/currency';
+import { formatCurrencyCompact, getPlayerAskingPrice } from '@/utils/currency';
 import { moraleEmoji } from '@/utils/morale';
 import { WK, pixelShadow } from '@/constants/theme';
 
@@ -336,7 +336,7 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
 
   const ovr = player.perceivedAbility ?? player.currentAbility;
   const stars = '★'.repeat(player.potential ?? 0) + '☆'.repeat(5 - (player.potential ?? 0));
-  const askingPrice = player.currentOffer ?? player.marketValue ?? 0;
+  const askingPrice = getPlayerAskingPrice(player);
 
   function handleRecruit() {
     signPlayer(playerId);

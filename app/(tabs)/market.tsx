@@ -20,6 +20,7 @@ import { MarketPlayer, MarketCoach, MarketScout, Scout } from '@/types/market';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { getPlayerAskingPrice } from '@/utils/currency';
 
 type MarketTab = 'PLAYERS' | 'COACHES' | 'SCOUTS';
 
@@ -112,7 +113,7 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
   const isScouting = status === 'scouting';
   const displayAbility = isRevealed ? (player.perceivedAbility ?? player.currentAbility) : null;
   const weeklyWage = isRevealed ? (player.perceivedAbility ?? player.currentAbility) : null;
-  const offer = player.currentOffer ?? player.marketValue ?? player.currentAbility * 1000;
+  const offer = getPlayerAskingPrice(player);
 
   // Get head coach opinion (highest influence coach)
   const headCoach = coaches.length > 0
@@ -229,7 +230,7 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
         <PixelText size={6} dim>ASKING PRICE</PixelText>
         <PixelText size={7} color={WK.orange}>
-          {isRevealed ? `£${Math.round(offer / 100).toLocaleString()}` : '??'}
+          {isRevealed ? `£${offer.toLocaleString()}` : '??'}
         </PixelText>
       </View>
 
