@@ -15,6 +15,7 @@ import { useMarketStore } from '@/stores/marketStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { WeeklyTick } from '@/types/game';
 import { PersonalityMatrix } from '@/types/player';
+import { CompanySize } from '@/types/market';
 
 const BASE_XP = 10;
 const BASE_INJURY_PROB = 0.05; // 5% per player per week
@@ -224,6 +225,91 @@ export function processWeeklyTick(): WeeklyTick {
           },
         });
       }
+    }
+  }
+
+  // ── 9a. Sponsor offers ────────────────────────────────────────────────────────
+  // ~3% chance per week. Offer size reflects current reputation tier.
+  // Does not fire if a sponsor offer is already pending a response.
+  const hasPendingSponsorOffer = inboxMessages.some(
+    (m) => m.type === 'sponsor' && m.requiresResponse && !m.response
+  );
+  if (!hasPendingSponsorOffer && Math.random() < 0.03) {
+    const rep = academy.reputation;
+    const availableSponsors = allSponsors.filter((s) => !academy.sponsorIds.includes(s.id));
+    let eligibleSizes: CompanySize[];
+    if (rep >= 75)      eligibleSizes = ['LARGE'];
+    else if (rep >= 40) eligibleSizes = ['MEDIUM', 'LARGE'];
+    else if (rep >= 15) eligibleSizes = ['SMALL', 'MEDIUM'];
+    else                eligibleSizes = ['SMALL'];
+
+    const eligible = availableSponsors.filter((s) => eligibleSizes.includes(s.companySize));
+    const sponsor = eligible.length > 0
+      ? eligible[Math.floor(Math.random() * eligible.length)]
+      : null;
+
+    if (sponsor) {
+      const weeklyPounds = Math.round(sponsor.weeklyPayment / 100);
+      addMessage({
+        id: `sponsor-offer-wk${weekNumber}-${sponsor.id}`,
+        type: 'sponsor',
+        week: weekNumber,
+        subject: 'Sponsorship Offer',
+        body: `${sponsor.name} has approached your academy with a sponsorship proposal. They are offering £${weeklyPounds.toLocaleString()} per week for ${sponsor.contractWeeks} weeks. Your growing reputation has caught their attention.`,
+        isRead: false,
+        requiresResponse: true,
+        entityId: sponsor.id,
+        metadata: {
+          sponsorId: sponsor.id,
+          sponsorName: sponsor.name,
+          weeklyPayment: weeklyPounds,
+          contractWeeks: sponsor.contractWeeks,
+          companySize: sponsor.companySize,
+        },
+      });
+    }
+  }
+
+  // ── 9b. Investor offers (ongoing) ─────────────────────────────────────────────
+  // ~1.5% chance per week. Only fires post-week-1, when no investor is assigned,
+  // no pending investor offer exists, and reputation has reached Regional tier (≥15).
+  const hasPendingInvestorOffer = inboxMessages.some(
+    (m) => m.type === 'investor' && m.requiresResponse && !m.response
+  );
+  if (
+    weekNumber > 1 &&
+    !academy.investorId &&
+    !hasPendingInvestorOffer &&
+    academy.reputation >= 15 &&
+    Math.random() < 0.015
+  ) {
+    const rep = academy.reputation;
+    // Equity ceiling by tier: Regional→SMALL (≤10%), National→MEDIUM (≤20%), Elite→any
+    const maxEquity = rep >= 75 ? 100 : rep >= 40 ? 20 : 10;
+    const eligible = allInvestors.filter((inv) => inv.equityTaken <= maxEquity);
+    const investor = eligible.length > 0
+      ? eligible[Math.floor(Math.random() * eligible.length)]
+      : null;
+
+    if (investor) {
+      const investmentPounds = Math.round(investor.investmentAmount / 100);
+      const size: CompanySize = investor.equityTaken <= 10 ? 'SMALL' : investor.equityTaken <= 20 ? 'MEDIUM' : 'LARGE';
+      addMessage({
+        id: `investor-offer-wk${weekNumber}-${investor.id}`,
+        type: 'investor',
+        week: weekNumber,
+        subject: 'Investment Offer',
+        body: `${investor.name} has expressed interest in backing your academy. They are offering £${investmentPounds.toLocaleString()} in funding in exchange for a ${investor.equityTaken}% stake in all future player sales. Your growing reputation has made you an attractive proposition.`,
+        isRead: false,
+        requiresResponse: true,
+        entityId: investor.id,
+        metadata: {
+          investmentAmount: investmentPounds,
+          equityPct: investor.equityTaken,
+          investorName: investor.name,
+          investorSize: size,
+        },
+      });
     }
   }
 

@@ -160,7 +160,7 @@ export default function PlayerDetailScreen() {
           gap: 14,
           ...pixelShadow,
         }}>
-          <Avatar appearance={player.appearance} role="PLAYER" size={64} />
+          <Avatar appearance={player.appearance} role="PLAYER" size={100} />
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <PixelText size={10} upper style={{ flex: 1 }} numberOfLines={2}>{player.name}</PixelText>

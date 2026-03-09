@@ -545,7 +545,7 @@ function InboxMessageDetail({
   onBack: () => void;
 }) {
   const { markRead, respond } = useInboxStore();
-  const { setInvestorId, addBalance } = useAcademyStore();
+  const { setInvestorId, setSponsorIds, addBalance, academy } = useAcademyStore();
 
   useEffect(() => {
     if (!message.isRead) markRead(message.id);
@@ -555,6 +555,9 @@ function InboxMessageDetail({
   const canRespond = message.requiresResponse && !message.response;
   const investorMeta = isInvestorMeta(message.metadata) ? message.metadata : null;
   const gemMeta = !investorMeta && isGemMeta(message.metadata) ? message.metadata : null;
+  const sponsorMeta = message.type === 'sponsor' && message.metadata ? message.metadata as {
+    sponsorId: string; sponsorName: string; weeklyPayment: number; contractWeeks: number; companySize: string;
+  } : null;
 
   function handleAccept() {
     if (message.type === 'investor' && message.entityId && investorMeta) {
@@ -566,6 +569,9 @@ function InboxMessageDetail({
         description: `${investorMeta.investorName} — ${investorMeta.equityPct}% equity deal`,
         weekNumber: message.week,
       });
+    }
+    if (message.type === 'sponsor' && message.entityId && sponsorMeta) {
+      setSponsorIds([...academy.sponsorIds, message.entityId]);
     }
     respond(message.id, 'accepted');
   }
@@ -589,6 +595,20 @@ function InboxMessageDetail({
         </View>
         <PixelText size={9} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
         <PixelText size={7} style={{ lineHeight: 16, color: WK.dim }}>{message.body}</PixelText>
+
+        {message.type === 'sponsor' && sponsorMeta && (
+          <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
+            <PixelText size={7} color={WK.tealLight} style={{ marginBottom: 8 }}>OFFER DETAILS</PixelText>
+            <OfferRow label="WEEKLY INCOME" value={`£${sponsorMeta.weeklyPayment.toLocaleString()}`} />
+            <OfferRow label="CONTRACT LENGTH" value={`${sponsorMeta.contractWeeks} WEEKS`} />
+            <OfferRow label="SPONSOR SIZE" value={String(sponsorMeta.companySize)} />
+            <View style={{ marginTop: 8 }}>
+              <PixelText size={6} dim>
+                TOTAL VALUE: £{(sponsorMeta.weeklyPayment * sponsorMeta.contractWeeks).toLocaleString()}
+              </PixelText>
+            </View>
+          </View>
+        )}
 
         {message.type === 'investor' && investorMeta && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>

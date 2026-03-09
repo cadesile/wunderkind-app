@@ -135,13 +135,17 @@ export function useAuthFlow(): AuthFlowResult {
 
     // 3. Register academy server-side — response contains metadata only, no financial data.
     //    Starting balance and sponsor/investor IDs are always derived locally.
+    let initResponse: Awaited<ReturnType<typeof marketApi.initializeAcademy>> | null = null;
     try {
-      await marketApi.initializeAcademy(academyName);
+      initResponse = await marketApi.initializeAcademy(academyName);
     } catch (err) {
       console.warn('[useAuthFlow] Academy init failed — continuing offline:', err);
     }
 
-    const startingBalance = 50_000;
+    const backendBalance = initResponse?.starterBundle
+      ? (initResponse.starterBundle as Record<string, unknown>).startingBalance
+      : undefined;
+    const startingBalance = typeof backendBalance === 'number' ? Math.round(backendBalance / 100) : 50_000;
     // Starter bundle spec: 1 small sponsor, 0 investors at creation.
     // An investor offer arrives in the inbox after the first week.
     const smallSponsors = marketData.sponsors.filter((s) => s.companySize === 'SMALL');

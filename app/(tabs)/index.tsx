@@ -47,7 +47,7 @@ function PlayerCard({ player }: { player: Player }) {
         gap: 12,
         ...pixelShadow,
       }}>
-        <Avatar appearance={player.appearance} role="PLAYER" size={44} />
+        <Avatar appearance={player.appearance} role="PLAYER" size={80} />
         <View style={{ flex: 1 }}>
           <PixelText size={9} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -55,11 +55,7 @@ function PlayerCard({ player }: { player: Player }) {
             <ArchetypeBadge player={player} />
           </View>
           <PixelText size={7} dim>{player.nationality}</PixelText>
-          <View style={{ marginTop: 6, flexDirection: 'row', gap: 2 }}>
-            {traits.map((v, i) => (
-              <View key={i} style={{ flex: 1, height: 4, backgroundColor: traitColor(v) }} />
-            ))}
-          </View>
+          
           <PixelText size={7} dim style={{ marginTop: 3 }}>AVG TRAIT: {avgTrait}/20</PixelText>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
