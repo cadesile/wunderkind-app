@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
@@ -106,6 +106,7 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
   const scouts = useScoutStore((s) => s.scouts);
   const coaches = useCoachStore((s) => s.coaches);
   const [signing, setSigning] = useState(false);
+  const [recruitError, setRecruitError] = useState<string | null>(null);
   const [showScoutPicker, setShowScoutPicker] = useState(false);
 
   const status = player.scoutingStatus ?? 'hidden';
@@ -125,6 +126,7 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
 
   async function handleRecruit() {
     setSigning(true);
+    setRecruitError(null);
     try {
       await marketApi.assignEntity('player', player.id);
       const newPlayer = marketPlayerToPlayer(player, weekNumber);
@@ -132,9 +134,8 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
       newPlayer.morale = 70;
       addPlayer(newPlayer);
       removeFromMarket('player', player.id);
-      Alert.alert('Recruited!', `${player.firstName} ${player.lastName} has joined the academy.`);
     } catch {
-      Alert.alert('Recruitment Failed', 'Unable to sign this player. Please try again.');
+      setRecruitError('Unable to sign this player. Please try again.');
     } finally {
       setSigning(false);
     }
@@ -307,6 +308,11 @@ function MarketPlayerCard({ player }: { player: MarketPlayer }) {
             onPress={handleRecruit}
             disabled={signing}
           />
+          {recruitError && (
+            <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+              {recruitError}
+            </PixelText>
+          )}
         </View>
       )}
     </View>
@@ -320,20 +326,18 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
   const addCoach = useCoachStore((s) => s.addCoach);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
+  const [hireError, setHireError] = useState<string | null>(null);
 
   async function handleHire() {
     setHiring(true);
+    setHireError(null);
     try {
       await marketApi.assignEntity('coach', coach.id);
       const newCoach = marketCoachToCoach(coach, weekNumber);
       addCoach(newCoach);
       removeFromMarket('coach', coach.id);
-      Alert.alert(
-        'Hired!',
-        `${coach.firstName} ${coach.lastName} has joined the coaching staff.`,
-      );
     } catch {
-      Alert.alert('Hire Failed', 'Unable to hire this coach. Please try again.');
+      setHireError('Unable to hire this coach. Please try again.');
     } finally {
       setHiring(false);
     }
@@ -369,11 +373,16 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
       <View style={{ marginTop: 10 }}>
         <Button
           label={hiring ? 'HIRING...' : 'HIRE'}
-          variant="yellow"
+          variant="teal"
           fullWidth
           onPress={handleHire}
           disabled={hiring}
         />
+        {hireError && (
+          <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+            {hireError}
+          </PixelText>
+        )}
       </View>
     </View>
   );
@@ -392,20 +401,18 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
   const addScout = useScoutStore((s) => s.addScout);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
+  const [hireError, setHireError] = useState<string | null>(null);
 
   async function handleHire() {
     setHiring(true);
+    setHireError(null);
     try {
       await marketApi.assignEntity('scout', scout.id);
       const newScout = marketScoutToScout(scout, weekNumber);
       addScout(newScout);
       removeFromMarket('scout', scout.id);
-      Alert.alert(
-        'Hired!',
-        `${scout.firstName} ${scout.lastName} is now scouting for the academy.`,
-      );
     } catch {
-      Alert.alert('Hire Failed', 'Unable to hire this scout. Please try again.');
+      setHireError('Unable to hire this scout. Please try again.');
     } finally {
       setHiring(false);
     }
@@ -450,6 +457,11 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
           onPress={handleHire}
           disabled={hiring}
         />
+        {hireError && (
+          <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+            {hireError}
+          </PixelText>
+        )}
       </View>
     </View>
   );
@@ -536,6 +548,11 @@ export default function MarketScreen() {
   const [activeTab, setActiveTab] = useState<MarketTab>('PLAYERS');
   const [refreshing, setRefreshing] = useState(false);
   const { players, coaches, marketScouts, setMarketData } = useMarketStore();
+  const academy = useAcademyStore((s) => s.academy);
+
+  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
+    ? academy.balance
+    : academy.totalCareerEarnings;
 
   // Pull-to-refresh always fetches fresh data, bypassing the store's 5-min cache
   const handleRefresh = useCallback(async () => {
@@ -573,15 +590,11 @@ export default function MarketScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Market</PixelText>
-        <PixelText size={7} color={WK.yellow}>
-          {activeTab === 'PLAYERS' ? `${players.length} AVAILABLE`
-            : activeTab === 'COACHES' ? `${coaches.length} AVAILABLE`
-            : `${marketScouts.length} AVAILABLE`}
-        </PixelText>
+        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
       </View>
 
       {/* Entity count strip */}
-      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginTop: 10, gap: 10 }}>
+      {/* <View style={{ flexDirection: 'row', marginHorizontal: 10, marginTop: 10, gap: 10 }}>
         <Card style={{ flex: 1, alignItems: 'center' }}>
           <PixelText size={6} dim>PLAYERS</PixelText>
           <PixelText size={14} color={WK.tealLight} style={{ marginTop: 4 }}>{players.length}</PixelText>
@@ -594,7 +607,7 @@ export default function MarketScreen() {
           <PixelText size={6} dim>SCOUTS</PixelText>
           <PixelText size={14} color={WK.orange} style={{ marginTop: 4 }}>{marketScouts.length}</PixelText>
         </Card>
-      </View>
+      </View> */}
 
       {/* Pane content */}
       <View style={{ flex: 1 }}>

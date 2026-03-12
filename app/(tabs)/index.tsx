@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, FlatList, Modal, Pressable, Alert } from 'react-native';
+import { View, FlatList, Modal, Pressable } from 'react-native';
+import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -284,12 +285,16 @@ function CoachesPane() {
   const { academy, addBalance } = useAcademyStore();
   const [showModal, setShowModal] = useState(false);
   const [prospects, setProspects] = useState<Coach[]>([]);
+  const [signError, setSignError] = useState<string | null>(null);
+  const [pendingFire, setPendingFire] = useState<{ coach: Coach; penalty: number; penaltyPence: number } | null>(null);
+  const [fireError, setFireError] = useState<string | null>(null);
 
   const weekNumber = academy.weekNumber ?? 1;
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
   const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
 
   function openScout() {
+    setSignError(null);
     setProspects(generateCoachProspects(3, weekNumber));
     setShowModal(true);
   }
@@ -297,9 +302,10 @@ function CoachesPane() {
   function signCoach(coach: Coach) {
     const signingFee = coach.salary * 4;
     if ((academy.balance ?? academy.totalCareerEarnings) < signingFee) {
-      Alert.alert('Insufficient Funds', `You need £${signingFee.toLocaleString()} to sign this coach.`);
+      setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
+    setSignError(null);
     addBalance(-signingFee);
     addCoach({ ...coach, joinedWeek: weekNumber });
     setProspects((prev) => prev.filter((p) => p.id !== coach.id));
@@ -308,33 +314,28 @@ function CoachesPane() {
   function fireCoach(coach: Coach) {
     const penaltyPence = Math.floor(coach.salary * 26 * 0.25);
     const penaltyPounds = Math.round(penaltyPence / 100);
-    const currentBalance = academy.balance ?? 0;
+    setFireError(null);
+    setPendingFire({ coach, penalty: penaltyPounds, penaltyPence });
+  }
 
-    Alert.alert(
-      'Release Coach?',
-      `Release ${coach.name}?\n\nEarly termination fee: £${penaltyPounds.toLocaleString()}\n(25% of 26 remaining weeks @ £${Math.round(coach.salary / 100)}/wk)`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Release',
-          style: 'destructive',
-          onPress: () => {
-            if (currentBalance < penaltyPounds) {
-              Alert.alert('Insufficient Funds', `You need £${penaltyPounds.toLocaleString()} to release this coach.`);
-              return;
-            }
-            addBalance(-penaltyPounds);
-            useFinanceStore.getState().addTransaction({
-              amount: -penaltyPence,
-              category: 'contract_termination',
-              description: `Released ${coach.name} (25% early termination)`,
-              weekNumber,
-            });
-            removeCoach(coach.id);
-          },
-        },
-      ],
-    );
+  function confirmFireCoach() {
+    if (!pendingFire) return;
+    const { coach, penalty, penaltyPence } = pendingFire;
+    const currentBalance = academy.balance ?? 0;
+    if (currentBalance < penalty) {
+      setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
+      setPendingFire(null);
+      return;
+    }
+    addBalance(-penalty);
+    useFinanceStore.getState().addTransaction({
+      amount: -penaltyPence,
+      category: 'contract_termination',
+      description: `Released ${coach.name} (25% early termination)`,
+      weekNumber,
+    });
+    removeCoach(coach.id);
+    setPendingFire(null);
   }
 
   return (
@@ -392,6 +393,11 @@ function CoachesPane() {
                 </View>
               ) : (
                 <>
+                  {signError && (
+                    <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
+                      {signError}
+                    </PixelText>
+                  )}
                   {prospects.map((c) => (
                     <CoachProspectCard key={c.id} coach={c} onSign={() => signCoach(c)} />
                   ))}
@@ -402,6 +408,27 @@ function CoachesPane() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Fire coach confirmation dialog */}
+      <PixelDialog
+        visible={!!pendingFire}
+        title="Release Coach?"
+        message={pendingFire
+          ? `Release ${pendingFire.coach.name}?\n\nEarly termination fee: £${pendingFire.penalty.toLocaleString()}\n(25% of 26 remaining weeks)`
+          : ''}
+        onClose={() => setPendingFire(null)}
+        onConfirm={confirmFireCoach}
+        confirmLabel="RELEASE"
+        confirmVariant="red"
+      />
+
+      {/* Insufficient funds after fire attempt */}
+      <PixelDialog
+        visible={!!fireError}
+        title="Insufficient Funds"
+        message={fireError ?? ''}
+        onClose={() => setFireError(null)}
+      />
     </View>
   );
 }
@@ -411,11 +438,15 @@ function ScoutsPane() {
   const { academy, addBalance } = useAcademyStore();
   const [showModal, setShowModal] = useState(false);
   const [prospects, setProspects] = useState<Scout[]>([]);
+  const [signError, setSignError] = useState<string | null>(null);
+  const [pendingFire, setPendingFire] = useState<{ scout: Scout; penalty: number; penaltyPence: number } | null>(null);
+  const [fireError, setFireError] = useState<string | null>(null);
 
   const weekNumber = academy.weekNumber ?? 1;
   const totalSalary = scouts.reduce((s, sc) => s + sc.salary, 0);
 
   function openRecruit() {
+    setSignError(null);
     setProspects(generateScoutProspects(3, weekNumber));
     setShowModal(true);
   }
@@ -423,9 +454,10 @@ function ScoutsPane() {
   function signScout(scout: Scout) {
     const signingFee = scout.salary * 4;
     if ((academy.balance ?? academy.totalCareerEarnings) < signingFee) {
-      Alert.alert('Insufficient Funds', `You need £${signingFee.toLocaleString()} to recruit this scout.`);
+      setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
+    setSignError(null);
     addBalance(-signingFee);
     addScout({ ...scout, joinedWeek: weekNumber });
     setProspects((prev) => prev.filter((p) => p.id !== scout.id));
@@ -434,33 +466,28 @@ function ScoutsPane() {
   function fireScout(scout: Scout) {
     const penaltyPence = Math.floor(scout.salary * 26 * 0.25);
     const penaltyPounds = Math.round(penaltyPence / 100);
-    const currentBalance = academy.balance ?? 0;
+    setFireError(null);
+    setPendingFire({ scout, penalty: penaltyPounds, penaltyPence });
+  }
 
-    Alert.alert(
-      'Release Scout?',
-      `Release ${scout.name}?\n\nEarly termination fee: £${penaltyPounds.toLocaleString()}\n(25% of 26 remaining weeks @ £${Math.round(scout.salary / 100)}/wk)`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Release',
-          style: 'destructive',
-          onPress: () => {
-            if (currentBalance < penaltyPounds) {
-              Alert.alert('Insufficient Funds', `You need £${penaltyPounds.toLocaleString()} to release this scout.`);
-              return;
-            }
-            addBalance(-penaltyPounds);
-            useFinanceStore.getState().addTransaction({
-              amount: -penaltyPence,
-              category: 'contract_termination',
-              description: `Released ${scout.name} (25% early termination)`,
-              weekNumber,
-            });
-            removeScout(scout.id);
-          },
-        },
-      ],
-    );
+  function confirmFireScout() {
+    if (!pendingFire) return;
+    const { scout, penalty, penaltyPence } = pendingFire;
+    const currentBalance = academy.balance ?? 0;
+    if (currentBalance < penalty) {
+      setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
+      setPendingFire(null);
+      return;
+    }
+    addBalance(-penalty);
+    useFinanceStore.getState().addTransaction({
+      amount: -penaltyPence,
+      category: 'contract_termination',
+      description: `Released ${scout.name} (25% early termination)`,
+      weekNumber,
+    });
+    removeScout(scout.id);
+    setPendingFire(null);
   }
 
   return (
@@ -518,6 +545,11 @@ function ScoutsPane() {
                 </View>
               ) : (
                 <>
+                  {signError && (
+                    <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
+                      {signError}
+                    </PixelText>
+                  )}
                   {prospects.map((s) => (
                     <ScoutProspectCard key={s.id} scout={s} onSign={() => signScout(s)} />
                   ))}
@@ -528,6 +560,27 @@ function ScoutsPane() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Fire scout confirmation dialog */}
+      <PixelDialog
+        visible={!!pendingFire}
+        title="Release Scout?"
+        message={pendingFire
+          ? `Release ${pendingFire.scout.name}?\n\nEarly termination fee: £${pendingFire.penalty.toLocaleString()}\n(25% of 26 remaining weeks)`
+          : ''}
+        onClose={() => setPendingFire(null)}
+        onConfirm={confirmFireScout}
+        confirmLabel="RELEASE"
+        confirmVariant="red"
+      />
+
+      {/* Insufficient funds after fire attempt */}
+      <PixelDialog
+        visible={!!fireError}
+        title="Insufficient Funds"
+        message={fireError ?? ''}
+        onClose={() => setFireError(null)}
+      />
     </View>
   );
 }
@@ -564,6 +617,11 @@ function UpkeepWarningBanner() {
 
 export default function AcademyHubScreen() {
   const [activeTab, setActiveTab] = useState<AcademyTab>('SQUAD');
+  const academy = useAcademyStore((s) => s.academy);
+
+  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
+    ? academy.balance
+    : academy.totalCareerEarnings;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
@@ -573,6 +631,21 @@ export default function AcademyHubScreen() {
         active={activeTab}
         onChange={(tab) => setActiveTab(tab as AcademyTab)}
       />
+
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 4,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <PixelText size={10} upper>Academy</PixelText>
+        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
+      </View>
       <UpkeepWarningBanner />
 
       {activeTab === 'SQUAD' && <SquadPane />}

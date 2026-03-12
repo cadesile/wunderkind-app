@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, FlatList, Modal, Pressable, Alert } from 'react-native';
+import { View, FlatList, Modal, Pressable } from 'react-native';
+import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useCoachStore } from '@/stores/coachStore';
@@ -95,8 +96,11 @@ export default function CoachesScreen() {
   const weekNumber = academy.weekNumber ?? 1;
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
   const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
+  const [signError, setSignError] = useState<string | null>(null);
+  const [pendingFireId, setPendingFireId] = useState<string | null>(null);
 
   function openScout() {
+    setSignError(null);
     setProspects(generateCoachProspects(3, weekNumber));
     setShowModal(true);
   }
@@ -104,19 +108,17 @@ export default function CoachesScreen() {
   function signCoach(coach: Coach) {
     const signingFee = coach.salary * 4; // one month upfront
     if (academy.totalCareerEarnings < signingFee) {
-      Alert.alert('Insufficient Funds', `You need £${signingFee.toLocaleString()} to sign this coach.`);
+      setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
+    setSignError(null);
     addEarnings(-signingFee);
     addCoach({ ...coach, joinedWeek: weekNumber });
     setProspects((prev) => prev.filter((p) => p.id !== coach.id));
   }
 
   function fireCoach(id: string) {
-    Alert.alert('Release Coach', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Release', style: 'destructive', onPress: () => removeCoach(id) },
-    ]);
+    setPendingFireId(id);
   }
 
   return (
@@ -200,6 +202,11 @@ export default function CoachesScreen() {
                 </View>
               ) : (
                 <>
+                  {signError && (
+                    <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
+                      {signError}
+                    </PixelText>
+                  )}
                   {prospects.map((c) => (
                     <ProspectCard key={c.id} coach={c} onSign={() => signCoach(c)} />
                   ))}
@@ -210,6 +217,17 @@ export default function CoachesScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Fire confirmation dialog */}
+      <PixelDialog
+        visible={!!pendingFireId}
+        title="Release Coach?"
+        message="Are you sure you want to release this coach?"
+        onClose={() => setPendingFireId(null)}
+        onConfirm={() => { removeCoach(pendingFireId!); setPendingFireId(null); }}
+        confirmLabel="RELEASE"
+        confirmVariant="red"
+      />
     </SafeAreaView>
   );
 }

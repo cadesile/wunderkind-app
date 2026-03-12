@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Alert } from 'react-native';
+import { View, ScrollView, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
@@ -44,6 +44,7 @@ const LEVEL_BENEFIT_LABELS: Record<FacilityType, (level: number) => string> = {
 function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: number; balance: number }) {
   const { upgradeLevel } = useFacilityStore();
   const { addBalance, academy } = useAcademyStore();
+  const [modalVisible, setModalVisible] = useState(false);
 
   const upgradeCost = facilityUpgradeCost(def.type, level);
   const maintenance = calculateFacilityUpkeep(def.type, level);
@@ -53,30 +54,19 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
   const levelPct = (level / 10) * 100;
 
   function handleUpgrade() {
-    if (!canAfford) {
-      Alert.alert('Insufficient Funds', `You need £${upgradeCost.toLocaleString()} to upgrade.`);
-      return;
-    }
-    Alert.alert(
-      `Upgrade ${def.label}`,
-      `Cost: £${upgradeCost.toLocaleString()}\n\nLevel ${level} → ${level + 1}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Upgrade',
-          onPress: () => {
-            upgradeLevel(def.type);
-            addBalance(-upgradeCost);
-            useFinanceStore.getState().addTransaction({
-              amount: -upgradeCost,
-              category: 'facility_upgrade',
-              description: `Upgraded ${def.label} to level ${level + 1}`,
-              weekNumber: academy.weekNumber ?? 1,
-            });
-          },
-        },
-      ],
-    );
+    setModalVisible(true);
+  }
+
+  function confirmUpgrade() {
+    setModalVisible(false);
+    upgradeLevel(def.type);
+    addBalance(-upgradeCost);
+    useFinanceStore.getState().addTransaction({
+      amount: -upgradeCost,
+      category: 'facility_upgrade',
+      description: `Upgraded ${def.label} to level ${level + 1}`,
+      weekNumber: academy.weekNumber ?? 1,
+    });
   }
 
   return (
@@ -142,6 +132,63 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
           disabled={!canAfford}
         />
       )}
+
+      {/* Confirmation modal (web + native) */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}
+          onPress={() => setModalVisible(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 4,
+              borderColor: WK.yellow,
+              padding: 20,
+              minWidth: 280,
+              maxWidth: 340,
+              ...pixelShadow,
+            }}>
+              <PixelText size={9} upper style={{ marginBottom: 14 }}>Upgrade {def.label}</PixelText>
+              {!canAfford ? (
+                <PixelText size={7} color={WK.orange} style={{ marginBottom: 20 }}>
+                  INSUFFICIENT FUNDS{'\n'}NEED £{upgradeCost.toLocaleString()}
+                </PixelText>
+              ) : (
+                <>
+                  <PixelText size={7} dim style={{ marginBottom: 6 }}>
+                    LEVEL {level} → {level + 1}
+                  </PixelText>
+                  <PixelText size={7} color={WK.yellow} style={{ marginBottom: 20 }}>
+                    COST: £{upgradeCost.toLocaleString()}
+                  </PixelText>
+                </>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Button
+                  label="CANCEL"
+                  variant="teal"
+                  onPress={() => setModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                {canAfford && (
+                  <Button
+                    label="UPGRADE"
+                    variant="yellow"
+                    onPress={confirmUpgrade}
+                    style={{ flex: 1 }}
+                  />
+                )}
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -186,7 +233,7 @@ export default function FacilitiesScreen() {
         <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: 16 }}>
         {visibleDefs.map((def) => (
           <FacilityCard
             key={def.type}

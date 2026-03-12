@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, FlatList, Modal, Pressable, TextInput, Alert } from 'react-native';
+import { View, ScrollView, FlatList, Modal, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useAcademyStore } from '@/stores/academyStore';
@@ -346,19 +346,21 @@ function LoansPane() {
   const { loans, takeLoan, totalWeeklyRepayment } = useLoanStore();
   const [showModal, setShowModal] = useState(false);
   const [amountText, setAmountText] = useState('');
+  const [loanError, setLoanError] = useState<string | null>(null);
 
   const loanLimit = getLoanLimit(academy.reputation);
   const weeklyRepayment = totalWeeklyRepayment();
 
   function handleTakeLoan() {
+    setLoanError(null);
     const amount = parseInt(amountText.replace(/[^0-9]/g, ''), 10);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid loan amount.');
+      setLoanError('Please enter a valid loan amount.');
       return;
     }
     const result = takeLoan(amount, academy.weekNumber ?? 1, academy.reputation);
     if (result instanceof Error) {
-      Alert.alert('Loan Denied', result.message);
+      setLoanError(result.message);
       return;
     }
     // Credit balance with loan proceeds
@@ -376,7 +378,7 @@ function LoansPane() {
           <FinanceRow label="WEEKLY REPAYMENTS" value={`-£${weeklyRepayment.toLocaleString()}`} accent={WK.orange} />
           <FinanceRow label="INTEREST RATE" value="4.6% / 52 WK" accent={WK.dim} />
         </Card>
-        <Button label="◈ TAKE A LOAN" variant="yellow" fullWidth onPress={() => setShowModal(true)} />
+        <Button label="◈ TAKE A LOAN" variant="yellow" fullWidth onPress={() => { setLoanError(null); setShowModal(true); }} />
       </View>
 
       {loans.length === 0 ? (
@@ -434,9 +436,14 @@ function LoansPane() {
                 onChangeText={setAmountText}
               />
 
+              {loanError && (
+                <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
+                  {loanError}
+                </PixelText>
+              )}
               <View style={{ gap: 8 }}>
                 <Button label="CONFIRM LOAN" variant="yellow" fullWidth onPress={handleTakeLoan} />
-                <Button label="CANCEL" variant="teal" fullWidth onPress={() => setShowModal(false)} />
+                <Button label="CANCEL" variant="teal" fullWidth onPress={() => { setShowModal(false); setLoanError(null); }} />
               </View>
             </View>
           </Pressable>
@@ -604,6 +611,11 @@ function LedgerPane() {
 
 export default function FinanceHubScreen() {
   const [activeTab, setActiveTab] = useState<FinanceTab>('BALANCE');
+  const academy = useAcademyStore((s) => s.academy);
+
+  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
+    ? academy.balance
+    : academy.totalCareerEarnings;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
@@ -613,6 +625,21 @@ export default function FinanceHubScreen() {
         active={activeTab}
         onChange={(tab) => setActiveTab(tab as FinanceTab)}
       />
+
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 4,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <PixelText size={10} upper>Finances</PixelText>
+        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
+      </View>
 
       {activeTab === 'BALANCE' && <BalancePane />}
       {activeTab === 'INVESTORS' && <InvestorsPane />}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -78,6 +79,8 @@ export default function PlayerDetailScreen() {
 
   const [attrsExpanded, setAttrsExpanded] = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
+  const [showReleaseDialog, setShowReleaseDialog] = useState(false);
+  const [releaseResultDialog, setReleaseResultDialog] = useState<{ title: string; message: string } | null>(null);
 
   const gameDate = getGameDate(weekNumber);
   const displayAge = player?.dateOfBirth
@@ -100,29 +103,23 @@ export default function PlayerDetailScreen() {
     : null;
 
   function handleRelease() {
-    Alert.alert(
-      'Release Player?',
-      `Release ${player.name} back to the market pool? No transfer fee is received.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Release',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await releasePlayer(player.id);
-            if (result.success) {
-              Alert.alert(
-                'Player Released',
-                `${result.playerName} has been returned to the market pool.`,
-                [{ text: 'OK', onPress: () => router.back() }],
-              );
-            } else {
-              Alert.alert('Error', result.error ?? 'Failed to release player.');
-            }
-          },
-        },
-      ],
-    );
+    setShowReleaseDialog(true);
+  }
+
+  async function confirmRelease() {
+    setShowReleaseDialog(false);
+    const result = await releasePlayer(player.id);
+    if (result.success) {
+      setReleaseResultDialog({
+        title: 'Player Released',
+        message: `${result.playerName} has been returned to the market pool.`,
+      });
+    } else {
+      setReleaseResultDialog({
+        title: 'Error',
+        message: result.error ?? 'Failed to release player.',
+      });
+    }
   }
 
   return (
@@ -423,6 +420,29 @@ export default function PlayerDetailScreen() {
         </View>
 
       </ScrollView>
+
+      {/* Release confirmation */}
+      <PixelDialog
+        visible={showReleaseDialog}
+        title="Release Player?"
+        message={`Release ${player.name} back to the market pool? No transfer fee is received.`}
+        onClose={() => setShowReleaseDialog(false)}
+        onConfirm={confirmRelease}
+        confirmLabel="RELEASE"
+        confirmVariant="red"
+      />
+
+      {/* Release result */}
+      <PixelDialog
+        visible={!!releaseResultDialog}
+        title={releaseResultDialog?.title ?? ''}
+        message={releaseResultDialog?.message ?? ''}
+        onClose={() => {
+          const wasSuccess = releaseResultDialog?.title === 'Player Released';
+          setReleaseResultDialog(null);
+          if (wasSuccess) router.back();
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, FlatList, RefreshControl, Alert, Pressable } from 'react-native';
+import { View, FlatList, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -37,6 +37,7 @@ function PlayerCard({ player }: { player: MarketPlayer }) {
   const rejectPlayer = useMarketStore((s) => s.rejectPlayer);
   const [showScoutPicker, setShowScoutPicker] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
 
   const status = player.scoutingStatus ?? 'hidden';
   const isRevealed = status === 'revealed';
@@ -64,12 +65,12 @@ function PlayerCard({ player }: { player: MarketPlayer }) {
 
   async function handleSign() {
     setSigning(true);
+    setSignError(null);
     try {
       await require('@/api/endpoints/market').marketApi.assignEntity('player', player.id);
       signPlayer(player.id);
-      Alert.alert('Signed!', `${player.firstName} ${player.lastName} has joined the academy.`);
     } catch {
-      Alert.alert('Error', 'Failed to sign player. Try again.');
+      setSignError('Failed to sign player. Try again.');
     } finally {
       setSigning(false);
     }
@@ -207,19 +208,26 @@ function PlayerCard({ player }: { player: MarketPlayer }) {
 
       {/* Sign / Pass buttons (revealed only) */}
       {isRevealed && (
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <View style={{ flex: 2 }}>
-            <Button
-              label={signing ? 'SIGNING...' : 'SIGN PLAYER'}
-              variant="green"
-              fullWidth
-              onPress={handleSign}
-              disabled={signing}
-            />
+        <View style={{ marginTop: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 2 }}>
+              <Button
+                label={signing ? 'SIGNING...' : 'SIGN PLAYER'}
+                variant="green"
+                fullWidth
+                onPress={handleSign}
+                disabled={signing}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="PASS" variant="teal" fullWidth onPress={handleReject} />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Button label="PASS" variant="teal" fullWidth onPress={handleReject} />
-          </View>
+          {signError && (
+            <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+              {signError}
+            </PixelText>
+          )}
         </View>
       )}
     </View>

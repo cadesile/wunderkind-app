@@ -4,7 +4,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,16 +18,18 @@ interface Props {
 export function OnboardingScreen({ onRegister }: Props) {
   const [academyName, setAcademyName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit = academyName.trim().length > 0 && !loading;
 
   async function handleSubmit() {
     if (!canSubmit) return;
     setLoading(true);
+    setError(null);
     try {
       await onRegister(academyName.trim());
     } catch (err) {
-      Alert.alert('Could not create academy', 'Please check your connection and try again.');
+      setError('Could not create academy. Please check your connection and try again.');
       console.error('[Onboarding] registerAcademy failed:', err);
     } finally {
       setLoading(false);
@@ -112,6 +113,12 @@ export function OnboardingScreen({ onRegister }: Props) {
               onPress={handleSubmit}
               disabled={!canSubmit}
             />
+          )}
+
+          {error && (
+            <PixelText size={6} color={WK.red} style={{ textAlign: 'center', marginTop: 12 }}>
+              {error}
+            </PixelText>
           )}
 
           <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 16 }}>

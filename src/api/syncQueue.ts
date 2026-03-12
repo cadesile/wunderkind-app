@@ -12,9 +12,10 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { InteractionManager, Alert } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { syncWeek } from '@/api/endpoints/sync';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useInboxStore } from '@/stores/inboxStore';
 import { SyncRequest } from '@/types/api';
 
 const QUEUE_STORAGE_KEY = 'wk-sync-queue';
@@ -124,11 +125,14 @@ class SyncQueue {
         useAcademyStore.getState().rollbackWeek(res.currentWeek);
         this.processing = false;
         this.notify('idle');
-        Alert.alert(
-          'Sync Conflict',
-          `Week mismatch detected. Local progress has been rolled back to Week ${res.currentWeek} to match the server.`,
-          [{ text: 'OK' }],
-        );
+        useInboxStore.getState().addMessage({
+          id: `sync-conflict-${res.currentWeek}-${Date.now()}`,
+          type: 'system',
+          week: res.currentWeek,
+          subject: 'Sync Conflict',
+          body: `Week mismatch detected. Local progress has been rolled back to Week ${res.currentWeek} to match the server.`,
+          isRead: false,
+        });
         return;
       }
     } catch {
