@@ -234,7 +234,7 @@ export function processWeeklyTick(): WeeklyTick {
   const hasPendingSponsorOffer = inboxMessages.some(
     (m) => m.type === 'sponsor' && m.requiresResponse && !m.response
   );
-  if (!hasPendingSponsorOffer && Math.random() < 0.03) {
+  if (!hasPendingSponsorOffer && Math.random() < 0.15) {
     const rep = academy.reputation;
     const availableSponsors = allSponsors.filter((s) => !academy.sponsorIds.includes(s.id));
     let eligibleSizes: CompanySize[];
@@ -280,8 +280,8 @@ export function processWeeklyTick(): WeeklyTick {
     weekNumber > 1 &&
     !academy.investorId &&
     !hasPendingInvestorOffer &&
-    academy.reputation >= 15 &&
-    Math.random() < 0.015
+    academy.reputation >= 5 &&
+    Math.random() < 0.08
   ) {
     const rep = academy.reputation;
     // Equity ceiling by tier: Regional→SMALL (≤10%), National→MEDIUM (≤20%), Elite→any

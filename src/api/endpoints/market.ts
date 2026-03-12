@@ -135,9 +135,9 @@ function sponsorContractWeeks(size: 'SMALL' | 'MEDIUM' | 'LARGE'): number {
 
 /** One-time investment amount in pence, derived from company size. */
 function investorAmount(size: 'SMALL' | 'MEDIUM' | 'LARGE'): number {
-  if (size === 'LARGE')  return 20_000_000;
-  if (size === 'MEDIUM') return 5_000_000;
-  return 1_000_000;
+  if (size === 'LARGE')  return 200_000_000; // £2,000,000
+  if (size === 'MEDIUM') return 50_000_000;  // £500,000
+  return 10_000_000;                         // £100,000
 }
 
 /** Transform raw backend market data to app-facing MarketData. */

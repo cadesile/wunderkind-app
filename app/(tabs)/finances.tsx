@@ -205,7 +205,7 @@ function InvestorsPane() {
           />
           <FinanceRow
             label="INVESTMENT"
-            value={`£${assignedInvestor.investmentAmount.toLocaleString()}`}
+            value={`£${Math.round(assignedInvestor.investmentAmount / 100).toLocaleString()}`}
             accent={WK.yellow}
           />
 

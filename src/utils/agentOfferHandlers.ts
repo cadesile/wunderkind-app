@@ -2,6 +2,8 @@ import { useInboxStore } from '@/stores/inboxStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
+import { useMarketStore } from '@/stores/marketStore';
+import { calculateNetSalePrice } from '@/engine/finance';
 
 /**
  * Accept an agent transfer offer:
@@ -27,18 +29,36 @@ export function handleAcceptAgentOffer(offerId: string): void {
     agentId: offer.agentId,
   });
 
-  // netProceeds is in pence — addBalance takes whole pounds
-  const netPounds = Math.round(offer.netProceeds / 100);
+  // Apply both agent commission AND investor equity deduction
+  const { academy } = useAcademyStore.getState();
+  const { investors } = useMarketStore.getState();
+  const investorEquityPcts = investors
+    .filter((inv) => inv.id === academy.investorId)
+    .map((inv) => inv.equityTaken);
+
+  // calculateNetSalePrice: gross × (1 − agentComm) × (1 − investorEquity) — all in pence
+  const netPence = calculateNetSalePrice(
+    offer.estimatedFee,
+    offer.agentCommissionRate,
+    investorEquityPcts,
+  );
+  const netPounds = Math.round(netPence / 100);
+  const agentCutPence = offer.estimatedFee - Math.round(offer.estimatedFee * (1 - offer.agentCommissionRate / 100));
+  const investorCutPence = Math.round(offer.estimatedFee * (1 - offer.agentCommissionRate / 100)) - netPence;
+
   useAcademyStore.getState().addBalance(netPounds);
 
-  const weekNumber = useAcademyStore.getState().academy.weekNumber;
+  const weekNumber = academy.weekNumber;
   const financeStore = useFinanceStore.getState();
 
-  // Ledger entry (whole pounds, consistent with rest of ledger)
+  // Ledger entry — net amount after all deductions (whole pounds)
+  const investorNote = investorEquityPcts.length > 0
+    ? ` [${investorEquityPcts[0]}% equity deducted]`
+    : '';
   financeStore.addTransaction({
     amount: netPounds,
     category: 'transfer_fee',
-    description: `${offer.playerName} → ${offer.destinationClub} (via ${offer.agentName})`,
+    description: `${offer.playerName} → ${offer.destinationClub} (via ${offer.agentName})${investorNote}`,
     weekNumber,
   });
 
@@ -48,8 +68,8 @@ export function handleAcceptAgentOffer(offerId: string): void {
     playerName: offer.playerName,
     destinationClub: offer.destinationClub,
     grossFee: offer.estimatedFee,
-    agentCommission: offer.estimatedFee - offer.netProceeds,
-    netProceeds: offer.netProceeds,
+    agentCommission: agentCutPence,
+    netProceeds: netPence,
     week: weekNumber,
     type: 'agent_assisted',
   });
