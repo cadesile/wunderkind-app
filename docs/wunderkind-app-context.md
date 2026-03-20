@@ -1,6 +1,6 @@
 # Wunderkind Factory — React Native App Context
 
-> Last updated: 2026-03-08 23:05:16
+> Last updated: 2026-03-20 23:25:42
 
 ## Overview
 Expo-managed React Native app for **The Wunderkind Factory** — a football academy
@@ -35,6 +35,7 @@ expo: ~54.0.0
 expo-asset: ~12.0.12
 expo-constants: ~18.0.13
 expo-font: ^14.0.11
+expo-haptics: ^55.0.8
 expo-linking: ~8.0.11
 expo-router: ~6.0.23
 expo-splash-screen: ~31.0.13
@@ -93,6 +94,7 @@ src/
 │   │   ├── auth.ts
 │   │   ├── events.ts
 │   │   ├── facilities.ts
+│   │   ├── gameConfig.ts
 │   │   ├── inbox.ts
 │   │   ├── leaderboard.ts
 │   │   ├── market.ts
@@ -116,8 +118,10 @@ src/
 │   │   ├── Card.tsx
 │   │   ├── PitchBackground.tsx
 │   │   ├── PixelAvatar.tsx
+│   │   ├── PixelDialog.tsx
 │   │   ├── PixelText.tsx
-│   │   └── PixelTopTabBar.tsx
+│   │   ├── PixelTopTabBar.tsx
+│   │   └── SwipeConfirm.tsx
 │   ├── ArchetypeBadge.tsx
 │   ├── GlobalHeader.tsx
 │   ├── OnboardingScreen.tsx
@@ -141,10 +145,12 @@ src/
 │   ├── recruitment.ts
 │   ├── RelationshipService.ts
 │   ├── ScoutingService.ts
-│   └── SimulationService.ts
+│   ├── SimulationService.ts
+│   └── SocialGraphEngine.ts
 ├── hooks/
 │   ├── useArchetypeSync.ts
 │   ├── useAuthFlow.ts
+│   ├── useGameConfigSync.ts
 │   ├── useNarrativeSync.ts
 │   └── useSyncStatus.ts
 ├── stores/
@@ -156,7 +162,9 @@ src/
 │   ├── eventStore.ts
 │   ├── facilityStore.ts
 │   ├── financeStore.ts
+│   ├── gameConfigStore.ts
 │   ├── inboxStore.ts
+│   ├── interactionStore.ts
 │   ├── loanStore.ts
 │   ├── marketStore.ts
 │   ├── narrativeStore.ts
@@ -170,6 +178,8 @@ src/
 │   ├── facility.ts
 │   ├── finance.ts
 │   ├── game.ts
+│   ├── gameConfig.ts
+│   ├── interaction.ts
 │   ├── market.ts
 │   ├── narrative.ts
 │   └── player.ts
@@ -178,6 +188,7 @@ src/
     ├── currency.ts
     ├── facilityUpkeep.ts
     ├── gameDate.ts
+    ├── haptics.ts
     ├── morale.ts
     ├── storage.ts
     └── uuidv7.ts
@@ -187,7 +198,7 @@ scripts/
 docs/
 └── wunderkind-app-context.md
 
-20 directories, 103 files
+20 directories, 113 files
 ```
 
 ---
@@ -429,6 +440,24 @@ interface FinanceState {
       getTotalByCategory: (category, weeks = ROLLING_WEEKS) =>
 ```
 
+### gameConfigStore
+
+```typescript
+interface GameConfigState {
+// Actions:
+  config: GameConfig;
+  lastFetchedAt: string | null;
+  setConfig: (config: GameConfig) => void;
+  shouldRefetch: () => boolean;
+  persist(
+      config: DEFAULT_GAME_CONFIG,
+      lastFetchedAt: null,
+      setConfig: (config) =>
+        set({ config, lastFetchedAt: new Date().toISOString() }),
+      shouldRefetch: () => {
+        if (!lastFetchedAt) return true;
+```
+
 ### inboxStore
 
 ```typescript
@@ -457,6 +486,33 @@ interface InboxState {
   addMessage: (msg: InboxMessage) => void;
   markRead: (id: string) => void;
   respond: (id: string, response: 'accepted' | 'rejected') => void;
+```
+
+### interactionStore
+
+```typescript
+interface InteractionState {
+// Actions:
+  records: InteractionRecord[];
+  cliques: Clique[];
+  dressingRoomHealth: DressingRoomHealth | null;
+  groupSessionLog: GroupSessionEntry[];
+  logInteraction: (record: Omit<InteractionRecord, 'id' | 'timestamp'>) => void;
+  getRecordsForEntity: (entityId: string) => InteractionRecord[];
+  getRecordsBetween: (idA: string, idB: string) => InteractionRecord[];
+  getVisibleRecords: (entityId: string, limit?: number) => InteractionRecord[];
+  getRecentGroupSessions: (
+    targetType: 'squad' | 'staff',
+    withinWeeks: number,
+  logGroupSession: (entry: GroupSessionEntry) => void;
+  updateCliques: (cliques: Clique[]) => void;
+  updateDressingRoomHealth: (health: DressingRoomHealth) => void;
+  renameClique: (cliqueId: string, name: string) => void;
+  persist(
+      records: [],
+      cliques: [],
+      dressingRoomHealth: null,
+      groupSessionLog: [],
 ```
 
 ### loanStore
@@ -588,11 +644,11 @@ interface SquadState {
     devUpdates: Record<string, PlayerDevelopmentUpdate>,
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   generateStarterSquad: () => void;
+  setDevelopmentFocus: (
+    playerId: string,
+    focus: Player['developmentFocus'] | null,
   releasePlayer: (playerId: string) => Promise<{ success: boolean; playerName?: string; error?: string }>;
   persist(
-      players: [],
-      addPlayer: (player) =>
-        set((state) => ({ players: [...state.players, player] })),
 ```
 
 
@@ -638,6 +694,7 @@ export function getCoachOpinion(player: MarketPlayer, coach: Coach): CoachOpinio
 ### DevelopmentService
 
 ```typescript
+export function computeCoachPerformanceScore(coach: Coach): number {
 export function computePlayerDevelopment(
 ```
 
@@ -717,6 +774,12 @@ export function refreshMarketOffers(): void {
 export const simulationService = new SimulationService();
 ```
 
+### SocialGraphEngine
+
+```typescript
+export function processSocialGraph(): void {
+```
+
 
 ---
 
@@ -748,11 +811,11 @@ export interface RegisterRequest {
 export interface RegisterResponse {
 export interface LoginRequest {
 export interface LoginResponse {
+export interface SyncTransfer {
+export interface SyncLedgerEntry {
 export interface SyncRequest {
 export interface SyncAcceptedResponse {
 export interface SyncRejectedResponse {
-export type SyncResponse = SyncAcceptedResponse | SyncRejectedResponse;
-export type LeaderboardCategory =
 ```
 
 ### archetype
@@ -797,6 +860,29 @@ export interface ExpenseItem {
 export interface BehavioralIncident {
 ```
 
+### gameConfig
+
+```typescript
+export interface GameConfig {
+```
+
+### interaction
+
+```typescript
+export type CliquePaletteColor = 'coral' | 'sky' | 'lilac' | 'amber';
+export type AmpPlayerSubtype =
+export type AmpCoachSubtype =
+export type AmpGroupSubtype =
+export type NpcTrainingIncidentSubtype =
+export type SystemSubtype =
+export type InteractionCategory =
+export type InteractionSubtype =
+export interface InteractionRecord {
+export interface Clique {
+export interface DressingRoomHealth {
+export interface GroupSessionEntry {
+```
+
 ### market
 
 ```typescript
@@ -829,6 +915,8 @@ export interface DurationConfig {
 export interface ManagerShift {
 export interface EventChoice {
 export interface EventImpacts {
+export interface TraitRequirement {
+export interface NpcFiringConditions {
 export interface GameEventTemplate {
 export interface ActiveEffect {
 export interface StatImpact {
@@ -888,6 +976,11 @@ export const eventsApi = {
 ```typescript
 export async function getFacilities(): Promise<FacilitiesResponse> {
 export async function upgradeFacility(facilityType: string): Promise<FacilityUpgradeResponse> {
+```
+
+#### gameConfig
+```typescript
+export async function fetchGameConfig(): Promise<GameConfig> {
 ```
 
 #### inbox
@@ -962,8 +1055,10 @@ export function useSyncWeek() {
 - `ui/Card.tsx` — Card({ children, variant = 'card', style, ...rest }: Props) 
 - `ui/PitchBackground.tsx` — PitchBackground() {
 - `ui/PixelAvatar.tsx` — PixelAvatar({ size = 48 }: Props) {
+- `ui/PixelDialog.tsx` — PixelDialog({
 - `ui/PixelText.tsx` — PixelText({
 - `ui/PixelTopTabBar.tsx` — PixelTopTabBar({ tabs, active, onChange }: Props) {
+- `ui/SwipeConfirm.tsx` — SwipeConfirm({
 
 ---
 
@@ -1064,6 +1159,13 @@ npm run proxy
 ## Recent Git Activity
 
 ```
+dd2e47b Implement Phase 1 & 2: NPC interaction ledger + coach performance link
+9154a98 ui fixes
+ca0553d ui fixes
+948b72e Populate transfers and ledger in weekly sync payload
+b13672d Centralise player asking price into getPlayerAskingPrice utility
+2152caf Implement sponsor/investor offer events + fix starter balance from backend
+346c77a Update project context generator for React Native app
 0a1aacc Fix agent offer UX, player rating stability, and coach valuation alignment
 92d2c56 Complete scouting & relationship system — missing elements
 704dd4f Implement Scouting, Relationship & Market Valuation systems
@@ -1072,13 +1174,6 @@ f1e0283 Add player development, archetype system, and inbox UX improvements
 55806f4 Add agent transfer offers, simplify advance UX, and wire transfer ledger
 23e7391 Fix financial display bugs, market card layout, and add incident inbox notifications
 fe6c466 added updated readme
-da4dde3 UI fixes: safe area, pitch grid, NaN balance, player profile, facilities subnav
-fa5877b Implement deep management simulation upgrade
-c42c203 Implement optimistic background sync queue
-34ed782 Fix Advance Week lag — fire sync in background
-ba3b63c Implement Academy Growth & Temporal Engine
-7706af9 Fix expo-font version to match Expo SDK 54 (14.0.11)
-8af23e0 Apply pixel-art UI style guide across full app
 ```
 
 ---

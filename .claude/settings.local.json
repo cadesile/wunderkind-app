@@ -11,7 +11,14 @@
       "Bash(git push:*)",
       "Bash(git stash:*)",
       "Bash(chmod +x:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Read(//Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-backend/**)",
+      "Bash(lando status)",
+      "Bash(lando list:*)",
+      "Bash(lando info:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)"
     ]
   }
 }
