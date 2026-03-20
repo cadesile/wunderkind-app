@@ -1,6 +1,7 @@
 import { View, Pressable } from 'react-native';
 import { PixelText } from './PixelText';
 import { WK } from '@/constants/theme';
+import { hapticTap } from '@/utils/haptics';
 
 interface Props {
   tabs: string[];
@@ -25,7 +26,7 @@ export function PixelTopTabBar({ tabs, active, onChange }: Props) {
         return (
           <Pressable
             key={tab}
-            onPress={() => onChange(tab)}
+            onPress={() => { hapticTap(); onChange(tab); }}
             style={{
               flex: 1,
               paddingVertical: 10,

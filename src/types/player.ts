@@ -113,6 +113,18 @@ export interface Player {
   relationships?: Relationship[];
   /** ID of the coach currently training this player */
   assignedCoachId?: string;
+  /**
+   * Active development focus set by the AMP via a coach conversation.
+   * The assigned coach applies a bonus multiplier to this attribute.
+   */
+  developmentFocus?: {
+    /** The attribute being prioritised */
+    attribute: 'pace' | 'technical' | 'vision' | 'power' | 'stamina' | 'heart';
+    /** Coach who was instructed to focus on this */
+    setByCoachId: string;
+    /** Game week when focus was set — expires after 8 weeks */
+    setWeek: number;
+  };
   /** Post-signing accuracy comparison between scout report and true stats */
   scoutingReport?: ScoutingReport;
 }

@@ -1,6 +1,7 @@
-import { Pressable, PressableProps, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, PressableProps, StyleSheet, ViewStyle, GestureResponderEvent } from 'react-native';
 import { PixelText } from './PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
+import { hapticPress } from '@/utils/haptics';
 
 interface Props extends PressableProps {
   label: string;
@@ -18,11 +19,18 @@ const VARIANTS: Record<NonNullable<Props['variant']>, { bg: string; text: string
 };
 
 /** Pixel-art button — chunky border, elevation drop shadow */
-export function Button({ label, variant = 'teal', fullWidth = false, disabled, style, ...rest }: Props) {
+export function Button({ label, variant = 'teal', fullWidth = false, disabled, style, onPress, ...rest }: Props) {
   const { bg, text } = VARIANTS[variant];
+
+  function handlePress(e: GestureResponderEvent) {
+    hapticPress();
+    onPress?.(e);
+  }
+
   return (
     <Pressable
       disabled={disabled}
+      onPress={disabled ? undefined : handlePress}
       style={({ pressed }) => ({
         backgroundColor: disabled ? WK.tealCard : bg,
         borderWidth: 3,

@@ -6,8 +6,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -82,6 +83,10 @@ export default function PlayerDetailScreen() {
   const [showReleaseDialog, setShowReleaseDialog] = useState(false);
   const [releaseResultDialog, setReleaseResultDialog] = useState<{ title: string; message: string } | null>(null);
 
+  const updatePlayer = useSquadStore((s) => s.updatePlayer);
+  const logInteraction = useInteractionStore((s) => s.logInteraction);
+  const recentInteractions = useInteractionStore((s) => s.getVisibleRecords(id ?? '', 5));
+
   const gameDate = getGameDate(weekNumber);
   const displayAge = player?.dateOfBirth
     ? computePlayerAge(player.dateOfBirth, gameDate)
@@ -101,6 +106,48 @@ export default function PlayerDetailScreen() {
   const attrEntries = player.attributes
     ? (Object.entries(player.attributes) as [AttributeName, number][])
     : null;
+
+  function handleSupport() {
+    const p = player!;
+    const moraleDelta = 5;
+    updatePlayer(p.id, { morale: Math.min(100, (p.morale ?? 70) + moraleDelta) });
+    logInteraction({
+      week: weekNumber,
+      actorType: 'amp',
+      actorId: 'amp',
+      targetType: 'player',
+      targetId: p.id,
+      category: 'AMP_PLAYER',
+      subtype: 'support',
+      relationshipDelta: 0,
+      traitDeltas: {},
+      moraleDelta,
+      isVisibleToAmp: true,
+      visibilityReason: 'direct_action',
+      narrativeSummary: `You gave ${p.name} your support.`,
+    });
+  }
+
+  function handlePunish() {
+    const p = player!;
+    const moraleDelta = -5;
+    updatePlayer(p.id, { morale: Math.max(0, (p.morale ?? 70) + moraleDelta) });
+    logInteraction({
+      week: weekNumber,
+      actorType: 'amp',
+      actorId: 'amp',
+      targetType: 'player',
+      targetId: p.id,
+      category: 'AMP_PLAYER',
+      subtype: 'punish',
+      relationshipDelta: 0,
+      traitDeltas: {},
+      moraleDelta,
+      isVisibleToAmp: true,
+      visibilityReason: 'direct_action',
+      narrativeSummary: `You disciplined ${p.name}.`,
+    });
+  }
 
   function handleRelease() {
     setShowReleaseDialog(true);
@@ -393,6 +440,79 @@ export default function PlayerDetailScreen() {
             </View>
           </View>
         )}
+
+        {/* Support / Punish */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          ...pixelShadow,
+        }}>
+          <PixelText size={8} upper style={{ marginBottom: 10 }}>Management</PixelText>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable
+              onPress={handleSupport}
+              style={{
+                flex: 1,
+                backgroundColor: WK.green,
+                borderWidth: 2,
+                borderColor: WK.border,
+                padding: 10,
+                alignItems: 'center',
+              }}
+            >
+              <PixelText size={7} color={WK.text}>SUPPORT</PixelText>
+            </Pressable>
+            <Pressable
+              onPress={handlePunish}
+              style={{
+                flex: 1,
+                backgroundColor: WK.red,
+                borderWidth: 2,
+                borderColor: WK.border,
+                padding: 10,
+                alignItems: 'center',
+              }}
+            >
+              <PixelText size={7} color={WK.text}>PUNISH</PixelText>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Recent Interactions */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          marginTop: 12,
+          ...pixelShadow,
+        }}>
+          <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>RECENT INTERACTIONS</PixelText>
+
+          {recentInteractions.length === 0 ? (
+            <BodyText size={13} dim>No interactions recorded yet.</BodyText>
+          ) : (
+            recentInteractions.map((record) => (
+              <View key={record.id} style={{
+                flexDirection: 'row',
+                gap: 8,
+                paddingVertical: 6,
+                borderBottomWidth: 2,
+                borderBottomColor: WK.border,
+                alignItems: 'flex-start',
+              }}>
+                <PixelText size={6} color={WK.yellow} style={{ minWidth: 36 }}>
+                  WK {record.week}
+                </PixelText>
+                <BodyText size={12} dim style={{ flex: 1, lineHeight: 16 }}>
+                  {record.narrativeSummary}
+                </BodyText>
+              </View>
+            ))
+          )}
+        </View>
 
         {/* Release player */}
         <View style={{

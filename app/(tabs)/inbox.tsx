@@ -17,10 +17,12 @@ import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
 import { PixelText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { formatCurrencyCompact, getPlayerAskingPrice } from '@/utils/currency';
 import { moraleEmoji } from '@/utils/morale';
 import { WK, pixelShadow } from '@/constants/theme';
+import { hapticTap, hapticWarning, hapticError } from '@/utils/haptics';
 
 // ─── Agent offer card (list item) ────────────────────────────────────────────
 
@@ -30,7 +32,7 @@ function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer
   const weeksLeft = offer.expiresWeek - currentWeek;
 
   return (
-    <Pressable onPress={() => onViewOffer(offer)}>
+    <Pressable onPress={() => { hapticTap(); onViewOffer(offer); }}>
       <View style={{
         backgroundColor: WK.tealCard,
         borderWidth: 4,
@@ -66,7 +68,7 @@ function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer
           EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
         </PixelText>
 
-        <Button label="VIEW OFFER →" variant="yellow" fullWidth onPress={() => onViewOffer(offer)} />
+        <Button label="VIEW OFFER →" variant="yellow" fullWidth onPress={() => { hapticTap(); onViewOffer(offer); }} />
       </View>
     </Pressable>
   );
@@ -117,7 +119,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10 }}>
-      <Pressable onPress={onBack} style={{ marginBottom: 4 }}>
+      <Pressable onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 4 }}>
         <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
       </Pressable>
 
@@ -246,9 +248,13 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
       )}
 
       {/* ── Actions ──────────────────────────────────────────────────────── */}
-      <View style={{ gap: 8, paddingBottom: 16 }}>
-        <Button label="✓ ACCEPT OFFER" variant="yellow" fullWidth onPress={handleAccept} />
-        <Button label="✗ DECLINE OFFER" variant="teal" fullWidth onPress={handleDecline} />
+      <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+        <SwipeConfirm
+          onAccept={handleAccept}
+          onDecline={handleDecline}
+          acceptLabel="ACCEPT OFFER"
+          declineLabel="DECLINE OFFER"
+        />
       </View>
     </ScrollView>
   );
@@ -448,7 +454,7 @@ function InboxMessageRow({
   const canDelete = !(message.requiresResponse && !message.response);
 
   return (
-    <Pressable onPress={() => onPress(message)}>
+    <Pressable onPress={() => { hapticTap(); onPress(message); }}>
       <View style={{
         backgroundColor: WK.tealCard,
         borderWidth: 3,
@@ -471,7 +477,7 @@ function InboxMessageRow({
           </PixelText>
           {isUnread && <Badge label="NEW" color="yellow" />}
           {canDelete && (
-            <Pressable onPress={(e) => { e.stopPropagation?.(); onDelete(message); }} hitSlop={8}>
+            <Pressable onPress={(e) => { e.stopPropagation?.(); hapticWarning(); onDelete(message); }} hitSlop={8}>
               <Trash2 size={14} color={WK.dim} />
             </Pressable>
           )}
@@ -500,7 +506,7 @@ function NarrativeMessageRow({
   const borderColor = isPending ? WK.green : isUnread ? WK.yellow : WK.border;
 
   return (
-    <Pressable onPress={() => onPress(message)}>
+    <Pressable onPress={() => { hapticTap(); onPress(message); }}>
       <View style={{
         backgroundColor: WK.tealCard,
         borderWidth: 3,
@@ -524,7 +530,7 @@ function NarrativeMessageRow({
           {isPending && <Badge label="ACT" color="green" />}
           {isUnread && !isPending && <Badge label="NEW" color="yellow" />}
           {canDelete && (
-            <Pressable onPress={(e) => { e.stopPropagation?.(); onDelete(message); }} hitSlop={8}>
+            <Pressable onPress={(e) => { e.stopPropagation?.(); hapticWarning(); onDelete(message); }} hitSlop={8}>
               <Trash2 size={14} color={WK.dim} />
             </Pressable>
           )}
@@ -564,7 +570,7 @@ function InboxMessageDetail({
       addBalance(investorMeta.investmentAmount);
       setInvestorId(message.entityId);
       useFinanceStore.getState().addTransaction({
-        amount: investorMeta.investmentAmount * 100, // convert whole pounds → pence
+        amount: investorMeta.investmentAmount,
         category: 'investment',
         description: `${investorMeta.investorName} — ${investorMeta.equityPct}% equity deal`,
         weekNumber: message.week,
@@ -578,7 +584,7 @@ function InboxMessageDetail({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
-      <Pressable onPress={onBack} style={{ marginBottom: 12 }}>
+      <Pressable onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12 }}>
         <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
       </Pressable>
 
@@ -672,7 +678,7 @@ function NarrativeMessageDetail({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
-      <Pressable onPress={onBack} style={{ marginBottom: 12 }}>
+      <Pressable onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12 }}>
         <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
       </Pressable>
 
@@ -829,7 +835,7 @@ export default function InboxScreen() {
   const isListView = !selectedInboxLive && !selectedNarrativeLive && !selectedOffer;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom', 'left', 'right']}>
       <PitchBackground />
 
       <View style={{
@@ -847,7 +853,7 @@ export default function InboxScreen() {
               <PixelText size={6} color={WK.red}>DELETE ALL DELETABLE MESSAGES?</PixelText>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable
-                  onPress={() => setConfirmingClear(false)}
+                  onPress={() => { hapticTap(); setConfirmingClear(false); }}
                   style={{
                     flex: 1, paddingVertical: 6, backgroundColor: WK.tealCard,
                     borderWidth: 2, borderColor: WK.border, alignItems: 'center',
@@ -856,7 +862,7 @@ export default function InboxScreen() {
                   <PixelText size={6} dim>CANCEL</PixelText>
                 </Pressable>
                 <Pressable
-                  onPress={confirmClear}
+                  onPress={() => { hapticError(); confirmClear(); }}
                   style={{
                     flex: 1, paddingVertical: 6, backgroundColor: WK.red,
                     borderWidth: 2, borderColor: '#8b0000', alignItems: 'center',
@@ -869,7 +875,7 @@ export default function InboxScreen() {
           ) : (
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
               <Pressable
-                onPress={handleMarkAllRead}
+                onPress={() => { hapticTap(); handleMarkAllRead(); }}
                 style={{
                   flex: 1, paddingVertical: 6, backgroundColor: WK.tealCard,
                   borderWidth: 2, borderColor: WK.border, alignItems: 'center',
@@ -878,7 +884,7 @@ export default function InboxScreen() {
                 <PixelText size={6} dim>MARK ALL READ</PixelText>
               </Pressable>
               <Pressable
-                onPress={handleClearInbox}
+                onPress={() => { hapticTap(); handleClearInbox(); }}
                 style={{
                   flex: 1, paddingVertical: 6, backgroundColor: WK.tealCard,
                   borderWidth: 2, borderColor: WK.red, alignItems: 'center',

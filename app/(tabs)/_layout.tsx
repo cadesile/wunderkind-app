@@ -11,6 +11,7 @@ import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
+import { hapticTap, hapticPress } from '@/utils/haptics';
 
 type NavTabDef = {
   name: string;
@@ -52,6 +53,7 @@ function CustomTabBar({ state, navigation, onAdvance }: CustomTabBarProps) {
             <Pressable
               key={name}
               onPress={() => {
+                hapticTap();
                 if (!route) return;
                 const event = navigation.emit({
                   type: 'tabPress',
@@ -99,7 +101,7 @@ function CustomTabBar({ state, navigation, onAdvance }: CustomTabBarProps) {
 
       {/* ADVANCE — fixed-width gold CTA anchored to the right */}
       <Pressable
-        onPress={onAdvance}
+        onPress={() => { hapticPress(); onAdvance(); }}
         style={{
           width: 88,
           alignItems: 'center',

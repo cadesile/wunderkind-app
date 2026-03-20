@@ -568,7 +568,7 @@ export default function MarketScreen() {
   }, [setMarketData]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
       <PitchBackground />
 
       {/* Tab navigation */}

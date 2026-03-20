@@ -2,9 +2,10 @@ import { calculateTraitShifts, generateIncidents } from './personality';
 import { calculateWeeklyFinances } from './finance';
 import { simulationService } from './SimulationService';
 import { generateAgentOffer } from './agentOffers';
-import { computePlayerDevelopment } from './DevelopmentService';
+import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
 import { processScoutingTasks, checkGemDiscovery, refreshMarketOffers } from './ScoutingService';
 import { processMoraleAndRelationships } from './MoraleEngine';
+import { processSocialGraph } from './SocialGraphEngine';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -47,11 +48,14 @@ export function processWeeklyTick(): WeeklyTick {
   simulationService.processDailyTick();
 
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
-  const totalCoachInfluence = coaches.reduce((sum, c) => sum + c.influence, 0);
+  // Dynamic coach performance replaces flat influence sum
+  const totalCoachPerformance = coaches.reduce(
+    (sum, c) => sum + computeCoachPerformanceScore(c), 0,
+  );
   const weeklyXP =
     BASE_XP *
     (1 + levels.trainingPitch * 0.05) *
-    (1 + totalCoachInfluence / 100);
+    (1 + totalCoachPerformance / 100);
 
   // ── 2. Injury Probability ─────────────────────────────────────────────────────
   const injuryProb = Math.max(0, BASE_INJURY_PROB * (1 - levels.medicalLab * 0.08));
@@ -320,6 +324,9 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 11. Relationship & morale ─────────────────────────────────────────────────
   processMoraleAndRelationships();
+
+  // ── 12. Social graph — NPC training incidents ─────────────────────────────────
+  processSocialGraph();
 
   return {
     week: weekNumber,

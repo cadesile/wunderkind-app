@@ -15,7 +15,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { Loan } from '@/types/market';
-import { type FinancialCategory, type FinancialTransaction, CATEGORY_LABELS } from '@/types/finance';
+import { type FinancialCategory, type FinancialTransaction } from '@/types/finance';
 import { calculateWeeklyFinances } from '@/engine/finance';
 
 const FINANCE_TABS = ['BALANCE', 'INVESTORS', 'SPONSORS', 'LOANS', 'LEDGER'] as const;
@@ -470,11 +470,24 @@ const CATEGORY_FILTER_OPTIONS: { label: string; value: FinancialCategory | 'all'
   { label: 'INVEST', value: 'investment' },
   { label: 'FACILITIES', value: 'facility_upgrade' },
   { label: 'EARNINGS', value: 'earnings' },
+  { label: 'TERMINATION', value: 'contract_termination' },
 ];
+
+const CAT_BADGE_CONFIG: Record<FinancialCategory, { label: string; color: string }> = {
+  wages:                { label: 'WAG', color: WK.orange },
+  upkeep:               { label: 'UPK', color: WK.dim },
+  sponsor_payment:      { label: 'SPO', color: WK.tealLight },
+  transfer_fee:         { label: 'TRF', color: WK.yellow },
+  investment:           { label: 'INV', color: WK.green },
+  facility_upgrade:     { label: 'FAC', color: WK.orange },
+  earnings:             { label: 'ERN', color: WK.green },
+  contract_termination: { label: 'TRM', color: WK.red },
+};
 
 function LedgerPane() {
   const [rangeWeeks, setRangeWeeks] = useState(12);
   const [catFilter, setCatFilter] = useState<FinancialCategory | 'all'>('all');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const { getRecentHistory, getTotalByCategory } = useFinanceStore();
 
   const allTx = getRecentHistory(rangeWeeks);
@@ -482,115 +495,199 @@ function LedgerPane() {
     ? allTx
     : allTx.filter((tx) => tx.category === catFilter);
 
-  // Category totals (only when showing all)
   const incomeCats: FinancialCategory[] = ['sponsor_payment', 'investment', 'earnings'];
-  const expenseCats: FinancialCategory[] = ['wages', 'upkeep', 'transfer_fee', 'facility_upgrade'];
+  const expenseCats: FinancialCategory[] = ['wages', 'upkeep', 'transfer_fee', 'facility_upgrade', 'contract_termination'];
   const totalIncome = incomeCats.reduce((s, c) => s + Math.max(0, getTotalByCategory(c, rangeWeeks)), 0);
   const totalExpenses = expenseCats.reduce((s, c) => s + Math.abs(Math.min(0, getTotalByCategory(c, rangeWeeks))), 0);
   const netTotal = totalIncome - totalExpenses;
 
-  function renderTx({ item }: { item: FinancialTransaction }) {
+  const selectedCatLabel = CATEGORY_FILTER_OPTIONS.find((o) => o.value === catFilter)?.label ?? 'ALL';
+
+  function renderTx({ item, index }: { item: FinancialTransaction; index: number }) {
     const isPositive = item.amount >= 0;
+    const catConf = CAT_BADGE_CONFIG[item.category];
+    const badgeColor = item.category === 'investment'
+      ? (isPositive ? WK.green : WK.red)
+      : catConf?.color ?? WK.dim;
+    const rowBg = index % 2 === 0 ? 'rgba(0,0,0,0.15)' : 'transparent';
+
     return (
       <View style={{
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        paddingVertical: 8,
-        borderBottomWidth: 2,
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 6,
+        backgroundColor: rowBg,
+        borderBottomWidth: 1,
         borderBottomColor: WK.border,
-        gap: 8,
+        gap: 4,
       }}>
+        <View style={{ width: 32, alignItems: 'flex-end' }}>
+          <PixelText size={5} color={WK.dim}>{item.weekNumber}</PixelText>
+        </View>
+        <View style={{
+          width: 44,
+          paddingVertical: 2,
+          paddingHorizontal: 2,
+          backgroundColor: `${badgeColor}22`,
+          borderWidth: 1,
+          borderColor: badgeColor,
+          alignItems: 'center',
+        }}>
+          <PixelText size={5} color={badgeColor}>{catConf?.label ?? '???'}</PixelText>
+        </View>
         <View style={{ flex: 1 }}>
-          <PixelText size={6} dim numberOfLines={1}>{item.description}</PixelText>
-          <PixelText size={6} color={WK.dim} style={{ marginTop: 2 }}>
-            {CATEGORY_LABELS[item.category]} · WK {item.weekNumber}
+          <PixelText size={5} color={WK.dim} numberOfLines={1}>{item.description}</PixelText>
+        </View>
+        <View style={{ width: 80, alignItems: 'flex-end' }}>
+          <PixelText size={6} color={isPositive ? WK.green : WK.red}>
+            {isPositive ? '+' : '-'}£{Math.abs(item.amount).toLocaleString()}
           </PixelText>
         </View>
-        <PixelText size={7} color={isPositive ? WK.green : WK.red}>
-          {isPositive ? '+' : '-'}£{Math.abs(item.amount).toLocaleString()}
-        </PixelText>
       </View>
     );
   }
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Range filter */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingTop: 10, gap: 6 }}>
-        {RANGE_OPTIONS.map(({ label, weeks }) => {
-          const active = weeks === rangeWeeks;
-          return (
-            <Pressable
-              key={weeks}
-              onPress={() => setRangeWeeks(weeks)}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                backgroundColor: active ? WK.yellow : WK.tealMid,
-                borderWidth: 2,
-                borderColor: WK.border,
-              }}
-            >
-              <PixelText size={7} color={active ? '#3a2000' : WK.dim}>{label}</PixelText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Category filter chips */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingVertical: 8, gap: 6 }}>
-        {CATEGORY_FILTER_OPTIONS.map(({ label, value }) => {
-          const active = value === catFilter;
-          return (
-            <Pressable
-              key={value}
-              onPress={() => setCatFilter(value)}
-              style={{
-                paddingHorizontal: 8,
-                paddingVertical: 5,
-                backgroundColor: active ? WK.tealLight : WK.tealMid,
-                borderWidth: 2,
-                borderColor: active ? WK.tealLight : WK.border,
-              }}
-            >
-              <PixelText size={6} color={active ? WK.tealCard : WK.dim}>{label}</PixelText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Summary card (all categories) */}
-      {catFilter === 'all' && (
+      {/* ── Controls row ──────────────────────────────────────────────── */}
+      <View style={{ zIndex: 100 }}>
         <View style={{
-          marginHorizontal: 10,
-          marginBottom: 8,
-          backgroundColor: WK.tealCard,
-          borderWidth: 3,
-          borderColor: WK.border,
-          padding: 12,
-          ...pixelShadow,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 10,
+          paddingTop: 10,
+          paddingBottom: 6,
+          gap: 6,
         }}>
-          <FinanceRow label="INCOME" value={`+£${totalIncome.toLocaleString()}`} accent={WK.green} />
-          <FinanceRow label="EXPENSES" value={`-£${totalExpenses.toLocaleString()}`} accent={WK.red} />
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingTop: 8,
-            borderTopWidth: 2,
-            borderTopColor: WK.tealMid,
-            marginTop: 4,
-          }}>
-            <PixelText size={7}>NET ({RANGE_OPTIONS.find((r) => r.weeks === rangeWeeks)?.label})</PixelText>
-            <PixelText size={8} color={netTotal >= 0 ? WK.green : WK.red}>
-              {netTotal >= 0 ? '+' : '-'}£{Math.abs(netTotal).toLocaleString()}
-            </PixelText>
-          </View>
-        </View>
-      )}
+          {RANGE_OPTIONS.map(({ label, weeks }) => {
+            const active = weeks === rangeWeeks;
+            return (
+              <Pressable
+                key={weeks}
+                onPress={() => setRangeWeeks(weeks)}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  backgroundColor: active ? WK.yellow : WK.tealMid,
+                  borderWidth: 2,
+                  borderColor: WK.border,
+                }}
+              >
+                <PixelText size={7} color={active ? '#3a2000' : WK.dim}>{label}</PixelText>
+              </Pressable>
+            );
+          })}
 
-      {/* Transaction list */}
+          <View style={{ flex: 1 }} />
+
+          {/* Category dropdown trigger */}
+          <Pressable
+            onPress={() => setDropdownOpen((o) => !o)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              backgroundColor: WK.tealMid,
+              borderWidth: 2,
+              borderColor: dropdownOpen ? WK.yellow : WK.border,
+            }}
+          >
+            <PixelText size={6} color={dropdownOpen ? WK.yellow : WK.dim}>
+              {selectedCatLabel} ▾
+            </PixelText>
+          </Pressable>
+        </View>
+
+        {/* Dropdown overlay */}
+        {dropdownOpen && (
+          <View style={{
+            position: 'absolute',
+            top: 52,
+            right: 10,
+            width: 150,
+            zIndex: 200,
+            elevation: 8,
+            backgroundColor: WK.tealCard,
+            borderWidth: 2,
+            borderColor: WK.yellow,
+          }}>
+            {CATEGORY_FILTER_OPTIONS.map(({ label, value }) => {
+              const active = value === catFilter;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => { setCatFilter(value); setDropdownOpen(false); }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    backgroundColor: active ? WK.tealMid : 'transparent',
+                    borderBottomWidth: 1,
+                    borderBottomColor: WK.border,
+                  }}
+                >
+                  <PixelText size={6} color={active ? WK.yellow : WK.dim}>{label}</PixelText>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {/* ── Summary block ─────────────────────────────────────────────── */}
+      <View style={{
+        marginHorizontal: 10,
+        marginBottom: 8,
+        backgroundColor: WK.tealCard,
+        borderWidth: 2,
+        borderColor: WK.border,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+          <PixelText size={6} dim>INCOME</PixelText>
+          <PixelText size={6} color={WK.green}>+£{totalIncome.toLocaleString()}</PixelText>
+        </View>
+        <View style={{ height: 1, backgroundColor: WK.border }} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+          <PixelText size={6} dim>EXPENSES</PixelText>
+          <PixelText size={6} color={WK.red}>-£{totalExpenses.toLocaleString()}</PixelText>
+        </View>
+        <View style={{ height: 1, backgroundColor: WK.tealMid }} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+          <PixelText size={6}>NET ({RANGE_OPTIONS.find((r) => r.weeks === rangeWeeks)?.label})</PixelText>
+          <PixelText size={7} color={netTotal >= 0 ? WK.green : WK.red}>
+            {netTotal >= 0 ? '+' : '-'}£{Math.abs(netTotal).toLocaleString()}
+          </PixelText>
+        </View>
+      </View>
+
+      {/* ── Table header ──────────────────────────────────────────────── */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 5,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.tealMid,
+        gap: 4,
+      }}>
+        <View style={{ width: 32, alignItems: 'flex-end' }}>
+          <PixelText size={5} color={WK.dim}>WK</PixelText>
+        </View>
+        <View style={{ width: 44, alignItems: 'center' }}>
+          <PixelText size={5} color={WK.dim}>CAT</PixelText>
+        </View>
+        <View style={{ flex: 1 }}>
+          <PixelText size={5} color={WK.dim}>DESCRIPTION</PixelText>
+        </View>
+        <View style={{ width: 80, alignItems: 'flex-end' }}>
+          <PixelText size={5} color={WK.dim}>AMOUNT</PixelText>
+        </View>
+      </View>
+
+      {/* ── Transaction list ──────────────────────────────────────────── */}
       {filtered.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <PixelText size={8} dim>NO TRANSACTIONS</PixelText>

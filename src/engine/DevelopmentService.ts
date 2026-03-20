@@ -19,25 +19,62 @@ function attrCap(potential: number): number {
 }
 
 /**
+ * Computes a dynamic performance score for a single coach.
+ * Replaces the flat coach.influence value in the XP formula.
+ *
+ * moraleMultiplier:  morale < 40 → 0.5×  |  40–70 → 0.75×  |  > 70 → 1.0×
+ * trustMultiplier:   manager relationship value (−100 to +100) mapped to 0.8×–1.2×
+ */
+export function computeCoachPerformanceScore(coach: Coach): number {
+  const morale = coach.morale ?? 70;
+  const moraleMultiplier =
+    morale < 40 ? 0.5 :
+    morale < 70 ? 0.75 :
+    1.0;
+
+  const managerRel = coach.relationships?.find(
+    (r) => r.id === 'manager' && r.type === 'manager',
+  );
+  const trustValue = managerRel?.value ?? 0; // −100 to +100
+  // Map −100→+100 to 0.8×→1.2×
+  const trustMultiplier = 0.8 + ((trustValue + 100) / 200) * 0.4;
+
+  return coach.influence * moraleMultiplier * trustMultiplier;
+}
+
+/**
  * Calculates weekly attribute gains for one player.
- * Formula per attribute:
- *   gain = baseGrowth × facilityMod × ageMod × personalityMod + coachBonus
- * Capped at potential × 20.
+ * Uses a single assigned coach rather than summing all coaches indiscriminately.
+ * Players with no assigned coach still develop via base growth alone.
  */
 function calcGains(
   player: Player,
-  coaches: Coach[],
-  facilityLevel: number, // trainingPitch level 1–10
+  assignedCoach: Coach | null,
+  facilityLevel: number,
+  weekNumber: number,
 ): Partial<PlayerAttributes> {
   const cap = attrCap(player.potential);
   const attrs = player.attributes ?? {
     pace: 30, technical: 30, vision: 30, power: 30, stamina: 30, heart: 30,
   };
 
-  const facilityMod = 1 + (facilityLevel - 1) * 0.1; // 1.0 – 1.9
+  const facilityMod = 1 + (facilityLevel - 1) * 0.1; // 1.0–1.9
   const am = ageMod(player.age);
-  const det = player.personality.determination; // 1–20
-  const personalityMod = 1 + (det / 20) * 0.3;  // 1.0 – 1.3
+  const det = player.personality.determination;
+  const personalityMod = 1 + (det / 20) * 0.3; // 1.0–1.3
+
+  // Coach performance score — 0 if no coach assigned
+  const coachScore = assignedCoach
+    ? computeCoachPerformanceScore(assignedCoach)
+    : 0;
+
+  // developmentFocus bonus: +0.1× on the focused attribute if active
+  const focus = player.developmentFocus;
+  const focusActive =
+    focus &&
+    assignedCoach &&
+    focus.setByCoachId === assignedCoach.id &&
+    weekNumber - focus.setWeek < 8;
 
   const gains: Partial<PlayerAttributes> = {};
 
@@ -50,13 +87,18 @@ function calcGains(
 
     const baseGrowth = 0.3 + Math.random() * 0.5; // 0.3–0.8
 
-    // Coach bonus: sum all coaches with this specialism
-    const coachBonus = coaches.reduce((sum, coach) => {
-      const strength = coach.specialisms?.[attr] ?? 0;
-      return sum + (strength / 100) * 0.4;
-    }, 0);
+    // Coach specialism bonus: only if coach is assigned
+    const coachBonus = assignedCoach
+      ? (assignedCoach.specialisms?.[attr] ?? 0) / 100 * 0.4 * (coachScore / assignedCoach.influence)
+      : 0;
 
-    const rawGain = baseGrowth * facilityMod * am * personalityMod + coachBonus;
+    // Focus bonus: +10% on the prioritised attribute
+    const focusBonus = focusActive && focus!.attribute === attr ? 0.1 : 0;
+
+    const rawGain =
+      (baseGrowth * facilityMod * am * personalityMod + coachBonus) *
+      (1 + focusBonus);
+
     gains[attr] = Math.min(rawGain, cap - current);
   });
 
@@ -82,11 +124,16 @@ export function computePlayerDevelopment(
   players.forEach((player) => {
     if (!player.isActive) return;
 
+    // Resolve assigned coach — null if unassigned or coach not found
+    const assignedCoach = player.assignedCoachId
+      ? coaches.find((c) => c.id === player.assignedCoachId) ?? null
+      : null;
+
     const currentAttrs = player.attributes ?? {
       pace: 30, technical: 30, vision: 30, power: 30, stamina: 30, heart: 30,
     };
 
-    const gains = calcGains(player, coaches, trainingLevel);
+    const gains = calcGains(player, assignedCoach, trainingLevel, weekNumber);
 
     const updated: PlayerAttributes = { ...currentAttrs };
     ATTRIBUTE_NAMES.forEach((attr) => {

@@ -52,15 +52,23 @@ export function handleAcceptAgentOffer(offerId: string): void {
   const financeStore = useFinanceStore.getState();
 
   // Ledger entry — net amount after all deductions (whole pounds)
-  const investorNote = investorEquityPcts.length > 0
-    ? ` [${investorEquityPcts[0]}% equity deducted]`
-    : '';
   financeStore.addTransaction({
     amount: netPounds,
     category: 'transfer_fee',
-    description: `${offer.playerName} → ${offer.destinationClub} (via ${offer.agentName})${investorNote}`,
+    description: `${offer.playerName} → ${offer.destinationClub} (via ${offer.agentName})`,
     weekNumber,
   });
+
+  // Separate ledger row for investor equity cut
+  if (investorCutPence > 0 && investorEquityPcts.length > 0) {
+    const investorCutPounds = Math.round(investorCutPence / 100);
+    financeStore.addTransaction({
+      amount: -investorCutPounds,
+      category: 'investment',
+      description: `${investorEquityPcts[0]}% equity cut — ${offer.playerName} sale`,
+      weekNumber,
+    });
+  }
 
   // Detailed transfer record (fees stored in pence)
   financeStore.addTransfer({

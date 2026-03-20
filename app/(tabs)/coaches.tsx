@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { hapticWarning } from '@/utils/haptics';
 import { Coach } from '@/types/coach';
 
 // ─── Coach card ───────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
           <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
         </View>
       </View>
-      <Pressable onPress={onFire} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
+      <Pressable onPress={() => { hapticWarning(); onFire(); }} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
         <PixelText size={6} color={WK.red}>[ RELEASE ]</PixelText>
       </Pressable>
     </View>
@@ -122,7 +123,7 @@ export default function CoachesScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
       <PitchBackground />
       {/* Header */}
       <View style={{

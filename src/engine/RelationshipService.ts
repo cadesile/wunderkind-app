@@ -2,6 +2,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useInteractionStore } from '@/stores/interactionStore';
 import { Relationship } from '@/types/player';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
@@ -50,6 +51,20 @@ export function updatePlayerRelationship(
     });
   }
   updatePlayer(playerId, { relationships });
+  useInteractionStore.getState().logInteraction({
+    week: weekNumber,
+    actorType: 'system',
+    actorId: 'system',
+    targetType: 'player',
+    targetId: playerId,
+    category: 'SYSTEM',
+    subtype: 'weekly_decay',
+    relationshipDelta: delta,
+    traitDeltas: {},
+    moraleDelta: 0,
+    isVisibleToAmp: false,
+    narrativeSummary: `Relationship updated with ${targetType} (${targetId}): ${delta > 0 ? '+' : ''}${delta}`,
+  });
 }
 
 /** Update a relationship on a coach in coachStore */
@@ -81,6 +96,20 @@ export function updateCoachRelationship(
     });
   }
   updateCoach(coachId, { relationships });
+  useInteractionStore.getState().logInteraction({
+    week: weekNumber,
+    actorType: 'system',
+    actorId: 'system',
+    targetType: 'coach',
+    targetId: coachId,
+    category: 'SYSTEM',
+    subtype: 'weekly_decay',
+    relationshipDelta: delta,
+    traitDeltas: {},
+    moraleDelta: 0,
+    isVisibleToAmp: false,
+    narrativeSummary: `Relationship updated with ${targetType} (${targetId}): ${delta > 0 ? '+' : ''}${delta}`,
+  });
 }
 
 /** Process weekly morale decay from negative relationships */

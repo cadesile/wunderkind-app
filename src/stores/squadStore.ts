@@ -37,6 +37,11 @@ interface SquadState {
   /** @deprecated Use applyWeeklyPlayerUpdates instead */
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   generateStarterSquad: () => void;
+  /** Set or clear a development focus on a player. Pass null to clear. */
+  setDevelopmentFocus: (
+    playerId: string,
+    focus: Player['developmentFocus'] | null,
+  ) => void;
   /**
    * Release a player back to the market pool. Removes from local squad immediately
    * (fat-client model) and fires a best-effort backend call to set academy = null.
@@ -118,6 +123,15 @@ export const useSquadStore = create<SquadState>()(
         set((state) => ({
           players: state.players.map((p) =>
             p.id === playerId ? { ...p, assignedCoachId: coachId } : p,
+          ),
+        })),
+
+      setDevelopmentFocus: (playerId, focus) =>
+        set((state) => ({
+          players: state.players.map((p) =>
+            p.id === playerId
+              ? { ...p, developmentFocus: focus ?? undefined }
+              : p,
           ),
         })),
 

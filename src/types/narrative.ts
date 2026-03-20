@@ -3,6 +3,7 @@ export enum EventCategory {
   FACILITY = 'FACILITY',
   STAFF = 'STAFF',
   FINANCE = 'FINANCE',
+  NPC_INTERACTION = 'NPC_INTERACTION',
 }
 
 export enum TargetType {
@@ -79,6 +80,22 @@ export interface EventImpacts {
   choices?: EventChoice[];
 }
 
+export interface TraitRequirement {
+  trait: import('./player').TraitName;
+  min?: number;
+  max?: number;
+}
+
+export interface NpcFiringConditions {
+  maxSquadMorale?: number;
+  minSquadMorale?: number;
+  maxPairRelationship?: number;
+  minPairRelationship?: number;
+  requiresCoLocation?: boolean;
+  actorTraitRequirements?: TraitRequirement[];
+  subjectTraitRequirements?: TraitRequirement[];
+}
+
 export interface GameEventTemplate {
   id: string;
   slug: string;
@@ -87,6 +104,8 @@ export interface GameEventTemplate {
   title: string;
   bodyTemplate: string;
   impacts: EventImpacts;
+  firingConditions?: NpcFiringConditions | null;
+  severity?: 'minor' | 'major' | null;
 }
 
 export interface ActiveEffect {

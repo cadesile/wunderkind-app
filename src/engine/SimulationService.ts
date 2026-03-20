@@ -298,6 +298,36 @@ class SimulationService {
     return isNaN(result) ? current : Math.max(0, Math.min(100, result));
   }
 
+  // ── NPC incident ───────────────────────────────────────────────────────────
+
+  /**
+   * Fire an NPC training incident template with a pre-resolved entity map.
+   * isMajor determines whether the resulting NarrativeMessage is actionable.
+   * Called by SocialGraphEngine — not used by the random event pipeline.
+   */
+  public triggerNpcIncident(
+    template: GameEventTemplate,
+    entityMap: Record<string, string>,
+    isMajor: boolean,
+  ): void {
+    const autoChanges = template.impacts.stat_changes ?? [];
+    let statImpacts: StatImpact[] = [];
+
+    if (!isMajor && autoChanges.length > 0) {
+      statImpacts = this.computeStatImpacts(autoChanges, entityMap);
+      this.applyStatChanges(autoChanges, entityMap);
+    }
+
+    const message = this.generateMessage(template, entityMap, statImpacts);
+
+    const finalMessage = {
+      ...message,
+      isActionable: isMajor && (template.impacts.choices?.length ?? 0) > 0,
+    };
+
+    useNarrativeStore.getState().addMessage(finalMessage);
+  }
+
   // ── Active effect creation ─────────────────────────────────────────────────
 
   createActiveEffect(slug: string, entityId: string, durationConfig: { ticks: number; tick_effect?: StatChange; completion_event_slug: string }): void {

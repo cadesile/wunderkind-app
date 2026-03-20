@@ -13,12 +13,15 @@ import { useFinanceStore } from '@/stores/financeStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { generateCoachProspects, generateScoutProspects } from '@/engine/recruitment';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { useInteractionStore } from '@/stores/interactionStore';
+import { CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { hapticTap, hapticWarning } from '@/utils/haptics';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
@@ -32,32 +35,75 @@ type AcademyTab = typeof ACADEMY_TABS[number];
 
 function PlayerCard({ player }: { player: Player }) {
   const router = useRouter();
-  const traits = Object.values(player.personality);
-  const avgTrait = Math.round(traits.reduce((a, b) => a + b, 0) / traits.length);
+  const cliques = useInteractionStore((s) => s.cliques);
+  const playerClique = cliques.find((c) => c.isDetected && c.memberIds.includes(player.id));
+  const cliqueColor = playerClique ? CLIQUE_PALETTE[playerClique.color] : NO_GROUP_COLOR;
+  const cliqueLabel = playerClique ? playerClique.name.toUpperCase() : 'NO GROUP';
+
+  const traitValues = [
+    player.personality.determination,
+    player.personality.professionalism,
+    player.personality.ambition,
+    player.personality.loyalty,
+    player.personality.adaptability,
+    player.personality.pressure,
+    player.personality.temperament,
+    player.personality.consistency,
+  ];
 
   return (
-    <Pressable onPress={() => router.push(`/player/${player.id}`)}>
+    <Pressable onPress={() => { hapticTap(); router.push(`/player/${player.id}`); }}>
       <View style={{
         backgroundColor: WK.tealCard,
         borderWidth: 3,
         borderColor: WK.border,
-        padding: 12,
-        marginBottom: 10,
+        padding: 8,
+        marginBottom: 6,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
         ...pixelShadow,
       }}>
-        <Avatar appearance={player.appearance} role="PLAYER" size={80} />
+        <Avatar appearance={player.appearance} role="PLAYER" size={44} />
         <View style={{ flex: 1 }}>
-          <PixelText size={9} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
+          <PixelText size={8} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {player.age}</PixelText>
+            <BodyText size={11} color={WK.tealLight}>{player.position} · AGE {player.age}</BodyText>
             <ArchetypeBadge player={player} />
           </View>
-          <PixelText size={7} dim>{player.nationality}</PixelText>
-          
-          <PixelText size={7} dim style={{ marginTop: 3 }}>AVG TRAIT: {avgTrait}/20</PixelText>
+          <BodyText size={11} dim>{player.nationality}</BodyText>
+
+          {/* 2×4 trait grid */}
+          <View style={{ marginTop: 4, gap: 2 }}>
+            {[0, 1].map((row) => (
+              <View key={row} style={{ flexDirection: 'row', gap: 2 }}>
+                {traitValues.slice(row * 4, row * 4 + 4).map((v, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      backgroundColor: traitColor(v),
+                      borderWidth: 1,
+                      borderColor: WK.border,
+                    }}
+                  />
+                ))}
+              </View>
+            ))}
+          </View>
+
+          {/* Clique tag */}
+          <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{
+              width: 8,
+              height: 8,
+              backgroundColor: cliqueColor,
+              borderWidth: 2,
+              borderColor: WK.border,
+            }} />
+            <BodyText size={11} color={cliqueColor}>{cliqueLabel}</BodyText>
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${player.overallRating}`} color="yellow" />
@@ -112,7 +158,7 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
           ))}
         </View>
       )}
-      <Pressable onPress={onFire} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
+      <Pressable onPress={() => { hapticWarning(); onFire(); }} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
         <PixelText size={6} color={WK.red}>[ RELEASE ]</PixelText>
       </Pressable>
     </View>
@@ -183,7 +229,7 @@ function ScoutCard({ scout, onFire }: { scout: Scout; onFire: () => void }) {
           <View style={{ height: '100%', width: `${scout.successRate}%`, backgroundColor: traitColor(Math.round(scout.successRate / 5)) }} />
         </View>
       </View>
-      <Pressable onPress={onFire} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
+      <Pressable onPress={() => { hapticWarning(); onFire(); }} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
         <PixelText size={6} color={WK.red}>[ RELEASE ]</PixelText>
       </Pressable>
     </View>
@@ -248,7 +294,7 @@ function SquadPane() {
           return (
             <Pressable
               key={pos}
-              onPress={() => setPosFilter(pos)}
+              onPress={() => { hapticTap(); setPosFilter(pos); }}
               style={{
                 flex: 1,
                 paddingVertical: 6,

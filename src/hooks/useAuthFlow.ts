@@ -7,6 +7,7 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { register, login } from '@/api/endpoints/auth';
+import { ApiError } from '@/types/api';
 import { marketApi } from '@/api/endpoints/market';
 import { generatePlayer } from '@/engine/personality';
 import { generateCoachProspect, generateScout } from '@/engine/recruitment';
@@ -107,21 +108,25 @@ export function useAuthFlow(): AuthFlowResult {
     const userEmail = generateDeviceEmail();
     const userPassword = generateDevicePassword();
 
-    // 1. Auth
-    const registered = await register({
-      email: userEmail,
-      password: userPassword,
-      academyName,
-    });
-
+    // 1. Auth — store credentials first so re-login can be retried on next launch
     setCredentials(userEmail, userPassword);
-    setUserId(registered.id);
+    try {
+      const registered = await register({
+        email: userEmail,
+        password: userPassword,
+        academyName,
+      });
+      setUserId(registered.id);
 
-    const { token: newToken } = await login({
-      username: userEmail,
-      password: userPassword,
-    });
-    setToken(newToken);
+      const { token: newToken } = await login({
+        username: userEmail,
+        password: userPassword,
+      });
+      setToken(newToken);
+    } catch (err) {
+      const status = err instanceof ApiError ? ` (HTTP ${err.status}: ${err.message})` : '';
+      console.warn(`[useAuthFlow] Backend registration unavailable${status} — continuing offline`);
+    }
 
     // 2. Fetch market data — populates agent/sponsor/investor pools for assignment
     let marketData = { players: [], coaches: [], scouts: [], agents: [], investors: [], sponsors: [] };

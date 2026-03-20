@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HTTP reverse-proxy: 0.0.0.0:8080 → 127.0.0.1:52159 (Lando nginx)
+HTTP reverse-proxy: 0.0.0.0:8080 → 127.0.0.1:52100 (Lando nginx)
 
 Replaces the old TCP tunnel with an HTTP-aware proxy so that:
   • Expo web (browser) — CORS headers are injected on every response,
@@ -19,7 +19,7 @@ import urllib.parse
 LISTEN_HOST = '0.0.0.0'
 LISTEN_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 TARGET_HOST = '127.0.0.1'
-TARGET_PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 52159
+TARGET_PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 52100
 
 # CORS headers added to every response (including error responses).
 CORS_HEADERS = [
