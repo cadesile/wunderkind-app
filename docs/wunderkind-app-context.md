@@ -1,6 +1,6 @@
 # Wunderkind Factory — React Native App Context
 
-> Last updated: 2026-03-24 08:16:14
+> Last updated: 2026-03-24 08:17:42
 
 ## Overview
 Expo-managed React Native app for **The Wunderkind Factory** — a football academy
@@ -1320,6 +1320,7 @@ npm run proxy
 ## Recent Git Activity
 
 ```
+175602e latest
 250f9e7 Fix currency formatting, scout gem source, and major feature additions
 6e67f74 update docs
 dd2e47b Implement Phase 1 & 2: NPC interaction ledger + coach performance link
@@ -1334,7 +1335,6 @@ b13672d Centralise player asking price into getPlayerAskingPrice utility
 704dd4f Implement Scouting, Relationship & Market Valuation systems
 5b4d7c1 UI: flip tab/title order on Facilities and Market screens
 f1e0283 Add player development, archetype system, and inbox UX improvements
-55806f4 Add agent transfer offers, simplify advance UX, and wire transfer ledger
 ```
 
 ---
