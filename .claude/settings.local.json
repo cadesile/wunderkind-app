@@ -18,7 +18,14 @@
       "Bash(lando info:*)",
       "Bash(npx tsc:*)",
       "Bash(npm install:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(wc:*)",
+      "Read(//Users/courtneyadesile/Downloads/**)",
+      "Read(//private/tmp/**)",
+      "Bash(unzip -o /Users/courtneyadesile/Downloads/flags-color-world-font.zip -d flags-font)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(lando php:*)"
     ]
   }
 }

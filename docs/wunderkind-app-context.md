@@ -1,6 +1,6 @@
 # Wunderkind Factory — React Native App Context
 
-> Last updated: 2026-03-23 22:41:31
+> Last updated: 2026-03-24 08:16:14
 
 ## Overview
 Expo-managed React Native app for **The Wunderkind Factory** — a football academy
@@ -83,8 +83,11 @@ app/
 │   ├── coaches.tsx
 │   ├── index.tsx
 │   ├── players.tsx
+│   ├── players.tsx.archived
 │   └── scouts.tsx
 ├── player/
+│   └── [id].tsx
+├── scout/
 │   └── [id].tsx
 ├── _layout.tsx
 └── game-over.tsx
@@ -129,11 +132,13 @@ src/
 │   │   └── SwipeConfirm.tsx
 │   ├── AcademyDashboard.tsx
 │   ├── ArchetypeBadge.tsx
+│   ├── AssignMissionOverlay.tsx
 │   ├── GlobalHeader.tsx
 │   ├── OnboardingScreen.tsx
 │   ├── ScoutReportCard.tsx
 │   ├── SyncStatusIndicator.tsx
-│   └── WeeklyTickOverlay.tsx
+│   ├── WeeklyTickOverlay.tsx
+│   └── WelcomeSplash.tsx
 ├── constants/
 │   ├── archetypes.ts
 │   └── theme.ts
@@ -205,6 +210,8 @@ src/
     ├── haptics.ts
     ├── morale.ts
     ├── nationality.ts
+    ├── scoutingCost.ts
+    ├── scoutingRegions.ts
     ├── storage.ts
     └── uuidv7.ts
 scripts/
@@ -213,7 +220,7 @@ scripts/
 docs/
 └── wunderkind-app-context.md
 
-20 directories, 128 files
+21 directories, 134 files
 ```
 
 ---
@@ -242,6 +249,7 @@ docs/
 - `app/market/players.tsx`
 - `app/market/scouts.tsx`
 - `app/player/[id].tsx`
+- `app/scout/[id].tsx`
 
 ---
 
@@ -729,6 +737,11 @@ interface ScoutState {
   removeAssignment: (scoutId: string, playerId: string) => void;
   getWorkload: (scoutId: string) => number;
   updateMorale: (scoutId: string, delta: number) => void;
+  assignMission: (scoutId: string, mission: ScoutingMission) => void;
+  tickMission: (scoutId: string) => void;
+  incrementGemsFound: (scoutId: string, count: number) => void;
+  completeMission: (scoutId: string) => void;
+  cancelMission: (scoutId: string) => void;
   persist(
       scouts: [],
       addScout: (scout) =>
@@ -736,11 +749,6 @@ interface ScoutState {
       removeScout: (id) =>
         set((state) => ({ scouts: state.scouts.filter((s) => s.id !== id) })),
       updateScout: (id, changes) =>
-        set((state) => ({
-          scouts: state.scouts.map((s) => s.id === id ? { ...s, ...changes } : s),
-      assignPlayer: (scoutId, playerId) =>
-        set((state) => ({
-          scouts: state.scouts.map((s) => {
 ```
 
 ### squadStore
@@ -899,7 +907,7 @@ export function assignScoutToPlayer(scoutId: string, playerId: string): boolean 
 export function removeScoutAssignment(scoutId: string, playerId: string): void {
 export function getScoutWorkload(scoutId: string): number {
 export function processScoutingTasks(): void {
-export function checkGemDiscovery(): void {
+export function processMissions(): void {
 export function refreshMarketOffers(): void {
 ```
 
@@ -1024,6 +1032,7 @@ export interface GroupSessionEntry {
 ### market
 
 ```typescript
+export interface ScoutingMission {
 export interface Agent {
 export interface Scout {
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
@@ -1190,6 +1199,7 @@ export function useSyncWeek() {
 
 - `AcademyDashboard.tsx` — AcademyDashboard() {
 - `ArchetypeBadge.tsx` — ArchetypeBadge({ player }: ArchetypeBadgeProps) {
+- `AssignMissionOverlay.tsx` — AssignMissionOverlay({ scout, visible, onClose }: Props) {
 - `GlobalHeader.tsx` — GlobalHeader() {
 - `OnboardingScreen.tsx` — OnboardingScreen({ onRegister }: Props) {
 - `radar/AttributesRadar.tsx` — AttributesRadar({ attributes, size = 200 }: Props) {
@@ -1209,6 +1219,7 @@ export function useSyncWeek() {
 - `ui/PixelTopTabBar.tsx` — PixelTopTabBar({ tabs, active, onChange }: Props) {
 - `ui/SwipeConfirm.tsx` — SwipeConfirm({
 - `WeeklyTickOverlay.tsx` — WeeklyTickOverlay() {
+- `WelcomeSplash.tsx` — WelcomeSplash({ academyName, onDismiss }: Props) {
 
 ---
 
@@ -1309,6 +1320,7 @@ npm run proxy
 ## Recent Git Activity
 
 ```
+250f9e7 Fix currency formatting, scout gem source, and major feature additions
 6e67f74 update docs
 dd2e47b Implement Phase 1 & 2: NPC interaction ledger + coach performance link
 9154a98 ui fixes
@@ -1323,7 +1335,6 @@ b13672d Centralise player asking price into getPlayerAskingPrice utility
 5b4d7c1 UI: flip tab/title order on Facilities and Market screens
 f1e0283 Add player development, archetype system, and inbox UX improvements
 55806f4 Add agent transfer offers, simplify advance UX, and wire transfer ledger
-23e7391 Fix financial display bugs, market card layout, and add incident inbox notifications
 ```
 
 ---
