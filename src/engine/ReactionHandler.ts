@@ -1,7 +1,11 @@
 import { simulationService } from './SimulationService';
 import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useSquadStore } from '@/stores/squadStore';
+import { useFinanceStore } from '@/stores/financeStore';
+import { useGuardianStore } from '@/stores/guardianStore';
 import { EventChoice, NarrativeMessage } from '@/types/narrative';
+import { InboxMessage } from '@/stores/inboxStore';
 
 class ReactionHandler {
   /**
@@ -28,3 +32,81 @@ class ReactionHandler {
 }
 
 export const reactionHandler = new ReactionHandler();
+
+/**
+ * Handle an accept or decline response to a guardian inbox message.
+ * Called from inbox.tsx after the manager taps Accept or Reject.
+ */
+export function handleGuardianResponse(
+  message: InboxMessage,
+  response: 'accepted' | 'rejected',
+): void {
+  const meta = message.metadata as Record<string, unknown> | undefined;
+  if (!meta) return;
+
+  const worstGuardianId = meta.worstGuardianId as string | undefined;
+  const costPence = meta.costPence as number | undefined;
+  const guardianIds = (meta.guardianIds as string[] | undefined) ?? [];
+  const playerId = message.entityId;
+  if (!playerId || !worstGuardianId) return;
+
+  const { players, updateMorale, updateTrait } = useSquadStore.getState();
+  const player = players.find((p) => p.id === playerId);
+  if (!player) return;
+
+  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const { updateGuardian } = useGuardianStore.getState();
+  const worstGuardian = useGuardianStore.getState().guardians.find((g) => g.id === worstGuardianId);
+  if (!worstGuardian) return;
+
+  // Reset ignoredRequestCount for all guardians of this player on any response
+  guardianIds.forEach((gId) => updateGuardian(gId, { ignoredRequestCount: 0 }));
+
+  // Surname-matching siblings (exclude the player themselves)
+  const playerSurname = player.name.split(' ').at(-1) ?? '';
+  const siblings = players.filter(
+    (p) => p.id !== playerId && p.isActive && p.name.split(' ').at(-1) === playerSurname,
+  );
+
+  if (response === 'accepted') {
+    // Worst guardian: loyalty +8, demandLevel +1 (capped at 10)
+    updateGuardian(worstGuardianId, {
+      loyaltyToAcademy: Math.min(100, worstGuardian.loyaltyToAcademy + 8),
+      demandLevel: Math.min(10, worstGuardian.demandLevel + 1),
+    });
+
+    // Player morale boost
+    updateMorale(playerId, +5);
+
+    // Deduct financial cost if applicable
+    if (costPence !== undefined) {
+      // balance is stored in pence — deduct pence directly
+      useAcademyStore.getState().addBalance(-costPence);
+
+      // Ledger entry — amount in whole pounds, negative = expense
+      useFinanceStore.getState().addTransaction({
+        amount: -Math.round(costPence / 100),
+        category: 'guardian_payment',
+        description: `Guardian payment — ${player.name}`,
+        weekNumber,
+      });
+    }
+  } else {
+    // Worst guardian: loyalty −12, demandLevel +2 (capped at 10), ignoredRequestCount +1
+    updateGuardian(worstGuardianId, {
+      loyaltyToAcademy: Math.max(0, worstGuardian.loyaltyToAcademy - 12),
+      demandLevel: Math.min(10, worstGuardian.demandLevel + 2),
+      ignoredRequestCount: worstGuardian.ignoredRequestCount + 1,
+    });
+
+    // Player morale and loyalty trait penalty
+    updateMorale(playerId, -8);
+    updateTrait(playerId, 'loyalty', -3);
+
+    // Siblings also suffer
+    siblings.forEach((sibling) => {
+      updateMorale(sibling.id, -5);
+      updateTrait(sibling.id, 'loyalty', -2);
+    });
+  }
+}

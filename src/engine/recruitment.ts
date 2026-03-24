@@ -1,7 +1,7 @@
-import { Player, Position } from '@/types/player';
 import { Coach, CoachRole, CoachSpecialism, CoachSpecialisms } from '@/types/coach';
+// Note: Player generation is intentionally NOT in this file. Players always come from the backend.
 import { Scout } from '@/types/market';
-import { generatePlayer, generatePersonality, TRAIT_NAMES } from './personality';
+import { generatePersonality, TRAIT_NAMES } from './personality';
 import { generateAppearance } from './appearance';
 import { uuidv7 } from '@/utils/uuidv7';
 
@@ -35,8 +35,6 @@ const SCOUT_NATIONALITIES = [
 ];
 const SCOUTING_RANGES: Scout['scoutingRange'][] = ['local', 'national', 'international'];
 
-const POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'FWD'];
-
 /** Primary specialisms by coach role — each role gets 1–2 relevant attributes */
 const ROLE_SPECIALISMS: Record<CoachRole, CoachSpecialism[]> = {
   'Head Coach':       ['vision', 'heart'],
@@ -58,14 +56,6 @@ function generateSpecialisms(role: CoachRole, influence: number): CoachSpecialis
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/**
- * Generates a scouted player prospect.
- * Position is random if not specified.
- */
-export function generateProspect(currentGameDate: Date, position?: Position): Player {
-  return generatePlayer(position ?? pick(POSITIONS), currentGameDate);
 }
 
 /**
@@ -98,11 +88,6 @@ export function generateCoachProspect(currentWeek: number): Coach {
 /** Returns N coach prospects */
 export function generateCoachProspects(count: number, currentWeek: number): Coach[] {
   return Array.from({ length: count }, () => generateCoachProspect(currentWeek));
-}
-
-/** Returns N player prospects */
-export function generatePlayerProspects(count: number, currentGameDate: Date): Player[] {
-  return Array.from({ length: count }, () => generateProspect(currentGameDate));
 }
 
 /**

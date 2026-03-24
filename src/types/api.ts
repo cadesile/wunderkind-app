@@ -18,6 +18,19 @@ export interface AcademyStatusResponse {
   activeInvestors: number;
 }
 
+// ─── Guardian (backend shape) ─────────────────────────────────────────────────
+
+export interface ApiGuardian {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string | null;
+  gender: 'male' | 'female';
+  demandLevel: number;
+  loyaltyToAcademy: number;
+  contactEmail: string | null;
+}
+
 // ─── Squad ────────────────────────────────────────────────────────────────────
 
 export interface SquadResponse {
@@ -52,6 +65,7 @@ export interface ApiPlayerDetail {
     name: string;
     commissionRate: string;
   } | null;
+  guardians?: ApiGuardian[];
 }
 
 // ─── Staff ────────────────────────────────────────────────────────────────────
@@ -164,37 +178,45 @@ export interface SyncTransfer {
   grossFee: number;        // pence
   agentCommission: number; // pence
   netProceeds: number;     // pence
-  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted' | 'guardian_withdrawal';
 }
 
 export interface SyncLedgerEntry {
   category: FinancialCategory;
-  amount: number;      // whole pounds, negative = expense
+  amount: number;      // pence, negative = expense
   description: string;
 }
 
 export interface SyncRequest {
   weekNumber: number;
-  clientTimestamp: string; // ISO 8601
-  earningsDelta: number;   // sponsor income − loan interest this week (pence)
-  reputationDelta: number; // can be negative
+  clientTimestamp: string;        // ISO 8601
+
+  // ── Financial ──────────────────────────────────────────────────────────────
+  /** Net income this week in pence — signed (negative = deficit week) */
+  earningsDelta: number;
+  /** Current spendable balance in pence */
+  balance: number;
+  /** Cumulative career earnings in pence */
+  totalCareerEarnings: number;
+
+  // ── Reputation ─────────────────────────────────────────────────────────────
+  /** Signed reputation change this week */
+  reputationDelta: number;
+  /** Absolute reputation value (0–100) — authoritative anchor for backend reconciliation */
+  reputation: number;
+
+  // ── Academy snapshot ───────────────────────────────────────────────────────
   hallOfFamePoints: number;
+  /** Number of active (non-transferred/released) players */
+  squadSize: number;
+  /** Total hired staff (coaches + scouts) */
+  staffCount: number;
+  /** Current facility levels (0 = not built, 1–10 = operational) */
+  facilityLevels: Record<string, number>;
+
+  // ── Activity ───────────────────────────────────────────────────────────────
   transfers: SyncTransfer[];
   ledger: SyncLedgerEntry[];
-  /** Cumulative manager personality shifts this week — optional, ignored by older backend versions */
-  managerShifts?: {
-    temperament: number;
-    discipline: number;
-    ambition: number;
-  };
-  /** Opaque relationship/morale snapshot — stored by backend as JSON, returned in future syncs */
-  playerRelationships?: Record<string, import('./player').Relationship[]>;
-  coachRelationships?: Record<string, import('./player').Relationship[]>;
-  scoutRelationships?: Record<string, import('./player').Relationship[]>;
-  playerMorale?: Record<string, number>;
-  coachMorale?: Record<string, number>;
-  scoutMorale?: Record<string, number>;
-  scoutingTasks?: Record<string, string[]>;
 }
 
 export interface SyncAcceptedResponse {

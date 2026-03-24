@@ -482,14 +482,13 @@ export function AcademyDashboard() {
         )}
       </SectionCard>
 
-      {/* ── Card 6: Roster balance ───────────────────────────────────────── */}
-      <SectionCard>
-        <PixelText size={7} dim upper style={{ marginBottom: 12 }}>Roster Balance</PixelText>
-        <RosterPieChart playerCount={players.filter(p => p.isActive).length} coachCount={coaches.length} />
-      </SectionCard>
-
-      {/* ── Card 7: Squad overview stat ──────────────────────────────────── */}
-      <SectionCard>
+      {/* ── Cards 6 & 7: Roster balance + Squad potential (side by side) ─── */}
+      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
+        <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+          <PixelText size={7} dim upper style={{ marginBottom: 12 }}>Roster Balance</PixelText>
+          <RosterPieChart playerCount={players.filter(p => p.isActive).length} coachCount={coaches.length} />
+        </View>
+        <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
         <StatRow
           label="Squad Potential"
           value={`${squadTotalPotential} ★ total`}
@@ -507,7 +506,8 @@ export function AcademyDashboard() {
             valueColor={WK.orange}
           />
         </View>
-      </SectionCard>
+        </View>
+      </View>
 
       {/* ── Card 7: Inbox preview ─────────────────────────────────────────── */}
       <SectionCard>

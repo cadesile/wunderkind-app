@@ -7,7 +7,8 @@ export type FinancialCategory =
   | 'upkeep'
   | 'earnings'
   | 'contract_termination'
-  | 'investor_buyout';
+  | 'investor_buyout'
+  | 'guardian_payment';
 
 export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   wages:                'WAGES',
@@ -19,6 +20,7 @@ export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   earnings:             'EARNINGS',
   contract_termination: 'TERMINATION',
   investor_buyout:      'BUYOUT',
+  guardian_payment:     'GUARDIAN',
 };
 
 export interface FinancialTransaction {
@@ -43,5 +45,5 @@ export interface TransferRecord {
   /** Net proceeds (after agent commission) in pence */
   netProceeds: number;
   week: number;
-  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted' | 'guardian_withdrawal';
 }

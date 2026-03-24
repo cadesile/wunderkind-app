@@ -1,12 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Player, PersonalityMatrix, PlayerAttributes, AttributeName, Position, TraitName, DevelopmentSnapshot } from '@/types/player';
-import { generatePlayer } from '@/engine/personality';
 import { zustandStorage } from '@/utils/storage';
-import { getGameDate } from '@/utils/gameDate';
 import { releasePlayer as releasePlayerApi } from '@/api/endpoints/squad';
-
-const STARTER_POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
 
 /** Per-player development update (attributes + recalculated overallRating). */
 export interface PlayerDevelopmentUpdate {
@@ -38,7 +34,6 @@ interface SquadState {
   ) => void;
   /** @deprecated Use applyWeeklyPlayerUpdates instead */
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
-  generateStarterSquad: () => void;
   /** Set or clear a development focus on a player. Pass null to clear. */
   setDevelopmentFocus: (
     playerId: string,
@@ -218,14 +213,6 @@ export const useSquadStore = create<SquadState>()(
         }
 
         return { success: true, playerName };
-      },
-      generateStarterSquad: () => {
-        // Lazy import to avoid circular dependency
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const weekNumber: number = require('@/stores/academyStore').useAcademyStore.getState().academy.weekNumber ?? 1;
-        const gameDate = getGameDate(weekNumber);
-        const starters = STARTER_POSITIONS.map((pos) => generatePlayer(pos, gameDate));
-        set({ players: starters });
       },
     }),
     { name: 'squad-store', storage: zustandStorage },

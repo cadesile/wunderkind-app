@@ -586,6 +586,7 @@ const CAT_BADGE_CONFIG: Record<FinancialCategory, { label: string; color: string
   earnings:             { label: 'ERN', color: WK.green },
   contract_termination: { label: 'TRM', color: WK.red },
   investor_buyout:      { label: 'BYO', color: WK.red },
+  guardian_payment:     { label: 'GRD', color: WK.yellow },
 };
 
 function LedgerPane() {

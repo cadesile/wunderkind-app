@@ -9,6 +9,9 @@ import { syncQueue } from '@/api/syncQueue';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useSquadStore } from '@/stores/squadStore';
+import { useCoachStore } from '@/stores/coachStore';
+import { useScoutStore } from '@/stores/scoutStore';
+import { useFacilityStore } from '@/stores/facilityStore';
 import { useAltercationStore } from '@/stores/altercationStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
@@ -128,8 +131,16 @@ export default function TabLayout() {
     await new Promise<void>((r) => setTimeout(r, 16));
 
     const result = processWeeklyTick();
+
+    // Read post-tick state — stores have already been mutated by processWeeklyTick()
     const { academy } = useAcademyStore.getState();
     const { transactions, transfers } = useFinanceStore.getState();
+    const { coaches } = useCoachStore.getState();
+    const { scouts } = useScoutStore.getState();
+    const { levels } = useFacilityStore.getState();
+    const activePlayers = useSquadStore.getState().players.filter((p) => p.isActive);
+
+    // GameLoop tags transactions with weekNumber+1 (the week after the tick runs)
     const ledgerWeek = result.week + 1;
 
     const weekTransfers: SyncTransfer[] = transfers
@@ -138,18 +149,36 @@ export default function TabLayout() {
         playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type,
       }));
 
+    // Transactions are stored in whole pounds — convert to pence for a consistent payload unit
     const weekLedger: SyncLedgerEntry[] = transactions
       .filter((tx) => tx.weekNumber === ledgerWeek)
-      .map(({ category, amount, description }) => ({ category, amount, description }));
+      .map(({ category, amount, description }) => ({
+        category,
+        amount: amount * 100,
+        description,
+      }));
 
     syncQueue.enqueue({
-      weekNumber:       result.week,
-      clientTimestamp:  result.processedAt,
-      earningsDelta:    Math.max(0, result.financialSummary.net),
-      reputationDelta:  Math.round(result.reputationDelta),
-      hallOfFamePoints: academy.hallOfFamePoints,
-      transfers:        weekTransfers,
-      ledger:           weekLedger,
+      weekNumber:          result.week,
+      clientTimestamp:     result.processedAt,
+
+      // Financial — all in pence, signed (allows negative deficit weeks)
+      earningsDelta:       result.financialSummary.net,
+      balance:             academy.balance,
+      totalCareerEarnings: academy.totalCareerEarnings,
+
+      // Reputation — both delta and absolute anchor
+      reputationDelta:     Math.round(result.reputationDelta),
+      reputation:          academy.reputation,
+
+      // Academy snapshot
+      hallOfFamePoints:    academy.hallOfFamePoints,
+      squadSize:           activePlayers.length,
+      staffCount:          coaches.length + scouts.length,
+      facilityLevels:      levels,
+
+      transfers:           weekTransfers,
+      ledger:              weekLedger,
     });
 
     endTick();

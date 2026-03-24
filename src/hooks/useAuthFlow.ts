@@ -13,7 +13,10 @@ import { marketApi } from '@/api/endpoints/market';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
 import { getSquad } from '@/api/endpoints/squad';
 import { getStaff } from '@/api/endpoints/staff';
-import { generatePlayer, generatePersonality } from '@/engine/personality';
+import { generatePersonality } from '@/engine/personality';
+import { useGuardianStore } from '@/stores/guardianStore';
+import type { ApiGuardian } from '@/types/api';
+import type { Guardian } from '@/types/guardian';
 import { generateCoachProspect, generateScout as generateLocalScout } from '@/engine/recruitment';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
@@ -45,6 +48,42 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/** Map backend ApiGuardian array to Guardian objects and store them for a player. */
+function storeBackendGuardians(playerId: string, apiGuardians: ApiGuardian[]): void {
+  if (!apiGuardians || apiGuardians.length === 0) return;
+  const guardians: Guardian[] = apiGuardians.map((g) => ({
+    id: g.id,
+    playerId,
+    firstName: g.firstName,
+    lastName: g.lastName,
+    gender: g.gender,
+    demandLevel: g.demandLevel,
+    loyaltyToAcademy: g.loyaltyToAcademy,
+    ignoredRequestCount: 0,
+  }));
+  useGuardianStore.getState().addGuardians(guardians);
+}
+
+/**
+ * For returning users: ensure any already-stored squad player without guardians
+ * gets them if the market store still holds their data (guardians nested on MarketPlayer).
+ * This covers the gap between when guardian data was added to the backend and existing
+ * persisted sessions that missed the bootstrap storeBackendGuardians calls.
+ */
+function backfillGuardians(players: Player[]): void {
+  const guardianStore = useGuardianStore.getState();
+  const marketPlayers = require('@/stores/marketStore').useMarketStore.getState().players as import('@/types/market').MarketPlayer[];
+  for (const player of players) {
+    if (guardianStore.getGuardiansForPlayer(player.id).length > 0) continue;
+    const mp = marketPlayers.find((m) => m.id === player.id);
+    if (mp?.guardians && mp.guardians.length > 0) {
+      storeBackendGuardians(player.id, mp.guardians);
+    } else {
+      console.warn(`[backfillGuardians] No backend guardian data for player ${player.id} — guardians will be absent until next sync.`);
+    }
+  }
+}
+
 const STAFF_ROLE_MAP: Record<string, CoachRole> = {
   head_coach:      'Head Coach',
   fitness_coach:   'Fitness Coach',
@@ -57,6 +96,8 @@ function marketPlayerToPlayer(mp: MarketPlayer, weekNumber: number, gameDate: Da
   const personality = generatePersonality();
   const ageRaw = mp.dateOfBirth ? computePlayerAge(mp.dateOfBirth, gameDate) : 14;
   const age = typeof ageRaw === 'number' ? ageRaw : 14;
+  // Store guardians from backend data — no local generation
+  storeBackendGuardians(mp.id, mp.guardians ?? []);
   return {
     id: mp.id,
     name: `${mp.firstName} ${mp.lastName}`,
@@ -69,7 +110,6 @@ function marketPlayerToPlayer(mp: MarketPlayer, weekNumber: number, gameDate: Da
     wage: mp.currentAbility * 100,
     personality,
     appearance: generateAppearance(mp.id, 'PLAYER', age, personality),
-    guardianId: null,
     agentId: mp.agent?.id ?? null,
     joinedWeek: weekNumber,
     isActive: true,
@@ -87,6 +127,8 @@ function apiPlayerToPlayer(ap: ApiPlayerDetail, weekNumber: number): Player {
   const pos: Position = ap.position === 'ATT' ? 'FWD' : ap.position as Position;
   // Estimate DOB from static age — approximate but consistent
   const estimatedYear = new Date().getFullYear() - ap.age;
+  // Store guardians from backend data — no local generation
+  storeBackendGuardians(ap.id, ap.guardians ?? []);
   return {
     id: ap.id,
     name: `${ap.firstName} ${ap.lastName}`,
@@ -99,7 +141,6 @@ function apiPlayerToPlayer(ap: ApiPlayerDetail, weekNumber: number): Player {
     wage: ap.currentAbility * 100,
     personality,
     appearance: generateAppearance(ap.id, 'PLAYER', ap.age, personality),
-    guardianId: null,
     agentId: ap.agent?.id ?? null,
     joinedWeek: weekNumber,
     isActive: true,
@@ -250,6 +291,8 @@ export function useAuthFlow(): AuthFlowResult {
         }
 
         setIsReady(true);
+        // Backfill guardians for any existing squad players that pre-date the guardian system
+        backfillGuardians(useSquadStore.getState().players);
         // Refresh market data in background — respects 5-min cache, safe to fire & forget
         void fetchMarketData();
         return;
@@ -279,6 +322,7 @@ export function useAuthFlow(): AuthFlowResult {
         } catch (err) {
           console.warn('[useAuthFlow] Re-login failed:', err);
         }
+        backfillGuardians(useSquadStore.getState().players);
         setIsReady(true);
         return;
       }
@@ -373,11 +417,9 @@ export function useAuthFlow(): AuthFlowResult {
     // Three-tier fallback:
     //   Tier 1 — backend getSquad()/getStaff() with market pool cross-reference
     //   Tier 2 — pick directly from marketData pool (backend assigned but squad endpoint empty)
-    //   Tier 3 — local generation (fully offline)
     const weekNumber = 1;
     const gameDate = getGameDate(weekNumber);
     const STARTER_PLAYER_COUNT = 5;
-    const STARTER_POSITIONS = ['GK', 'DEF', 'MID', 'MID', 'FWD'] as const;
     const homeNationality = ACADEMY_CODE_TO_NATIONALITY[country];
 
     let players: Player[] = [];
@@ -432,14 +474,10 @@ export function useAuthFlow(): AuthFlowResult {
       assignedScouts = [marketScoutToScout(pickRandom(marketData.scouts), weekNumber, gameDate)];
     }
 
-    // Tier 3: fully offline — generate locally (force home nationality)
+    // No local player generation fallback — players must come from the backend.
+    // If both Tier 1 and Tier 2 fail (no backend, empty pool), the squad starts empty.
     if (players.length === 0) {
-      console.warn('[useAuthFlow] Tier 3: generating players locally (offline)');
-      players = STARTER_POSITIONS.map((pos) => {
-        const player = generatePlayer(pos, gameDate);
-        const agentId = marketData.agents.length > 0 ? pickRandom(marketData.agents).id : null;
-        return { ...player, nationality: homeNationality, agentId, enrollmentEndWeek: weekNumber + 52, morale: 40, extensionCount: 0 };
-      });
+      console.warn('[useAuthFlow] No players available from backend or pool — squad will be empty.');
     }
     if (assignedCoaches.length === 0) {
       assignedCoaches = [generateCoachProspect(weekNumber)];
@@ -449,6 +487,7 @@ export function useAuthFlow(): AuthFlowResult {
     }
 
     setPlayers(players);
+    backfillGuardians(players);
     for (const coach of assignedCoaches) { addCoach(coach); }
     for (const scout of assignedScouts) { addScout(scout); }
 

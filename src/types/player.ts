@@ -28,6 +28,8 @@ export interface ScoutingReport {
   actualPotential: number;
   accuracyPercent: number;
   revealedAt: number; // game week
+  /** Scout's narrative note about the player's guardians — generated once at signing */
+  guardianNote?: string;
 }
 
 export type PlayerStatus =
@@ -105,7 +107,6 @@ export interface Player {
   personality: PersonalityMatrix;
   /** Deterministic visual appearance generated from id. Optional for backward compat. */
   appearance?: Appearance;
-  guardianId: string | null;
   /** ID of the agent representing this player, or null if unrepresented */
   agentId: string | null;
   joinedWeek: number;

@@ -8,6 +8,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
+import { useGuardianStore } from '@/stores/guardianStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -16,8 +17,10 @@ import { PitchBackground } from '@/components/ui/PitchBackground';
 import { AttributesRadar } from '@/components/radar/AttributesRadar';
 import { WK, pixelShadow } from '@/constants/theme';
 import { AttributeName } from '@/types/player';
+import { Guardian } from '@/types/guardian';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 import { moraleLabel } from '@/utils/morale';
+import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
 import { ScoutReportCard } from '@/components/ScoutReportCard';
 import { DevelopmentChart } from '@/components/ui/DevelopmentChart';
 
@@ -31,6 +34,12 @@ const ATTR_LABELS: Record<AttributeName, string> = {
   stamina:   'STAMINA',
   heart:     'HEART',
 };
+
+function guardianLabel(g: Guardian, all: Guardian[], i: number): string {
+  const sameGender = all.filter((x) => x.gender === g.gender).length;
+  if (sameGender > 1) return `GUARDIAN ${i + 1}`;
+  return g.gender === 'female' ? 'MUM' : 'DAD';
+}
 
 /** Color for 0–100 scale: ≥70 yellow, ≥40 teal, <40 red */
 function attrColor(value: number): string {
@@ -69,6 +78,12 @@ export default function PlayerDetailScreen() {
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const analyticsUnlocked = useFacilityStore((s) => s.levels.scoutingCenter > 0);
+  const academyName = useAcademyStore((s) => s.academy.name ?? 'the academy');
+  const allGuardians = useGuardianStore((s) => s.guardians);
+  const guardians = useMemo(
+    () => allGuardians.filter((g) => g.playerId === id),
+    [allGuardians, id],
+  );
 
   // Contract metrics
   const weeksRemaining = player
@@ -361,6 +376,65 @@ export default function PlayerDetailScreen() {
 
         {/* Scout Report — personality archetype (no raw numbers) */}
         <ScoutReportCard player={player} />
+
+        {/* Guardians */}
+        {guardians.length > 0 && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.border,
+            ...pixelShadow,
+          }}>
+            {/* Header */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 14,
+              paddingTop: 12,
+              paddingBottom: 10,
+              borderBottomWidth: 2,
+              borderBottomColor: WK.border,
+            }}>
+              <PixelText size={7} color={WK.yellow}>GUARDIANS</PixelText>
+              <PixelText size={6} dim>{guardians.length === 1 ? '1 GUARDIAN' : `${guardians.length} GUARDIANS`}</PixelText>
+            </View>
+
+            {guardians.map((g, i) => {
+              return (
+                <View key={g.id} style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  borderBottomWidth: i < guardians.length - 1 ? 2 : 0,
+                  borderBottomColor: WK.border,
+                }}>
+                  {/* Name row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <View style={{
+                      paddingHorizontal: 6,
+                      paddingVertical: 3,
+                      borderWidth: 2,
+                      borderColor: WK.border,
+                      backgroundColor: WK.tealDark,
+                    }}>
+                      <PixelText size={6} dim>{guardianLabel(g, guardians, i)}</PixelText>
+                    </View>
+                    <PixelText size={8}>{g.firstName} {g.lastName}</PixelText>
+                  </View>
+
+                  <View style={{ paddingVertical: 8, paddingHorizontal: 2, gap: 8 }}>
+                    <PixelText size={7} style={{ lineHeight: 16 }}>
+                      {getLoyaltyNote(g.loyaltyToAcademy, academyName)}
+                    </PixelText>
+                    <PixelText size={7} dim style={{ lineHeight: 16 }}>
+                      {getDemandNote(g.demandLevel)}
+                    </PixelText>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Scouting Accuracy Report */}
         {player.scoutingReport && (

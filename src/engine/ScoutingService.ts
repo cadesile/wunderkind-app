@@ -4,7 +4,8 @@ import { useInboxStore } from '@/stores/inboxStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { MarketPlayer } from '@/types/market';
-import { resolveNationalityForMission } from '@/utils/scoutingRegions';
+import { getAvailableRegions } from '@/utils/scoutingRegions';
+import { ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
 
 const MAX_ASSIGNMENTS = 5;
 
@@ -124,32 +125,60 @@ export function processMissions(): void {
       roll >= 0.25 ? 1 : 0;
 
     // 3. Pull from the backend prospect pool — never generate locally.
-    //    Filter by position (required); prefer nationality match from the mission target.
-    //    If the pool has fewer matching prospects than the rolled count, use what's available.
+    //    Allowed nationalities are determined by the academy's reputation tier and
+    //    the scout's range. Domestic nationality is derived from academy.country.
     const foundPlayers: MarketPlayer[] = [];
     if (count > 0) {
       const { prospects, consumeProspect } = useProspectPoolStore.getState();
-      const nationality = resolveNationalityForMission(mission.targetNationality);
+      const { academy } = useAcademyStore.getState();
 
-      // Split pool into nationality-matched and position-only candidates
-      const natMatch = prospects.filter(
-        (p) => p.position === mission.position && p.nationality === nationality,
-      );
-      const posOnly = prospects.filter(
-        (p) => p.position === mission.position && p.nationality !== nationality,
-      );
-      // Prefer nationality match; fall back to any matching position
-      const candidates = [...natMatch, ...posOnly];
+      // Build allowed nationality set for this scout
+      const availableRegions = getAvailableRegions(academy.reputationTier, scout.scoutingRange);
+      const domesticNationality = academy.country
+        ? ACADEMY_CODE_TO_NATIONALITY[academy.country]
+        : null;
+      const poolNationalities = availableRegions
+        ? availableRegions.flatMap((r) => r.nationalities)
+        : [];
+      const allowedNationalities = [
+        ...(domesticNationality ? [domesticNationality] : []),
+        ...poolNationalities,
+      ];
+
+      let candidates: MarketPlayer[];
+      if (allowedNationalities.length === 0) {
+        // Academy country unknown — fall back to position-only filter
+        candidates = prospects.filter((p) => p.position === mission.position);
+      } else if (mission.targetNationality && allowedNationalities.includes(mission.targetNationality)) {
+        // Targeted mission: prefer target nationality, fall back to other allowed nationalities
+        const natMatch = prospects.filter(
+          (p) => p.position === mission.position && p.nationality === mission.targetNationality,
+        );
+        const posOnly = prospects.filter(
+          (p) => p.position === mission.position &&
+                 allowedNationalities.includes(p.nationality) &&
+                 p.nationality !== mission.targetNationality,
+        );
+        candidates = [...natMatch, ...posOnly];
+      } else {
+        // Domestic/unspecified search or target not in allowed regions —
+        // restrict to the full allowed nationality set
+        candidates = prospects.filter(
+          (p) => p.position === mission.position && allowedNationalities.includes(p.nationality),
+        );
+      }
+
       const actualCount = Math.min(count, candidates.length);
 
       for (let i = 0; i < actualCount; i++) {
         const prospect = candidates[i];
-        // Mark as revealed (scout has identified this player)
+        // Mark as revealed and flag as local gem so market refresh doesn't wipe it
         const gem: MarketPlayer = {
           ...prospect,
           scoutingStatus: 'revealed',
           scoutingProgress: 2,
           perceivedAbility: prospect.currentAbility,
+          isLocalGem: true,
         };
         consumeProspect(prospect.id);
         addMarketPlayer(gem);
@@ -187,7 +216,7 @@ export function processMissions(): void {
         subject: `${scout.name} has found a gem!`,
         body,
         isRead: false,
-        metadata: { playerIds: foundPlayers.map(p => p.id) },
+        metadata: { gemDiscovery: true, playerIds: foundPlayers.map(p => p.id) },
       });
     }
 

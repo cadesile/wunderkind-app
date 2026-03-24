@@ -15,8 +15,11 @@ import { useCoachStore } from './coachStore';
 import { useSquadStore } from './squadStore';
 import { useScoutStore } from './scoutStore';
 import { useAcademyStore } from './academyStore';
+import { useGuardianStore } from './guardianStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { updateCoachRelationship } from '@/engine/RelationshipService';
+import type { ApiGuardian } from '@/types/api';
+import type { Guardian } from '@/types/guardian';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -95,6 +98,12 @@ export const useMarketStore = create<MarketState>()(
 
       setMarketData: (data) => {
         const existingPlayers = get().players;
+
+        // Preserve locally-added gem players that the backend doesn't know about
+        const localGems = existingPlayers.filter(
+          (p) => p.isLocalGem && !data.players.some((bp) => bp.id === p.id),
+        );
+
         const playersWithScouting = data.players.map((p) => {
           const existing = existingPlayers.find((e) => e.id === p.id);
           if (existing?.scoutingStatus) {
@@ -117,7 +126,7 @@ export const useMarketStore = create<MarketState>()(
           };
         });
         set({
-          players: playersWithScouting,
+          players: [...playersWithScouting, ...localGems],
           coaches: data.coaches,
           marketScouts: data.scouts,
           agents: data.agents,
@@ -229,6 +238,23 @@ export const useMarketStore = create<MarketState>()(
         const age = typeof ageRaw === 'number' ? ageRaw : 17;
         const personality = generatePersonality();
 
+        // Store backend guardians if not already in the store
+        const existingGuardians = useGuardianStore.getState().getGuardiansForPlayer(player.id);
+        if (existingGuardians.length === 0 && player.guardians && player.guardians.length > 0) {
+          const guardians: Guardian[] = (player.guardians as ApiGuardian[]).map((g) => ({
+            id: g.id,
+            playerId: player.id,
+            firstName: g.firstName,
+            lastName: g.lastName,
+            gender: g.gender,
+            demandLevel: g.demandLevel,
+            loyaltyToAcademy: g.loyaltyToAcademy,
+            ignoredRequestCount: 0,
+          }));
+          useGuardianStore.getState().addGuardians(guardians);
+        }
+        const finalScoutingReport = scoutingReport;
+
         addPlayer({
           id: player.id,
           name: `${player.firstName} ${player.lastName}`,
@@ -241,13 +267,12 @@ export const useMarketStore = create<MarketState>()(
           wage: player.currentAbility * 100,
           personality,
           appearance: generateAppearance(player.id, 'PLAYER', age, personality),
-          guardianId: null,
           agentId: player.agent?.id ?? null,
           joinedWeek: weekNumber,
           isActive: true,
           morale: 40,
           relationships: [],
-          scoutingReport,
+          scoutingReport: finalScoutingReport,
           // Pass backend attributes through so GameLoop doesn't need to generate them
           ...(player.attributes ? { attributes: player.attributes } : {}),
         });

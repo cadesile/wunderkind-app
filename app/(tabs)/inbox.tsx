@@ -13,6 +13,7 @@ import { useCoachStore } from '@/stores/coachStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { MarketPlayer } from '@/types/market';
 import { reactionHandler } from '@/engine/ReactionHandler';
+import { handleGuardianResponse } from '@/engine/ReactionHandler';
 import { handleAcceptAgentOffer, handleRejectAgentOffer } from '@/utils/agentOfferHandlers';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
@@ -23,7 +24,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
 import { PitchBackground } from '@/components/ui/PitchBackground';
-import { formatCurrencyCompact, getPlayerAskingPrice } from '@/utils/currency';
+import { formatCurrencyCompact, formatCurrencyWhole, getPlayerAskingPrice } from '@/utils/currency';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap, hapticWarning, hapticError } from '@/utils/haptics';
 import { moraleLabel } from '@/utils/morale';
@@ -294,7 +295,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
 // ─── Type badge config ─────────────────────────────────────────────────────────
 
 const TYPE_CONFIG: Record<InboxMessageType, { label: string; color: 'yellow' | 'red' | 'green' | 'dim' }> = {
-  guardian: { label: 'G', color: 'dim' },
+  guardian: { label: 'GUARDIAN', color: 'yellow' },
   agent:    { label: 'A', color: 'dim' },
   sponsor:  { label: '$', color: 'green' },
   investor: { label: '£', color: 'yellow' },
@@ -328,6 +329,7 @@ function isInvestorMeta(meta: unknown): meta is InvestorOfferMeta {
 // ─── Gem discovery metadata ────────────────────────────────────────────────────
 
 interface GemPlayerMeta {
+  gemDiscovery: true;
   playerId: string;
 }
 
@@ -335,6 +337,7 @@ function isGemMeta(meta: unknown): meta is GemPlayerMeta {
   return (
     typeof meta === 'object' &&
     meta !== null &&
+    (meta as GemPlayerMeta).gemDiscovery === true &&
     typeof (meta as GemPlayerMeta).playerId === 'string'
   );
 }
@@ -342,11 +345,15 @@ function isGemMeta(meta: unknown): meta is GemPlayerMeta {
 // ─── Multi-gem (mission) metadata ─────────────────────────────────────────────
 
 interface MultiGemMeta {
+  gemDiscovery: true;
   playerIds: string[];
 }
 
 function isMultiGemMeta(meta: unknown): meta is MultiGemMeta {
-  return Array.isArray((meta as MultiGemMeta)?.playerIds);
+  return (
+    (meta as MultiGemMeta)?.gemDiscovery === true &&
+    Array.isArray((meta as MultiGemMeta)?.playerIds)
+  );
 }
 
 // ─── Mission summary metadata ─────────────────────────────────────────────────
@@ -366,16 +373,29 @@ function isMissionSummaryMeta(meta: unknown): meta is MissionSummaryMeta {
     (meta as MissionSummaryMeta)?.missionSummary !== null;
 }
 
+// ─── Guardian request metadata ─────────────────────────────────────────────────
+
+interface GuardianMeta {
+  costPence?: number;
+  guardianIds?: string[];
+  worstGuardianId?: string;
+}
+
+function isGuardianMeta(meta: unknown): meta is GuardianMeta {
+  return typeof meta === 'object' && meta !== null;
+}
+
 // ─── Gem player card ───────────────────────────────────────────────────────────
 
 function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: string }) {
   const player = useMarketStore((s) => s.players.find((p) => p.id === playerId));
+  const inSquad = useSquadStore((s) => s.players.some((p) => p.id === playerId));
   const { signPlayer } = useMarketStore.getState();
   const { respond } = useInboxStore.getState();
   const [recruited, setRecruited] = useState(false);
 
-  // Already signed (player removed from market) or just signed this session
-  if (!player || recruited) {
+  // Player was signed this session or is already in the squad
+  if (recruited || inSquad) {
     return (
       <View style={{
         marginTop: 12,
@@ -389,6 +409,25 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
       }}>
         <PixelText size={8} color={WK.green}>✓ PLAYER SIGNED</PixelText>
         <PixelText size={6} dim>CHECK YOUR SQUAD</PixelText>
+      </View>
+    );
+  }
+
+  // Player not found in market — gem was lost to a market refresh before the player could act
+  if (!player) {
+    return (
+      <View style={{
+        marginTop: 12,
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: WK.border,
+        padding: 16,
+        alignItems: 'center',
+        gap: 6,
+        ...pixelShadow,
+      }}>
+        <PixelText size={8} color={WK.dim}>PROSPECT UNAVAILABLE</PixelText>
+        <PixelText size={6} dim>This player is no longer on the market.</PixelText>
       </View>
     );
   }
@@ -790,6 +829,7 @@ function InboxMessageDetail({
     : null;
   const gemMeta = !investorMeta && !multiGemMeta && isGemMeta(message.metadata) ? message.metadata : null;
   const missionSummaryMeta = isMissionSummaryMeta(message.metadata) ? message.metadata : null;
+  const guardianMeta = message.type === 'guardian' && isGuardianMeta(message.metadata) ? message.metadata : null;
   const behaviouralPlayerIds: string[] = !multiGemMeta && Array.isArray(message.metadata?.playerIds)
     ? (message.metadata!.playerIds as string[])
     : [];
@@ -860,6 +900,12 @@ function InboxMessageDetail({
           </View>
         )}
 
+        {guardianMeta?.costPence !== undefined && guardianMeta.costPence > 0 && (
+          <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
+            <OfferRow label="COST IF ACCEPTED" value={formatCurrencyWhole(guardianMeta.costPence)} />
+          </View>
+        )}
+
         {message.response && (
           <View style={{
             marginTop: 16, paddingVertical: 8, paddingHorizontal: 12,
@@ -921,7 +967,32 @@ function InboxMessageDetail({
         <ManagementPanel playerIds={behaviouralPlayerIds} />
       )}
 
-      {canRespond && (
+      {canRespond && message.type === 'guardian' && (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          <Button
+            label="✓ ACCEPT"
+            variant="yellow"
+            fullWidth
+            onPress={() => {
+              hapticTap();
+              handleGuardianResponse(message, 'accepted');
+              respond(message.id, 'accepted');
+            }}
+          />
+          <Button
+            label="✗ DECLINE"
+            variant="teal"
+            fullWidth
+            onPress={() => {
+              hapticWarning();
+              handleGuardianResponse(message, 'rejected');
+              respond(message.id, 'rejected');
+            }}
+          />
+        </View>
+      )}
+
+      {canRespond && message.type !== 'guardian' && (
         <View style={{ marginTop: 12, gap: 8 }}>
           <Button label="✓ ACCEPT" variant="yellow" fullWidth onPress={handleAccept} />
           <Button label="✗ REJECT" variant="teal" fullWidth onPress={() => respond(message.id, 'rejected')} />

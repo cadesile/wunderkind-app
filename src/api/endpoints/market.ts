@@ -1,7 +1,7 @@
 import { apiRequest } from '@/api/client';
 import { MarketData } from '@/types/market';
 import type { CoachRole } from '@/types/coach';
-import type { ManagerProfileInput } from '@/types/api';
+import type { ManagerProfileInput, ApiGuardian } from '@/types/api';
 
 // ─── Entity type sent to POST /api/market/assign ───────────────────────────────
 
@@ -43,6 +43,7 @@ interface RawPlayer {
   overall?: number;
   height?: number;
   weight?: number;
+  guardians?: ApiGuardian[];
 }
 
 interface RawCoach {
@@ -187,6 +188,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
               nationality: p.agent.nationality,
             }
           : null,
+        guardians: p.guardians ?? [],
       };
     }),
 

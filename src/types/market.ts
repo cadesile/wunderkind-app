@@ -105,12 +105,16 @@ export interface MarketPlayer {
   weight?: number;
   /** Assigned agent, or null if unrepresented */
   agent: Agent | null;
+  /** Guardians from backend — present for academy-assigned and market players */
+  guardians?: import('@/types/api').ApiGuardian[];
   scoutingStatus?: 'hidden' | 'scouting' | 'revealed';
   scoutingProgress?: number;
   marketValue?: number;     // pence = currentAbility * 1000
   currentOffer?: number;    // agent's asking price in pence
   perceivedAbility?: number; // revealed ability with scout error applied
   assignedScoutId?: string;
+  /** True for players discovered by a scout mission — protects them from backend market refresh wipes. */
+  isLocalGem?: boolean;
 }
 
 /** A coach available in the backend market. */

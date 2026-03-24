@@ -1,8 +1,5 @@
-import { PersonalityMatrix, Player, PlayerAttributes, Position, TraitName } from '@/types/player';
+import { PersonalityMatrix, Player, PlayerAttributes, TraitName } from '@/types/player';
 import { BehavioralIncident } from '@/types/game';
-import { generateDOB } from '@/utils/gameDate';
-import { generateAppearance } from '@/engine/appearance';
-import { uuidv7 } from '@/utils/uuidv7';
 import { getRelationshipValue } from '@/engine/RelationshipService';
 
 export const TRAIT_NAMES: TraitName[] = [
@@ -16,71 +13,15 @@ export const TRAIT_NAMES: TraitName[] = [
   'consistency',
 ];
 
-// ─── Name pools ───────────────────────────────────────────────────────────────
-
-const FIRST_NAMES = [
-  'Marcus', 'Luca', 'Kai', 'Omar', 'Theo', 'Finn', 'Nico', 'Leo',
-  'Ethan', 'Javier', 'Rafael', 'Seb', 'Malik', 'Ryo', 'Carlos',
-  'Antoine', 'Emil', 'Jake', 'Ivan', 'Luis', 'Dami', 'Yusuf',
-  'Matteo', 'Alexis', 'Kwame', 'Tobias', 'Remi', 'Fabio', 'Noa', 'Cian',
-];
-
-const LAST_NAMES = [
-  'Torres', 'Schmidt', 'Chen', 'Okafor', 'Hansen', 'Silva', 'Muller',
-  'Santos', 'Park', 'Fischer', 'Diaz', 'Garcia', 'Bello', 'Rossi',
-  'Nakamura', 'Williams', 'Dupont', 'Costa', 'Andersen', 'Mensah',
-  'Svensson', 'Afolabi', 'Ferreira', 'Makinen', 'Boateng', 'Ramos',
-];
-
-const NATIONALITIES = [
-  'English', 'Spanish', 'French', 'German', 'Brazilian', 'Portuguese',
-  'Nigerian', 'Ghanaian', 'Japanese', 'South Korean', 'Argentine',
-  'Dutch', 'Italian', 'Swedish', 'Danish', 'Irish', 'Ivorian', 'Senegalese',
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
 
 function randomTrait(): number {
   return 1 + Math.floor(Math.random() * 20);
 }
 
-// ─── Attribute generation ─────────────────────────────────────────────────────
+// ─── Personality generation ───────────────────────────────────────────────────
 
-/** Base attribute ranges per position [min, max] */
-const POSITION_ATTR_RANGES: Record<Position, Record<keyof PlayerAttributes, [number, number]>> = {
-  GK:  { pace: [20,40], technical: [25,45], vision: [30,50], power: [35,55], stamina: [35,55], heart: [30,55] },
-  DEF: { pace: [25,50], technical: [25,45], vision: [25,45], power: [35,55], stamina: [35,55], heart: [25,50] },
-  MID: { pace: [25,50], technical: [30,55], vision: [35,55], power: [25,45], stamina: [30,55], heart: [30,55] },
-  FWD: { pace: [30,55], technical: [30,55], vision: [25,50], power: [25,50], stamina: [25,50], heart: [30,55] },
-};
-
-/**
- * Generates initial 6-attribute block for a youth player.
- * Values are position-biased, 0–100 scale.
- */
-export function generateAttributes(position: Position): PlayerAttributes {
-  const ranges = POSITION_ATTR_RANGES[position];
-  function roll(attr: keyof PlayerAttributes): number {
-    const [min, max] = ranges[attr];
-    return min + Math.floor(Math.random() * (max - min + 1));
-  }
-  return {
-    pace:      roll('pace'),
-    technical: roll('technical'),
-    vision:    roll('vision'),
-    power:     roll('power'),
-    stamina:   roll('stamina'),
-    heart:     roll('heart'),
-  };
-}
-
-// ─── Player generation ────────────────────────────────────────────────────────
-
-/** Generates all 8 personality traits with random 1–20 values */
+/** Generates all 8 personality traits with random 1–20 values. */
 export function generatePersonality(): PersonalityMatrix {
   return {
     determination:   randomTrait(),
@@ -91,43 +32,6 @@ export function generatePersonality(): PersonalityMatrix {
     pressure:        randomTrait(),
     temperament:     randomTrait(),
     consistency:     randomTrait(),
-  };
-}
-
-/**
- * Generates a randomised youth player for the given position and game date.
- * DOB = currentGameDate − (ageYears × 365.25 days)
- * Wage = overallRating × 100 pence/week
- */
-export function generatePlayer(position: Position, currentGameDate: Date): Player {
-  const id = uuidv7(); // generate first — used as appearance seed
-  const personality = generatePersonality();
-  const ageYears = 15 + Math.floor(Math.random() * 3); // 15–17
-
-  const attributes = generateAttributes(position);
-  const overallRating = Math.round(
-    Object.values(attributes).reduce((a, b) => a + b, 0) / Object.values(attributes).length,
-  );
-
-  return {
-    id,
-    name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
-    dateOfBirth: generateDOB(ageYears, currentGameDate),
-    age: ageYears,
-    position,
-    nationality: pick(NATIONALITIES),
-    overallRating,
-    potential: 1 + Math.floor(Math.random() * 5), // 1–5 stars
-    wage: overallRating * 100,                      // pence/week
-    personality,
-    attributes,
-    appearance: generateAppearance(id, 'PLAYER', ageYears, personality),
-    morale: 40,
-    relationships: [],
-    guardianId: null,
-    agentId: null,
-    joinedWeek: 1,
-    isActive: true,
   };
 }
 

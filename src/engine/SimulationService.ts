@@ -15,6 +15,7 @@ import {
   SelectionLogic,
   TargetType,
   StatOperator,
+  EventCategory,
 } from '@/types/narrative';
 
 // ─── Simulation Service ───────────────────────────────────────────────────────
@@ -54,6 +55,9 @@ class SimulationService {
   private triggerRandomEvent(): void {
     const template = useEventStore.getState().getWeightedRandomTemplate();
     if (!template) return;
+    // GUARDIAN templates are handled exclusively by GuardianEngine — they use
+    // {guardian_name}/{player_name} placeholders that generateMessage() doesn't resolve.
+    if (template.category === EventCategory.GUARDIAN) return;
 
     let entityMap = this.resolveTargets(template.impacts.selection_logic);
     // If the template requires specific targets but none were resolved, skip.

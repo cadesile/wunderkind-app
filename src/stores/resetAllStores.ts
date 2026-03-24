@@ -4,6 +4,7 @@ import { useAcademyStore } from './academyStore';
 import { useSquadStore } from './squadStore';
 import { useCoachStore } from './coachStore';
 import { useScoutStore } from './scoutStore';
+import { useGuardianStore } from './guardianStore';
 
 /**
  * All Zustand persist store keys registered in AsyncStorage.
@@ -29,6 +30,7 @@ const ALL_STORE_KEYS = [
   'game-config-store',
   'archetype-store',
   'loss-condition-store',
+  'guardian-store',
 ];
 
 /**
@@ -66,6 +68,7 @@ export function resetInMemoryStores(): void {
   useSquadStore.setState({ players: [] });
   useCoachStore.setState({ coaches: [] });
   useScoutStore.setState({ scouts: [] });
+  useGuardianStore.getState().clearAll();
 }
 
 /**

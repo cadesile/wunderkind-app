@@ -6,6 +6,7 @@ import { computePlayerDevelopment, computeCoachPerformanceScore } from './Develo
 import { processScoutingTasks, processMissions, refreshMarketOffers } from './ScoutingService';
 import { processMoraleAndRelationships } from './MoraleEngine';
 import { processSocialGraph } from './SocialGraphEngine';
+import { processGuardianTick } from './GuardianEngine';
 import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
@@ -867,6 +868,9 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 12. Social graph — NPC training incidents ─────────────────────────────────
   processSocialGraph();
+
+  // ── 13. Guardian tick ─────────────────────────────────────────────────────────
+  processGuardianTick(weekNumber);
 
   return {
     week: weekNumber,

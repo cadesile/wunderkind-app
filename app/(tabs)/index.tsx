@@ -71,76 +71,57 @@ function PlayerCard({ player }: { player: Player }) {
   ];
 
   return (
-    <Pressable onPress={() => { hapticTap(); router.push(`/player/${player.id}`); }}>
+    <Pressable onPress={() => { hapticTap(); router.push(`/player/${player.id}`); }} style={{ flex: 1 }}>
       <View style={{
+        flex: 1,
         backgroundColor: cardStyle.backgroundColor,
         borderWidth: 3,
         borderColor: cardStyle.borderColor,
         padding: 8,
         marginBottom: 6,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
         ...pixelShadow,
       }}>
-        <Avatar appearance={player.appearance} role="PLAYER" size={44} morale={player.morale ?? 70} age={player.age} />
-        <View style={{ flex: 1 }}>
-          <PixelText size={8} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <BodyText size={11} color={WK.tealLight}>{player.position} · AGE {player.age}</BodyText>
-            <ArchetypeBadge player={player} />
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <FlagText nationality={player.nationality} size={11} />
-            <BodyText size={11} dim>{player.nationality}</BodyText>
-          </View>
-
-          {/* 2×4 trait grid */}
-          <View style={{ marginTop: 4, gap: 2 }}>
-            {[0, 1].map((row) => (
-              <View key={row} style={{ flexDirection: 'row', gap: 2 }}>
-                {traitValues.slice(row * 4, row * 4 + 4).map((v, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      width: 8,
-                      height: 8,
-                      backgroundColor: traitColor(v),
-                      borderWidth: 1,
-                      borderColor: WK.border,
-                    }}
-                  />
-                ))}
-              </View>
-            ))}
-          </View>
-
-          {/* Clique tag */}
-          <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={{
-              width: 8,
-              height: 8,
-              backgroundColor: cliqueColor,
-              borderWidth: 2,
-              borderColor: WK.border,
-            }} />
-            <BodyText size={11} color={cliqueColor}>{cliqueLabel}</BodyText>
-          </View>
+        <View style={{ alignItems: 'center', marginBottom: 6 }}>
+          <Avatar appearance={player.appearance} role="PLAYER" size={40} morale={player.morale ?? 70} age={player.age} />
         </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
+          <PixelText size={7} upper numberOfLines={1} style={{ flex: 1, marginRight: 4 }}>{player.name}</PixelText>
           <Badge label={`${player.overallRating}`} color="yellow" />
-          {badgeLabel ? (
-            <View style={{
-              backgroundColor: cardStyle.borderColor,
-              borderWidth: 2,
-              borderColor: WK.border,
-              paddingHorizontal: 4,
-              paddingVertical: 2,
-            }}>
-              <PixelText size={5} color={WK.text}>{badgeLabel}</PixelText>
-            </View>
-          ) : null}
         </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+          <BodyText size={10} color={WK.tealLight}>{player.position} · {player.age}</BodyText>
+          <ArchetypeBadge player={player} />
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+          <FlagText nationality={player.nationality} size={10} />
+          <BodyText size={10} dim numberOfLines={1}>{player.nationality}</BodyText>
+        </View>
+
+        {/* 2×4 trait grid */}
+        <View style={{ gap: 2, marginBottom: 4 }}>
+          {[0, 1].map((row) => (
+            <View key={row} style={{ flexDirection: 'row', gap: 2 }}>
+              {traitValues.slice(row * 4, row * 4 + 4).map((v, i) => (
+                <View key={i} style={{ width: 8, height: 8, backgroundColor: traitColor(v), borderWidth: 1, borderColor: WK.border }} />
+              ))}
+            </View>
+          ))}
+        </View>
+
+        {/* Clique tag */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ width: 6, height: 6, backgroundColor: cliqueColor, borderWidth: 2, borderColor: WK.border }} />
+          <BodyText size={9} color={cliqueColor} numberOfLines={1}>{cliqueLabel}</BodyText>
+        </View>
+
+        {badgeLabel && (
+          <View style={{ marginTop: 4, alignSelf: 'flex-start', backgroundColor: cardStyle.borderColor, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 4, paddingVertical: 2 }}>
+            <PixelText size={5} color={WK.text}>{badgeLabel}</PixelText>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -151,49 +132,40 @@ function PlayerCard({ player }: { player: Player }) {
 function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
   return (
     <View style={{
+      flex: 1,
       backgroundColor: WK.tealCard,
       borderWidth: 3,
       borderColor: WK.border,
-      padding: 12,
+      padding: 10,
       marginBottom: 10,
       ...pixelShadow,
     }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={coach.age ?? 35} />
-        <View style={{ flex: 1 }}>
-          <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
-          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-            <FlagText nationality={coach.nationality} size={12} />
-            <PixelText size={7} dim>{coach.nationality}</PixelText>
-          </View>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Badge label={`INF ${coach.influence}`} color="yellow" />
-          <PixelText size={6} dim>£{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
-        </View>
+      <View style={{ alignItems: 'center', marginBottom: 6 }}>
+        <Avatar appearance={coach.appearance} role="COACH" size={40} morale={coach.morale ?? 70} age={coach.age ?? 35} />
       </View>
-      <View style={{ marginTop: 8 }}>
-        <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-          <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
-        </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
+        <PixelText size={7} upper numberOfLines={1} style={{ flex: 1, marginRight: 4 }}>{coach.name}</PixelText>
+        <Badge label={`INF ${coach.influence}`} color="yellow" />
       </View>
+      <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 2 }}>{coach.role.toUpperCase()}</PixelText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+        <FlagText nationality={coach.nationality} size={11} />
+        <PixelText size={6} dim numberOfLines={1}>{coach.nationality}</PixelText>
+      </View>
+      <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, marginBottom: 4 }}>
+        <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
+      </View>
+      <PixelText size={6} dim style={{ marginBottom: 4 }}>£{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
       {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
-        <View style={{ flexDirection: 'row', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
-          {(Object.entries(coach.specialisms) as [string, number][]).map(([attr, strength]) => (
-            <View key={attr} style={{
-              paddingHorizontal: 5,
-              paddingVertical: 2,
-              backgroundColor: WK.tealDark,
-              borderWidth: 1,
-              borderColor: WK.yellow,
-            }}>
-              <PixelText size={6} color={WK.yellow}>{attr.toUpperCase()} {strength}</PixelText>
+        <View style={{ flexDirection: 'row', gap: 3, marginBottom: 6, flexWrap: 'wrap' }}>
+          {(Object.entries(coach.specialisms) as [string, number][]).map(([attr]) => (
+            <View key={attr} style={{ paddingHorizontal: 4, paddingVertical: 2, backgroundColor: WK.tealDark, borderWidth: 1, borderColor: WK.yellow }}>
+              <PixelText size={5} color={WK.yellow}>{attr.toUpperCase()}</PixelText>
             </View>
           ))}
         </View>
       )}
-      <Pressable onPress={() => { hapticWarning(); onFire(); }} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
+      <Pressable onPress={() => { hapticWarning(); onFire(); }} style={{ alignSelf: 'flex-end' }}>
         <PixelText size={6} color={WK.red}>[ RELEASE ]</PixelText>
       </Pressable>
     </View>
@@ -245,37 +217,34 @@ function ScoutCard({ scout }: { scout: Scout }) {
   return (
     <Pressable
       onPress={() => { hapticTap(); router.push(`/scout/${scout.id}`); }}
-      style={{
+      style={{ flex: 1 }}
+    >
+      <View style={{
+        flex: 1,
         backgroundColor: WK.tealCard,
         borderWidth: 3,
         borderColor: isOnMission ? WK.orange : WK.border,
-        padding: 12,
+        padding: 10,
         marginBottom: 10,
         ...pixelShadow,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar appearance={scout.appearance} role="SCOUT" size={44} morale={scout.morale ?? 70} />
-        <View style={{ flex: 1 }}>
-          <PixelText size={8} upper numberOfLines={1}>{scout.name}</PixelText>
-          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>
-            {RANGE_LABEL[scout.scoutingRange]} SCOUT
-          </PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-            <FlagText nationality={scout.nationality} size={12} />
-            <PixelText size={7} dim>{scout.nationality}</PixelText>
-          </View>
+      }}>
+        <View style={{ alignItems: 'center', marginBottom: 6 }}>
+          <Avatar appearance={scout.appearance} role="SCOUT" size={40} morale={scout.morale ?? 70} />
         </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
+          <PixelText size={7} upper numberOfLines={1} style={{ flex: 1, marginRight: 4 }}>{scout.name}</PixelText>
           <Badge label={`${scout.successRate}%`} color="yellow" />
-          <PixelText size={6} dim>£{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
-          {isOnMission && <Badge label="ON MISSION" color="yellow" />}
         </View>
-      </View>
-      <View style={{ marginTop: 8 }}>
-        <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+        <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 2 }}>{RANGE_LABEL[scout.scoutingRange]} SCOUT</PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+          <FlagText nationality={scout.nationality} size={11} />
+          <PixelText size={6} dim numberOfLines={1}>{scout.nationality}</PixelText>
+        </View>
+        <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, marginBottom: 4 }}>
           <View style={{ height: '100%', width: `${scout.successRate}%`, backgroundColor: traitColor(Math.round(scout.successRate / 5)) }} />
         </View>
+        <PixelText size={6} dim>£{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
+        {isOnMission && <View style={{ marginTop: 4 }}><Badge label="ON MISSION" color="yellow" /></View>}
       </View>
     </Pressable>
   );
@@ -366,6 +335,8 @@ function SquadPane() {
         <FlatList
           data={players}
           keyExtractor={(p) => p.id}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 6 }}
           renderItem={({ item }) => <PlayerCard player={item} />}
           contentContainerStyle={{ padding: 10 }}
         />
@@ -458,6 +429,8 @@ function CoachesPane() {
         <FlatList
           data={coaches}
           keyExtractor={(c) => c.id}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 6 }}
           renderItem={({ item }) => <CoachCard coach={item} onFire={() => fireCoach(item)} />}
           contentContainerStyle={{ padding: 10 }}
         />
@@ -610,6 +583,8 @@ function ScoutsPane() {
         <FlatList
           data={scouts}
           keyExtractor={(s) => s.id}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 6 }}
           renderItem={({ item }) => <ScoutCard scout={item} />}
           contentContainerStyle={{ padding: 10 }}
         />
