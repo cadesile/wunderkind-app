@@ -144,7 +144,9 @@ export function processOrganicRelationshipGrowth(): void {
   const { coaches } = useCoachStore.getState();
 
   players.forEach((player) => {
-    const coach = coaches[0]; // Use first coach as default pairing
+    const coach = player.assignedCoachId
+      ? coaches.find((c) => c.id === player.assignedCoachId) ?? null
+      : null;
     if (!coach) return;
 
     const loyaltyBoost = (player.personality.loyalty ?? 10) / 20;

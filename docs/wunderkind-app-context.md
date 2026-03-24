@@ -1,6 +1,6 @@
 # Wunderkind Factory — React Native App Context
 
-> Last updated: 2026-03-20 23:25:42
+> Last updated: 2026-03-23 22:41:31
 
 ## Overview
 Expo-managed React Native app for **The Wunderkind Factory** — a football academy
@@ -35,7 +35,7 @@ expo: ~54.0.0
 expo-asset: ~12.0.12
 expo-constants: ~18.0.13
 expo-font: ^14.0.11
-expo-haptics: ^55.0.8
+expo-haptics: ~15.0.8
 expo-linking: ~8.0.11
 expo-router: ~6.0.23
 expo-splash-screen: ~31.0.13
@@ -71,6 +71,7 @@ app/
 │   ├── coaches.tsx
 │   ├── facilities.tsx
 │   ├── finances.tsx
+│   ├── home.tsx
 │   ├── inbox.tsx
 │   ├── index.tsx
 │   ├── market.tsx
@@ -85,7 +86,8 @@ app/
 │   └── scouts.tsx
 ├── player/
 │   └── [id].tsx
-└── _layout.tsx
+├── _layout.tsx
+└── game-over.tsx
 src/
 ├── api/
 │   ├── endpoints/
@@ -99,6 +101,7 @@ src/
 │   │   ├── leaderboard.ts
 │   │   ├── market.ts
 │   │   ├── marketData.ts
+│   │   ├── prospects.ts
 │   │   ├── squad.ts
 │   │   ├── staff.ts
 │   │   └── sync.ts
@@ -116,17 +119,21 @@ src/
 │   │   ├── Badge.tsx
 │   │   ├── Button.tsx
 │   │   ├── Card.tsx
+│   │   ├── DevelopmentChart.tsx
+│   │   ├── FlagText.tsx
 │   │   ├── PitchBackground.tsx
 │   │   ├── PixelAvatar.tsx
 │   │   ├── PixelDialog.tsx
 │   │   ├── PixelText.tsx
 │   │   ├── PixelTopTabBar.tsx
 │   │   └── SwipeConfirm.tsx
+│   ├── AcademyDashboard.tsx
 │   ├── ArchetypeBadge.tsx
 │   ├── GlobalHeader.tsx
 │   ├── OnboardingScreen.tsx
 │   ├── ScoutReportCard.tsx
-│   └── SyncStatusIndicator.tsx
+│   ├── SyncStatusIndicator.tsx
+│   └── WeeklyTickOverlay.tsx
 ├── constants/
 │   ├── archetypes.ts
 │   └── theme.ts
@@ -148,14 +155,17 @@ src/
 │   ├── SimulationService.ts
 │   └── SocialGraphEngine.ts
 ├── hooks/
+│   ├── useAcademyMetrics.ts
 │   ├── useArchetypeSync.ts
 │   ├── useAuthFlow.ts
 │   ├── useGameConfigSync.ts
 │   ├── useNarrativeSync.ts
+│   ├── useProspectSync.ts
 │   └── useSyncStatus.ts
 ├── stores/
 │   ├── academyStore.ts
 │   ├── activeEffectStore.ts
+│   ├── altercationStore.ts
 │   ├── archetypeStore.ts
 │   ├── authStore.ts
 │   ├── coachStore.ts
@@ -166,10 +176,14 @@ src/
 │   ├── inboxStore.ts
 │   ├── interactionStore.ts
 │   ├── loanStore.ts
+│   ├── lossConditionStore.ts
 │   ├── marketStore.ts
 │   ├── narrativeStore.ts
+│   ├── prospectPoolStore.ts
+│   ├── resetAllStores.ts
 │   ├── scoutStore.ts
-│   └── squadStore.ts
+│   ├── squadStore.ts
+│   └── tickProgressStore.ts
 ├── types/
 │   ├── academy.ts
 │   ├── api.ts
@@ -190,6 +204,7 @@ src/
     ├── gameDate.ts
     ├── haptics.ts
     ├── morale.ts
+    ├── nationality.ts
     ├── storage.ts
     └── uuidv7.ts
 scripts/
@@ -198,7 +213,7 @@ scripts/
 docs/
 └── wunderkind-app-context.md
 
-20 directories, 113 files
+20 directories, 128 files
 ```
 
 ---
@@ -212,6 +227,7 @@ docs/
 - `coaches` — 
 - `facilities` — 
 - `finances` — 
+- `home` — 
 - `inbox` — 
 - `index` — 
 - `market` — 
@@ -220,6 +236,7 @@ docs/
 ### Other Routes
 
 - `app/coach/[id].tsx`
+- `app/game-over.tsx`
 - `app/market/coaches.tsx`
 - `app/market/index.tsx`
 - `app/market/players.tsx`
@@ -248,13 +265,13 @@ interface AcademyState {
   setCreatedAt: (date: string) => void;
   setSponsorIds: (ids: string[]) => void;
   setInvestorId: (id: string | null) => void;
+  setCountry: (country: Academy['country']) => void;
   incrementWeek: () => void;
   rollbackWeek: (weekNumber: number) => void;
   applyServerSync: (data: { reputation: number; totalCareerEarnings: number; hallOfFamePoints: number }) => void;
   syncWithApi: (data: AcademyStatusResponse) => void;
   updateFromSyncResponse: (data: SyncAcceptedResponse['academy']) => void;
-  setManagerPersonality: (personality: ManagerPersonality) => void;
-  updateManagerPersonality: (shifts: Partial<Pick<ManagerPersonality, 'temperament' | 'discipline' | 'ambition'>>) => void;
+  managerProfile: ManagerProfile | null;
 ```
 
 ### activeEffectStore
@@ -280,6 +297,28 @@ interface ActiveEffectState {
       getEffectsForEntity: (entityId) =>
         get().effects.filter((e) => e.affectedEntityId === entityId),
       clearAll: () => set({ effects: [] }),
+```
+
+### altercationStore
+
+```typescript
+interface AltercationState {
+// Actions:
+  pendingBlocks: AltercationBlock[];
+  addBlock: (block: AltercationBlock) => void;
+  resolveBlock: (playerAId: string, playerBId: string) => void;
+  clearAll: () => void;
+  persist(
+      pendingBlocks: [],
+      addBlock: (block) =>
+        set((state) => {
+          if (already) return state;
+      resolveBlock: (playerAId, playerBId) =>
+        set((state) => ({
+          pendingBlocks: state.pendingBlocks.filter(
+      clearAll: () => set({ pendingBlocks: [] }),
+      name: 'altercation-store',
+      storage: createJSONStorage(() => AsyncStorage),
 ```
 
 ### archetypeStore
@@ -391,26 +430,26 @@ interface EventState {
 ```typescript
 interface FacilityState {
 // Actions:
+  technicalZone:  0,
+  strengthSuite:  0,
+  tacticalRoom:   0,
+  physioClinic:   0,
+  hydroPool:      0,
+  scoutingCenter: 0,
+  technicalZone:  100,
+  strengthSuite:  100,
+  tacticalRoom:   100,
+  physioClinic:   100,
+  hydroPool:      100,
+  scoutingCenter: 100,
   if (!def || currentLevel >= MAX_LEVEL) return Infinity;
   return (currentLevel + 1) * def.baseCost;
   levels: FacilityLevels;
+  conditions: FacilityConditions;
   upgradeLevel: (type: FacilityType) => boolean;
   initAllLevels: () => void;
-  maxSquadSize: () => number;
-  analyticsUnlocked: () => boolean;
-  totalWeeklyMaintenance: () => number;
-  persist(
-      levels: {
-        trainingPitch: 0,
-        medicalLab: 0,
-        youthHostel: 0,
-        analyticsSuite: 0,
-        mediaCenter: 0,
-      upgradeLevel: (type) => {
-        if (current >= MAX_LEVEL) return false;
-        set((state) => ({
-          levels: { ...state.levels, [type]: state.levels[type] + 1 },
-      initAllLevels: () =>
+  decayCondition: () => void;
+  repairFacility: (type: FacilityType) => void;
 ```
 
 ### financeStore
@@ -542,6 +581,35 @@ interface LoanState {
         get().loans.reduce((sum, l) => sum + l.weeklyRepayment, 0),
 ```
 
+### lossConditionStore
+
+```typescript
+export type LossConditionType = 'insolvency' | 'talent_drain';
+interface AtRiskEntry {
+interface LossConditionState {
+// Actions:
+  weeksNegativeBalance: number;
+  weeksUnderCoachRatio: number;
+  weeksCoachesWithFewPlayers: number;
+  atRiskPlayers: Record<string, AtRiskEntry>;
+  atRiskCoaches: Record<string, AtRiskEntry>;
+  lossCondition: LossConditionType | null;
+  pendingNewGame: boolean;
+  setWeeksNegativeBalance: (n: number) => void;
+  setWeeksUnderPlayerFloor: (n: number) => void;
+  setWeeksUnderCoachRatio: (n: number) => void;
+  setWeeksCoachesWithFewPlayers: (n: number) => void;
+  setAtRiskPlayer: (id: string, entry: AtRiskEntry) => void;
+  removeAtRiskPlayer: (id: string) => void;
+  setAtRiskCoach: (id: string, entry: AtRiskEntry) => void;
+  removeAtRiskCoach: (id: string) => void;
+  triggerGameOver: (condition: LossConditionType) => void;
+  requestNewGame: () => void;
+  clearNewGameRequest: () => void;
+  resetAll: () => void;
+  weeksNegativeBalance: 0,
+```
+
 ### marketStore
 
 ```typescript
@@ -559,6 +627,7 @@ interface MarketState {
   error: string | null;
   setMarketData: (data: MarketData) => void;
   fetchMarketData: () => Promise<void>;
+  refreshMarketPool: () => Promise<void>;
   removeFromMarket: (entityType: 'player' | 'coach' | 'scout', id: string) => void;
   updateMarketPlayer: (id: string, changes: Partial<MarketPlayer>) => void;
   addMarketPlayer: (player: MarketPlayer) => void;
@@ -566,7 +635,6 @@ interface MarketState {
   rejectPlayer: (playerId: string) => void;
   hireCoach: (coachId: string, weekNumber: number) => void;
   hireScout: (scoutId: string, weekNumber: number) => void;
-  persist(
 ```
 
 ### narrativeStore
@@ -594,6 +662,58 @@ interface NarrativeState {
       markAsResponded: (id) =>
         set((state) => ({
           messages: state.messages.map((m) =>
+```
+
+### prospectPoolStore
+
+```typescript
+interface ProspectPoolState {
+// Actions:
+  prospects: MarketPlayer[];
+  consumedIds: string[];
+  lastFetchedAt: string | null;
+  isLoading: boolean;
+  shouldRefetch: () => boolean;
+  setProspects: (incoming: MarketPlayer[]) => void;
+  fetchProspects: () => Promise<void>;
+  consumeProspect: (id: string) => void;
+  persist(
+      prospects: [],
+      consumedIds: [],
+      lastFetchedAt: null,
+      isLoading: false,
+      shouldRefetch: () => {
+        if (!lastFetchedAt) return true;
+      setProspects: (incoming) => {
+        set((state) => ({
+          prospects: [...state.prospects, ...freshOnes],
+          lastFetchedAt: new Date().toISOString(),
+      fetchProspects: async () => {
+```
+
+### resetAllStores
+
+```typescript
+// Actions:
+    academy: {
+      id: 'academy-1',
+      name: '',
+      foundedWeek: 1,
+      weekNumber: 1,
+      reputation: 0,
+      reputationTier: 'Local',
+      totalCareerEarnings: 0,
+      hallOfFamePoints: 0,
+      squadSize: 0,
+      staffCount: 1,
+      balance: 0,
+      createdAt: '',
+      sponsorIds: [],
+      investorId: null,
+      country: null,
+      lastRepActivityWeek: 1,
+    managerPersonality: null,
+  resetInMemoryStores();
 ```
 
 ### scoutStore
@@ -647,8 +767,21 @@ interface SquadState {
   setDevelopmentFocus: (
     playerId: string,
     focus: Player['developmentFocus'] | null,
-  releasePlayer: (playerId: string) => Promise<{ success: boolean; playerName?: string; error?: string }>;
-  persist(
+  setPlayerInjury: (playerId: string, injury: NonNullable<Player['injury']>) => void;
+  clearPlayerInjury: (playerId: string) => void;
+```
+
+### tickProgressStore
+
+```typescript
+interface TickProgressState {
+// Actions:
+  isProcessing: boolean;
+  startTick: () => void;
+  endTick: () => void;
+  isProcessing: false,
+  startTick: () => set({ isProcessing: true }),
+  endTick:   () => set({ isProcessing: false }),
 ```
 
 
@@ -667,6 +800,7 @@ export function generateAgentOffer(
 
 ```typescript
 export function generateAppearance(
+export function getAppearanceFacialHair(appearance: Appearance): FacialHair {
 ```
 
 ### archetypeEngine
@@ -695,6 +829,7 @@ export function getCoachOpinion(player: MarketPlayer, coach: Coach): CoachOpinio
 
 ```typescript
 export function computeCoachPerformanceScore(coach: Coach): number {
+export function checkBreakthroughSpike(
 export function computePlayerDevelopment(
 ```
 
@@ -788,6 +923,7 @@ export function processSocialGraph(): void {
 ### academy
 
 ```typescript
+export interface ManagerProfile {
 export type ReputationTier = 'Local' | 'Regional' | 'National' | 'Elite';
 export interface ManagerPersonality {
 export interface Academy {
@@ -807,6 +943,7 @@ export interface ApiFacilityData {
 export interface FacilityUpgradeResponse {
 export interface ApiInboxResponse {
 export interface ApiInboxMessage {
+export interface ManagerProfileInput {
 export interface RegisterRequest {
 export interface RegisterResponse {
 export interface LoginRequest {
@@ -815,7 +952,6 @@ export interface SyncTransfer {
 export interface SyncLedgerEntry {
 export interface SyncRequest {
 export interface SyncAcceptedResponse {
-export interface SyncRejectedResponse {
 ```
 
 ### archetype
@@ -840,6 +976,7 @@ export interface Coach {
 ```typescript
 export type FacilityType =
 export type FacilityLevels = Record<FacilityType, number>;
+export type FacilityConditions = Record<FacilityType, number>;
 export interface FacilityMeta {
 ```
 
@@ -854,6 +991,7 @@ export interface TransferRecord {
 ### game
 
 ```typescript
+export interface AltercationBlock {
 export interface WeeklyTick {
 export interface FinancialRecord {
 export interface ExpenseItem {
@@ -934,12 +1072,14 @@ export interface Relationship {
 export interface ScoutingReport {
 export type PlayerStatus =
 export type HairStyle = 'buzz' | 'shaggy' | 'afro' | 'crop' | 'bald';
-export type AppearanceAccessory = 'glasses' | 'whistle' | 'headset' | null;
+export type AppearanceAccessory = 'glasses' | 'sunglasses' | 'whistle' | 'headset' | 'beanie' | null;
 export type AppearanceExpression = 0 | 1 | 2;
 export type AppearanceRole = 'PLAYER' | 'COACH' | 'SCOUT' | 'AGENT';
+export type FacialHair = 'none' | 'stubble' | 'moustache' | 'goatee' | 'beard';
 export interface Appearance {
 export interface PlayerAttributes {
 export type AttributeName = keyof PlayerAttributes;
+export interface DevelopmentSnapshot {
 export interface Player {
 ```
 
@@ -953,6 +1093,7 @@ export interface Player {
 #### academy
 ```typescript
 export async function getAcademyStatus(): Promise<AcademyStatusResponse> {
+export async function checkAcademy(): Promise<{ exists: boolean }> {
 ```
 
 #### archetypes
@@ -1008,6 +1149,11 @@ export async function assignMarketEntity(
 export function fetchMarketData(): Promise<MarketDataResponse> {
 ```
 
+#### prospects
+```typescript
+export async function getProspects(): Promise<MarketPlayer[]> {
+```
+
 #### squad
 ```typescript
 export async function getSquad(): Promise<SquadResponse> {
@@ -1042,6 +1188,7 @@ export function useSyncWeek() {
 
 ## UI Components (`src/components/`)
 
+- `AcademyDashboard.tsx` — AcademyDashboard() {
 - `ArchetypeBadge.tsx` — ArchetypeBadge({ player }: ArchetypeBadgeProps) {
 - `GlobalHeader.tsx` — GlobalHeader() {
 - `OnboardingScreen.tsx` — OnboardingScreen({ onRegister }: Props) {
@@ -1049,16 +1196,19 @@ export function useSyncWeek() {
 - `radar/PersonalityRadar.tsx` — PersonalityRadar({ personality, size = 200 }: Props) {
 - `ScoutReportCard.tsx` — ScoutReportCard({ player }: ScoutReportCardProps) {
 - `SyncStatusIndicator.tsx` — SyncStatusIndicator({ status }: Props) {
-- `ui/Avatar.tsx` — Avatar({ appearance, role = 'PLAYER', size = 48 }: Props) {
+- `ui/Avatar.tsx` — Avatar({ appearance, role = 'PLAYER', size = 48, morale = 70
 - `ui/Badge.tsx` — Badge({ label, color = 'dim' }: Props) {
 - `ui/Button.tsx` — Button({ label, variant = 'teal', fullWidth = false, disable
 - `ui/Card.tsx` — Card({ children, variant = 'card', style, ...rest }: Props) 
+- `ui/DevelopmentChart.tsx` — DevelopmentChart({ log }: Props) {
+- `ui/FlagText.tsx` — FlagText({ nationality, size = 14 }: { nationality: string; 
 - `ui/PitchBackground.tsx` — PitchBackground() {
 - `ui/PixelAvatar.tsx` — PixelAvatar({ size = 48 }: Props) {
 - `ui/PixelDialog.tsx` — PixelDialog({
 - `ui/PixelText.tsx` — PixelText({
 - `ui/PixelTopTabBar.tsx` — PixelTopTabBar({ tabs, active, onChange }: Props) {
 - `ui/SwipeConfirm.tsx` — SwipeConfirm({
+- `WeeklyTickOverlay.tsx` — WeeklyTickOverlay() {
 
 ---
 
@@ -1159,6 +1309,7 @@ npm run proxy
 ## Recent Git Activity
 
 ```
+6e67f74 update docs
 dd2e47b Implement Phase 1 & 2: NPC interaction ledger + coach performance link
 9154a98 ui fixes
 ca0553d ui fixes
@@ -1173,7 +1324,6 @@ b13672d Centralise player asking price into getPlayerAskingPrice utility
 f1e0283 Add player development, archetype system, and inbox UX improvements
 55806f4 Add agent transfer offers, simplify advance UX, and wire transfer ledger
 23e7391 Fix financial display bugs, market card layout, and add incident inbox notifications
-fe6c466 added updated readme
 ```
 
 ---

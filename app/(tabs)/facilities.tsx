@@ -3,6 +3,7 @@ import { View, ScrollView, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
+import { repairFacilityCost } from '@/types/facility';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { FACILITY_DEFS, FacilityMeta, FacilityType } from '@/types/facility';
@@ -11,56 +12,77 @@ import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
+import { penceToPounds, formatPounds } from '@/utils/currency';
 
 // ─── Category definition ──────────────────────────────────────────────────────
 
-type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'TECHNICAL';
+type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'SCOUTING';
 
 const CATEGORIES: { id: FacilityCategory; label: string }[] = [
   { id: 'TRAINING',  label: 'TRAINING'  },
   { id: 'MEDICAL',   label: 'MEDICAL'   },
-  { id: 'TECHNICAL', label: 'TECHNICAL' },
+  { id: 'SCOUTING',  label: 'SCOUTING'  },
 ];
 
-/** Maps each facility type to its category */
 const FACILITY_CATEGORY: Record<FacilityType, FacilityCategory> = {
-  trainingPitch:  'TRAINING',
-  youthHostel:    'TRAINING',
-  medicalLab:     'MEDICAL',
-  analyticsSuite: 'TECHNICAL',
-  mediaCenter:    'TECHNICAL',
+  technicalZone:  'TRAINING',
+  strengthSuite:  'TRAINING',
+  tacticalRoom:   'SCOUTING',
+  physioClinic:   'MEDICAL',
+  hydroPool:      'MEDICAL',
+  scoutingCenter: 'SCOUTING',
 };
 
 const LEVEL_BENEFIT_LABELS: Record<FacilityType, (level: number) => string> = {
-  trainingPitch:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% XP BOOST`,
-  medicalLab:     (l) => l === 0 ? 'INACTIVE' : `-${(l * 8).toFixed(0)}% INJURY PROB`,
-  youthHostel:    (l) => l === 0 ? 'MAX 15 PLAYERS' : `MAX ${10 + l * 3} PLAYERS`,
-  analyticsSuite: (l) => l === 0 ? 'INACTIVE' : 'TRAITS & POT VISIBLE',
-  mediaCenter:    (l) => l === 0 ? 'INACTIVE' : `+${(l * 1.2).toFixed(1)} REP/WK`,
+  technicalZone:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% XP BOOST`,
+  strengthSuite:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 2).toFixed(0)}% POWER/STAM XP`,
+  tacticalRoom:   (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% COACH PERF`,
+  physioClinic:   (l) => l === 0 ? 'INACTIVE' : `-${(l * 8).toFixed(0)}% INJURY PROB · MAX ${10 + l * 3} PLAYERS`,
+  hydroPool:      (l) => l === 0 ? 'INACTIVE' : `-${(l * 10).toFixed(0)}% RECOVERY TIME`,
+  scoutingCenter: (l) => l === 0 ? 'INACTIVE' : `SCOUTING ACTIVE · +${(l * 0.8).toFixed(1)} REP/WK`,
 };
+
+/** Condition bar colour: ≥60 teal, ≥30 orange, <30 red */
+function conditionColor(pct: number): string {
+  if (pct >= 60) return WK.tealLight;
+  if (pct >= 30) return WK.orange;
+  return WK.red;
+}
 
 // ─── Facility card ────────────────────────────────────────────────────────────
 
-function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: number; balance: number }) {
-  const { upgradeLevel } = useFacilityStore();
+function FacilityCard({
+  def,
+  level,
+  condition,
+  balance,
+}: {
+  def: FacilityMeta;
+  level: number;
+  condition: number;
+  balance: number;
+}) {
+  const { upgradeLevel, repairFacility } = useFacilityStore();
   const { addBalance, academy } = useAcademyStore();
-  const [modalVisible, setModalVisible] = useState(false);
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
+  const [repairModalVisible, setRepairModalVisible] = useState(false);
 
-  const upgradeCost = facilityUpgradeCost(def.type, level);
-  const maintenance = calculateFacilityUpkeep(def.type, level);
+  const upgradeCost    = facilityUpgradeCost(def.type, level);
+  const maintenance    = calculateFacilityUpkeep(def.type, level);
   const nextMaintenance = calculateFacilityUpkeep(def.type, level + 1);
-  const canAfford = balance >= upgradeCost;
-  const atMax = level >= 10;
-  const levelPct = (level / 10) * 100;
+  const repairCost     = repairFacilityCost(def.type, level, condition);
 
-  function handleUpgrade() {
-    setModalVisible(true);
-  }
+  const canAffordUpgrade = balance >= upgradeCost;
+  const canAffordRepair  = balance >= repairCost;
+  const atMax      = level >= 10;
+  const levelPct   = (level / 10) * 100;
+  const effectiveLevel = (level * (condition / 100)).toFixed(1);
+  const needsRepair = level > 0 && condition < 100;
 
   function confirmUpgrade() {
-    setModalVisible(false);
+    setUpgradeModalVisible(false);
     upgradeLevel(def.type);
-    addBalance(-upgradeCost);
+    addBalance(-upgradeCost * 100); // pounds → pence
     useFinanceStore.getState().addTransaction({
       amount: -upgradeCost,
       category: 'facility_upgrade',
@@ -69,11 +91,21 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
     });
   }
 
+  function confirmRepair() {
+    setRepairModalVisible(false);
+    repairFacility(def.type);
+  }
+
+  const condColor = conditionColor(condition);
+  const cardBorder = level > 0
+    ? (condition < 30 ? WK.red : WK.tealLight)
+    : WK.border;
+
   return (
     <View style={{
       backgroundColor: WK.tealCard,
       borderWidth: 3,
-      borderColor: level > 0 ? WK.tealLight : WK.border,
+      borderColor: cardBorder,
       padding: 14,
       marginBottom: 10,
       ...pixelShadow,
@@ -91,19 +123,41 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
         </View>
       </View>
 
-      {/* Description */}
-      <PixelText size={6} dim style={{ marginBottom: 8 }}>{def.description}</PixelText>
+      <PixelText size={6} dim style={{ marginBottom: 10 }}>{def.description}</PixelText>
 
       {/* Level bar */}
+      <PixelText size={6} dim style={{ marginBottom: 4 }}>LEVEL</PixelText>
       <View style={{
         height: 6,
         backgroundColor: 'rgba(0,0,0,0.4)',
         borderWidth: 2,
         borderColor: WK.border,
-        marginBottom: 8,
+        marginBottom: 10,
       }}>
         <View style={{ height: '100%', width: `${levelPct}%`, backgroundColor: WK.tealLight }} />
       </View>
+
+      {/* Condition bar — only shown for built facilities */}
+      {level > 0 && (
+        <>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <PixelText size={6} dim>CONDITION</PixelText>
+            <PixelText size={6} color={condColor}>{Math.round(condition)}%</PixelText>
+          </View>
+          <View style={{
+            height: 6,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            borderWidth: 2,
+            borderColor: WK.border,
+            marginBottom: 6,
+          }}>
+            <View style={{ height: '100%', width: `${condition}%`, backgroundColor: condColor }} />
+          </View>
+          <PixelText size={6} color={WK.dim} style={{ marginBottom: 10 }}>
+            EFFECTIVE LV {effectiveLevel}
+          </PixelText>
+        </>
+      )}
 
       {/* Active benefit */}
       <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 4 }}>
@@ -118,31 +172,45 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
         </PixelText>
       )}
 
-      {/* Upgrade button */}
-      {atMax ? (
-        <View style={{ borderWidth: 2, borderColor: WK.dim, padding: 8, alignItems: 'center' }}>
-          <PixelText size={7} dim>MAX LEVEL</PixelText>
-        </View>
-      ) : (
-        <Button
-          label={`UPGRADE → LV${level + 1}  £${upgradeCost.toLocaleString()}`}
-          variant={canAfford ? 'yellow' : 'teal'}
-          fullWidth
-          onPress={handleUpgrade}
-          disabled={!canAfford}
-        />
-      )}
+      {/* Action buttons */}
+      <View style={{ gap: 8 }}>
+        {/* Repair button — shown when condition < 100 and level > 0 */}
+        {needsRepair && (
+          <Button
+            label={`REPAIR  £${repairCost.toLocaleString()}`}
+            variant={condition < 30 ? 'orange' : 'teal'}
+            fullWidth
+            onPress={() => setRepairModalVisible(true)}
+            disabled={!canAffordRepair}
+          />
+        )}
 
-      {/* Confirmation modal (web + native) */}
+        {/* Upgrade button */}
+        {atMax ? (
+          <View style={{ borderWidth: 2, borderColor: WK.dim, padding: 8, alignItems: 'center' }}>
+            <PixelText size={7} dim>MAX LEVEL</PixelText>
+          </View>
+        ) : (
+          <Button
+            label={`UPGRADE → LV${level + 1}  £${upgradeCost.toLocaleString()}`}
+            variant={canAffordUpgrade ? 'yellow' : 'teal'}
+            fullWidth
+            onPress={() => setUpgradeModalVisible(true)}
+            disabled={!canAffordUpgrade}
+          />
+        )}
+      </View>
+
+      {/* Upgrade confirmation modal */}
       <Modal
-        visible={modalVisible}
+        visible={upgradeModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => setUpgradeModalVisible(false)}
       >
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => setModalVisible(false)}
+          onPress={() => setUpgradeModalVisible(false)}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{
@@ -155,34 +223,69 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
               ...pixelShadow,
             }}>
               <PixelText size={9} upper style={{ marginBottom: 14 }}>Upgrade {def.label}</PixelText>
-              {!canAfford ? (
+              {!canAffordUpgrade ? (
                 <PixelText size={7} color={WK.orange} style={{ marginBottom: 20 }}>
                   INSUFFICIENT FUNDS{'\n'}NEED £{upgradeCost.toLocaleString()}
                 </PixelText>
               ) : (
                 <>
-                  <PixelText size={7} dim style={{ marginBottom: 6 }}>
-                    LEVEL {level} → {level + 1}
-                  </PixelText>
+                  <PixelText size={7} dim style={{ marginBottom: 6 }}>LEVEL {level} → {level + 1}</PixelText>
                   <PixelText size={7} color={WK.yellow} style={{ marginBottom: 20 }}>
                     COST: £{upgradeCost.toLocaleString()}
                   </PixelText>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Button
-                  label="CANCEL"
-                  variant="teal"
-                  onPress={() => setModalVisible(false)}
-                  style={{ flex: 1 }}
-                />
-                {canAfford && (
-                  <Button
-                    label="UPGRADE"
-                    variant="yellow"
-                    onPress={confirmUpgrade}
-                    style={{ flex: 1 }}
-                  />
+                <Button label="CANCEL" variant="teal" onPress={() => setUpgradeModalVisible(false)} style={{ flex: 1 }} />
+                {canAffordUpgrade && (
+                  <Button label="UPGRADE" variant="yellow" onPress={confirmUpgrade} style={{ flex: 1 }} />
+                )}
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Repair confirmation modal */}
+      <Modal
+        visible={repairModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRepairModalVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}
+          onPress={() => setRepairModalVisible(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 4,
+              borderColor: WK.orange,
+              padding: 20,
+              minWidth: 280,
+              maxWidth: 340,
+              ...pixelShadow,
+            }}>
+              <PixelText size={9} upper style={{ marginBottom: 14 }}>Repair {def.label}</PixelText>
+              {!canAffordRepair ? (
+                <PixelText size={7} color={WK.red} style={{ marginBottom: 20 }}>
+                  INSUFFICIENT FUNDS{'\n'}NEED £{repairCost.toLocaleString()}
+                </PixelText>
+              ) : (
+                <>
+                  <PixelText size={7} dim style={{ marginBottom: 6 }}>
+                    CONDITION {Math.round(condition)}% → 100%
+                  </PixelText>
+                  <PixelText size={7} color={WK.orange} style={{ marginBottom: 20 }}>
+                    COST: £{repairCost.toLocaleString()}
+                  </PixelText>
+                </>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Button label="CANCEL" variant="teal" onPress={() => setRepairModalVisible(false)} style={{ flex: 1 }} />
+                {canAffordRepair && (
+                  <Button label="REPAIR" variant="orange" onPress={confirmRepair} style={{ flex: 1 }} />
                 )}
               </View>
             </View>
@@ -196,13 +299,15 @@ function FacilityCard({ def, level, balance }: { def: FacilityMeta; level: numbe
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function FacilitiesScreen() {
-  const { levels } = useFacilityStore();
+  const { levels, conditions } = useFacilityStore();
   const academy = useAcademyStore((s) => s.academy);
   const [activeCategory, setActiveCategory] = useState<FacilityCategory>('TRAINING');
 
-  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
-    ? academy.balance
-    : academy.totalCareerEarnings;
+  const balance = penceToPounds(
+    typeof academy.balance === 'number' && !isNaN(academy.balance)
+      ? academy.balance
+      : academy.totalCareerEarnings * 100,
+  );
 
   const visibleDefs = FACILITY_DEFS.filter(
     (def) => FACILITY_CATEGORY[def.type] === activeCategory,
@@ -230,7 +335,7 @@ export default function FacilitiesScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Facilities</PixelText>
-        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
+        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: 16 }}>
@@ -239,6 +344,7 @@ export default function FacilitiesScreen() {
             key={def.type}
             def={def}
             level={levels[def.type]}
+            condition={conditions[def.type]}
             balance={balance}
           />
         ))}

@@ -1,7 +1,20 @@
-import { Position, PersonalityMatrix } from './player';
-import { CoachRole } from './coach';
+import { Position, PersonalityMatrix, PlayerAttributes } from './player';
+import { CoachRole, CoachSpecialisms } from './coach';
 
 // ─── Hired staff types (locally-generated) ────────────────────────────────────
+
+export interface ScoutingMission {
+  id: string;
+  scoutId: string;
+  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  targetNationality: string | null;
+  weeksTotal: number;
+  weeksElapsed: number;
+  gemsFound: number;
+  costPaid: number;   // pence, deducted upfront
+  startWeek: number;
+  status: 'active' | 'completed' | 'cancelled';
+}
 
 export interface Agent {
   id: string;
@@ -23,6 +36,7 @@ export interface Scout {
   assignedPlayerIds?: string[];
   morale?: number;
   relationships?: import('./player').Relationship[];
+  activeMission?: ScoutingMission;
 }
 
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
@@ -79,6 +93,16 @@ export interface MarketPlayer {
    * Null until the player is recruited and a local personality is generated.
    */
   personality: PersonalityMatrix | null;
+  /**
+   * Individual football attributes from the backend.
+   * Present when the backend serializes them (post MarketDataService fix).
+   * Undefined for legacy/offline-generated market players.
+   */
+  attributes?: PlayerAttributes;
+  /** Height in cm — from backend when available */
+  height?: number;
+  /** Weight in kg — from backend when available */
+  weight?: number;
   /** Assigned agent, or null if unrepresented */
   agent: Agent | null;
   scoutingStatus?: 'hidden' | 'scouting' | 'revealed';
@@ -100,6 +124,9 @@ export interface MarketCoach {
   influence: number;
   /** Weekly, in pence */
   salary: number;
+  /** Attribute training boosts — maps attribute name to strength (0–100) */
+  specialisms?: CoachSpecialisms;
+  morale?: number;
 }
 
 /** A scout available in the backend market. */
@@ -107,6 +134,8 @@ export interface MarketScout {
   id: string;
   firstName: string;
   lastName: string;
+  /** YYYY-MM-DD — for age display */
+  dateOfBirth?: string;
   nationality: string;
   scoutingRange: 'local' | 'national' | 'international';
   /** 0–100 */

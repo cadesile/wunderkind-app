@@ -8,6 +8,7 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { generateCoachProspects } from '@/engine/recruitment';
 import { Avatar } from '@/components/ui/Avatar';
 import { PixelText } from '@/components/ui/PixelText';
+import { FlagText } from '@/components/ui/FlagText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -28,11 +29,14 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} />
+        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={coach.age ?? 35} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
-          <PixelText size={7} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={coach.nationality} size={12} />
+            <PixelText size={7} dim>{coach.nationality}</PixelText>
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`INF ${coach.influence}`} color="yellow" />
@@ -70,11 +74,14 @@ function ProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} />
+        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
-          <PixelText size={7} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={coach.nationality} size={12} />
+            <PixelText size={7} dim>{coach.nationality}</PixelText>
+          </View>
         </View>
         <Badge label={`INF ${coach.influence}`} color="green" />
       </View>

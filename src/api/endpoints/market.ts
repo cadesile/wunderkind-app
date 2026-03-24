@@ -1,6 +1,7 @@
 import { apiRequest } from '@/api/client';
 import { MarketData } from '@/types/market';
 import type { CoachRole } from '@/types/coach';
+import type { ManagerProfileInput } from '@/types/api';
 
 // ─── Entity type sent to POST /api/market/assign ───────────────────────────────
 
@@ -31,6 +32,17 @@ interface RawPlayer {
   contractValue: number;
   recruitmentSource: string;
   agent: RawAgent | null;
+  // Individual attributes — added in MarketDataService serialization fix
+  pace?: number;
+  technical?: number;
+  vision?: number;
+  power?: number;
+  stamina?: number;
+  heart?: number;
+  /** Backend-computed average of 6 attributes — authoritative overall rating. */
+  overall?: number;
+  height?: number;
+  weight?: number;
 }
 
 interface RawCoach {
@@ -41,11 +53,15 @@ interface RawCoach {
   coachingAbility: number;    // 0–100
   scoutingRange: number;
   weeklySalary: number;
+  morale?: number;
+  /** e.g. {"pace": 85, "technical": 70} — attribute boost map */
+  specialisms?: Record<string, number>;
 }
 
 interface RawScout {
   id: string;
   name: string;               // full name as a single string
+  dateOfBirth?: string;       // YYYY-MM-DD — for age display
   nationality: string;
   experience: number;
   judgements: unknown[];
@@ -143,25 +159,36 @@ function investorAmount(size: 'SMALL' | 'MEDIUM' | 'LARGE'): number {
 /** Transform raw backend market data to app-facing MarketData. */
 function transformMarketData(raw: RawMarketData): MarketData {
   return {
-    players: raw.players.map((p) => ({
-      id: p.id,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      dateOfBirth: p.dateOfBirth,
-      nationality: p.nationality,
-      position: mapPosition(p.position),
-      potential: p.potential,
-      currentAbility: p.currentAbility,
-      personality: null,  // backend does not return personality — generated locally on recruit
-      agent: p.agent
-        ? {
-            id: p.agent.id,
-            name: p.agent.name,
-            commissionRate: parseFloat(p.agent.commissionRate),
-            nationality: p.agent.nationality,
-          }
-        : null,
-    })),
+    players: raw.players.map((p) => {
+      // Prefer the backend-computed overall over the legacy currentAbility field
+      const overallRating = p.overall ?? p.currentAbility;
+      const hasAttributes = p.pace != null && p.technical != null && p.vision != null
+        && p.power != null && p.stamina != null && p.heart != null;
+      return {
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        dateOfBirth: p.dateOfBirth,
+        nationality: p.nationality,
+        position: mapPosition(p.position),
+        potential: p.potential,
+        currentAbility: overallRating,
+        personality: null,  // backend does not return personality — generated locally on recruit
+        attributes: hasAttributes
+          ? { pace: p.pace!, technical: p.technical!, vision: p.vision!, power: p.power!, stamina: p.stamina!, heart: p.heart! }
+          : undefined,
+        height: p.height,
+        weight: p.weight,
+        agent: p.agent
+          ? {
+              id: p.agent.id,
+              name: p.agent.name,
+              commissionRate: parseFloat(p.agent.commissionRate),
+              nationality: p.agent.nationality,
+            }
+          : null,
+      };
+    }),
 
     coaches: raw.coaches.map((c) => ({
       id: c.id,
@@ -171,6 +198,8 @@ function transformMarketData(raw: RawMarketData): MarketData {
       role: mapCoachRole(c.role),
       influence: mapInfluence(c.coachingAbility),
       salary: c.weeklySalary,
+      morale: c.morale,
+      specialisms: c.specialisms as import('@/types/coach').CoachSpecialisms | undefined,
     })),
 
     scouts: raw.scouts.map((s) => {
@@ -180,6 +209,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
         id: s.id,
         firstName: nameParts[0] ?? s.name,
         lastName: nameParts.slice(1).join(' '),
+        dateOfBirth: s.dateOfBirth,
         nationality: s.nationality,
         scoutingRange: mapScoutingRange(s.experience),
         successRate,
@@ -227,8 +257,9 @@ export interface MarketAssignResponse {
 
 export const marketApi = {
   /** GET /api/market/data — full market snapshot, transforms to app types. */
-  async getMarketData(): Promise<MarketData> {
-    const raw = await apiRequest<RawMarketData>('/api/market/data');
+  async getMarketData(country?: string | null): Promise<MarketData> {
+    const url = country ? `/api/market/data?country=${encodeURIComponent(country)}` : '/api/market/data';
+    const raw = await apiRequest<RawMarketData>(url);
     return transformMarketData(raw);
   },
 
@@ -245,15 +276,32 @@ export const marketApi = {
   },
 
   /**
+   * POST /api/pool/ensure
+   * Guarantees at least `min` unassigned players of the given nationality exist
+   * in the pool. Idempotent — safe to call even if the pool is already full.
+   * Call before initializeAcademy to ensure Tier 1 always finds enough players.
+   */
+  async ensurePool(countryCode: string, min = 10): Promise<void> {
+    await apiRequest<unknown>('/api/pool/ensure', {
+      method: 'POST',
+      body: JSON.stringify({ countryCode, min }),
+    });
+  },
+
+  /**
    * POST /api/academy/initialize
    * Registers the academy server-side. The response is academy metadata only —
    * starting balance and sponsor/investor IDs are always derived locally from
    * market data (see useAuthFlow).
    */
-  initializeAcademy(academyName: string): Promise<AcademyInitServerResponse> {
+  initializeAcademy(academyName: string, country?: string | null, manager?: ManagerProfileInput): Promise<AcademyInitServerResponse> {
     return apiRequest<AcademyInitServerResponse>('/api/academy/initialize', {
       method: 'POST',
-      body: JSON.stringify({ academyName }),
+      body: JSON.stringify({
+        academyName,
+        ...(country ? { country } : {}),
+        ...(manager ? { manager } : {}),
+      }),
     });
   },
 };

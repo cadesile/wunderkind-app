@@ -150,7 +150,7 @@ export interface AgentOffer {
   playerName: string;
   /** Gross transfer fee in pence */
   estimatedFee: number;
-  /** Net proceeds after agent commission, in pence */
+  /** Post-agent proceeds in pence (before investor equity deduction, which is calculated at display/accept time) */
   netProceeds: number;
   destinationClub: string;
   week: number;

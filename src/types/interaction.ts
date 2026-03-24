@@ -35,7 +35,11 @@ export type NpcTrainingIncidentSubtype =
   | 'verbal_confrontation'
   | 'player_mentoring'
   | 'coach_player_friction'
-  | 'coach_player_breakthrough';
+  | 'coach_player_breakthrough'
+  | 'positive_bond'
+  | 'squad_banter'
+  | 'standing_up'
+  | 'cultural_exchange';
 
 export type SystemSubtype =
   | 'training_assignment_change'

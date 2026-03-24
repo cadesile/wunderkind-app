@@ -6,7 +6,7 @@ import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { simulationService } from './SimulationService';
 import { getRelationshipValue } from './RelationshipService';
 import { EventCategory } from '@/types/narrative';
-import { Clique, DressingRoomHealth, CliquePaletteColor } from '@/types/interaction';
+import { Clique, DressingRoomHealth, CliquePaletteColor, NpcTrainingIncidentSubtype } from '@/types/interaction';
 import { Player } from '@/types/player';
 import { uuidv7 } from '@/utils/uuidv7';
 
@@ -14,6 +14,24 @@ const BASE_INCIDENT_PROBABILITY = 0.08;
 const INCIDENT_COOLDOWN_WEEKS = 3;
 const MIN_CLIQUE_SIZE = 3;
 const CLIQUE_COLORS: CliquePaletteColor[] = ['coral', 'sky', 'lilac', 'amber'];
+
+// ─── Subtype derivation ────────────────────────────────────────────────────────
+
+function deriveSubtype(slug: string): NpcTrainingIncidentSubtype {
+  if (slug.includes('altercation') || slug.includes('confrontation') || slug.includes('ego-clash') || slug.includes('withdrawal') || slug.includes('professionalism')) {
+    return slug.includes('confrontation') ? 'verbal_confrontation' : 'training_altercation';
+  }
+  if (slug.includes('mentoring') || slug.includes('quiet-leader') || slug.includes('veteran')) {
+    return 'player_mentoring';
+  }
+  if (slug.includes('breakthrough') || slug.includes('rivalry') || slug.includes('high-five') || slug.includes('kickabout') || slug.includes('celebration')) {
+    return 'coach_player_breakthrough';
+  }
+  if (slug.includes('standing-up')) return 'standing_up';
+  if (slug.includes('cultural')) return 'cultural_exchange';
+  if (slug.includes('banter') || slug.includes('laughter') || slug.includes('atmosphere')) return 'squad_banter';
+  return 'positive_bond';
+}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -374,6 +392,8 @@ export function processSocialGraph(): void {
         isMajor,
       );
 
+      const subtype = deriveSubtype(template.slug);
+
       useInteractionStore.getState().logInteraction({
         week: weekNumber,
         actorType: 'player',
@@ -382,7 +402,7 @@ export function processSocialGraph(): void {
         targetId: subject.id,
         secondaryTargetId: subject.id,
         category: 'NPC_TRAINING_INCIDENT',
-        subtype: 'training_altercation',
+        subtype,
         relationshipDelta: 0,
         traitDeltas: {},
         moraleDelta: 0,

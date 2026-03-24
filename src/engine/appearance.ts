@@ -1,4 +1,4 @@
-import { Appearance, AppearanceRole, HairStyle, PersonalityMatrix } from '@/types/player';
+import { Appearance, AppearanceRole, FacialHair, HairStyle, PersonalityMatrix } from '@/types/player';
 
 // ─── Palettes ─────────────────────────────────────────────────────────────────
 
@@ -142,9 +142,12 @@ export function generateAppearance(
   let accessory: Appearance['accessory'] = null;
 
   if (role === 'COACH') {
-    // Older coaches are more likely to wear glasses; all coaches may carry a whistle
     if (age > 40 && rng.chance(0.38)) {
       accessory = 'glasses';
+    } else if (rng.chance(0.12)) {
+      accessory = 'beanie';
+    } else if (rng.chance(0.08)) {
+      accessory = 'sunglasses';
     } else if (rng.chance(0.22)) {
       accessory = 'whistle';
     }
@@ -161,6 +164,22 @@ export function generateAppearance(
   const kitTrim =
     role === 'PLAYER' ? rng.pick(PLAYER_TRIMS) : rng.pick(STAFF_TRIMS);
 
-  return { skinTone, hairStyle, hairColor, expression, accessory, kitTrim };
+  // ── Facial hair ────────────────────────────────────────────────────────────
+  let facialHair: FacialHair = 'none';
+  if (role !== 'PLAYER' && age >= 20) {
+    if (!rng.chance(0.40)) {
+      const pool: FacialHair[] = age > 45
+        ? ['stubble', 'stubble', 'beard', 'beard', 'moustache']
+        : ['stubble', 'stubble', 'moustache', 'goatee', 'beard'];
+      facialHair = rng.pick(pool);
+    }
+  }
+
+  return { skinTone, hairStyle, hairColor, expression, accessory, kitTrim, facialHair };
+}
+
+/** Fallback for existing Appearance data without facialHair field. */
+export function getAppearanceFacialHair(appearance: Appearance): FacialHair {
+  return appearance.facialHair ?? 'none';
 }
 

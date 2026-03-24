@@ -1,4 +1,4 @@
-import { Pressable, PressableProps, StyleSheet, ViewStyle, GestureResponderEvent } from 'react-native';
+import { View, Pressable, PressableProps, StyleSheet, StyleProp, ViewStyle, GestureResponderEvent } from 'react-native';
 import { PixelText } from './PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticPress } from '@/utils/haptics';
@@ -10,15 +10,44 @@ interface Props extends PressableProps {
 }
 
 const VARIANTS: Record<NonNullable<Props['variant']>, { bg: string; text: string }> = {
-  yellow: { bg: WK.yellow,    text: '#3a2000' },
-  green:  { bg: WK.green,     text: '#fff' },
-  orange: { bg: WK.orange,    text: '#fff' },
-  red:    { bg: WK.red,       text: '#fff' },
-  blue:   { bg: WK.blue,      text: '#fff' },
-  teal:   { bg: WK.tealPanel, text: WK.text },
+  yellow: { bg: WK.yellow,   text: WK.border },
+  green:  { bg: WK.green,    text: WK.text },
+  orange: { bg: WK.orange,   text: WK.text },
+  red:    { bg: WK.red,      text: WK.text },
+  blue:   { bg: WK.blue,     text: WK.text },
+  teal:   { bg: WK.tealCard, text: WK.text },
 };
 
-/** Pixel-art button — chunky border, elevation drop shadow */
+const pressedShadow: ViewStyle = {
+  elevation: 1,
+  shadowColor: '#000',
+  shadowOffset: { width: 1, height: 1 },
+  shadowOpacity: 0.45,
+  shadowRadius: 0,
+  transform: [{ translateX: 2 }, { translateY: 2 }],
+};
+
+const styles = StyleSheet.create({
+  pressable: {
+    alignSelf: 'flex-start',
+  },
+  fullWidth: {
+    alignSelf: 'stretch',
+  },
+  inner: {
+    borderWidth: 3,
+    borderColor: WK.border,
+    borderRadius: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+});
+
+/** Pixel-art button — visual styles live on inner View for reliable Android rendering */
 export function Button({ label, variant = 'teal', fullWidth = false, disabled, style, onPress, ...rest }: Props) {
   const { bg, text } = VARIANTS[variant];
 
@@ -31,27 +60,23 @@ export function Button({ label, variant = 'teal', fullWidth = false, disabled, s
     <Pressable
       disabled={disabled}
       onPress={disabled ? undefined : handlePress}
-      style={({ pressed }) => ({
-        backgroundColor: disabled ? WK.tealCard : bg,
-        borderWidth: 3,
-        borderColor: WK.border,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        alignItems: 'center' as const,
-        borderRadius: 0,
-        opacity: disabled ? 0.5 : 1,
-        transform: [{ translateX: pressed ? 2 : 0 }, { translateY: pressed ? 2 : 0 }],
-        ...(pressed
-          ? { elevation: 1, shadowOffset: { width: 1, height: 1 } }
-          : pixelShadow),
-        ...(fullWidth ? { alignSelf: 'stretch' as const } : {}),
-        ...(style ? (StyleSheet.flatten(style) as ViewStyle) : {}),
-      })}
+      style={[fullWidth ? styles.fullWidth : styles.pressable, style as StyleProp<ViewStyle>]}
       {...rest}
     >
-      <PixelText size={9} color={disabled ? WK.dim : text} upper>
-        {label}
-      </PixelText>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.inner,
+            { backgroundColor: bg },
+            pressed ? pressedShadow : pixelShadow,
+            disabled ? styles.disabled : null,
+          ]}
+        >
+          <PixelText size={9} color={text} upper>
+            {label}
+          </PixelText>
+        </View>
+      )}
     </Pressable>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, FlatList, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
 import { useInboxStore, InboxMessage, InboxMessageType } from '@/stores/inboxStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
@@ -13,23 +14,34 @@ import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { MarketPlayer } from '@/types/market';
 import { reactionHandler } from '@/engine/ReactionHandler';
 import { handleAcceptAgentOffer, handleRejectAgentOffer } from '@/utils/agentOfferHandlers';
+import { useInteractionStore } from '@/stores/interactionStore';
 import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
 import { PixelText } from '@/components/ui/PixelText';
+import { Avatar } from '@/components/ui/Avatar';
+import { FlagText } from '@/components/ui/FlagText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { formatCurrencyCompact, getPlayerAskingPrice } from '@/utils/currency';
-import { moraleEmoji } from '@/utils/morale';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap, hapticWarning, hapticError } from '@/utils/haptics';
+import { moraleLabel } from '@/utils/morale';
 
 // ─── Agent offer card (list item) ────────────────────────────────────────────
 
 function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer: (o: AgentOffer) => void }) {
-  const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
-  const weeksLeft = offer.expiresWeek - currentWeek;
+  const currentWeek   = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const investorId    = useAcademyStore((s) => s.academy.investorId);
+  const investor      = useMarketStore((s) => s.investors.find((inv) => inv.id === investorId));
+  const player        = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
+  const weeksLeft     = offer.expiresWeek - currentWeek;
+
+  const investorEquityPct = investor?.equityTaken ?? 0;
+  const investorCutPence  = investorEquityPct > 0
+    ? Math.round(offer.netProceeds * (investorEquityPct / 100))
+    : 0;
+  const trueNetPence = offer.netProceeds - investorCutPence;
 
   return (
     <Pressable onPress={() => { hapticTap(); onViewOffer(offer); }}>
@@ -58,9 +70,15 @@ function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer
             <PixelText size={6} dim>GROSS FEE</PixelText>
             <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
           </View>
+          {investorCutPence > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <PixelText size={6} dim>INVESTOR ({investorEquityPct}%)</PixelText>
+              <PixelText size={6} color={WK.red}>-{formatCurrencyCompact(investorCutPence)}</PixelText>
+            </View>
+          )}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <PixelText size={6} dim>NET PROCEEDS</PixelText>
-            <PixelText size={6} color={WK.green}>{formatCurrencyCompact(offer.netProceeds)}</PixelText>
+            <PixelText size={6} color={WK.green}>{formatCurrencyCompact(trueNetPence)}</PixelText>
           </View>
         </View>
 
@@ -78,10 +96,20 @@ function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer
 
 function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => void }) {
   const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const investorId  = useAcademyStore((s) => s.academy.investorId);
+  const investor    = useMarketStore((s) => s.investors.find((inv) => inv.id === investorId));
   const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
   const coaches = useCoachStore((s) => s.coaches);
   const headCoach = getHeadCoach(coaches);
   const weeksLeft = offer.expiresWeek - currentWeek;
+
+  // Fee breakdown — all in pence
+  const agentCutPence    = offer.estimatedFee - offer.netProceeds; // offer.netProceeds is post-agent
+  const investorEquityPct = investor?.equityTaken ?? 0;
+  const investorCutPence  = investorEquityPct > 0
+    ? Math.round(offer.netProceeds * (investorEquityPct / 100))
+    : 0;
+  const trueNetPence = offer.netProceeds - investorCutPence;
 
   // Coach opinion: compare offer fee against player's estimated market value
   const coachOpinion = player && headCoach
@@ -119,9 +147,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10 }}>
-      <Pressable onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 4 }}>
-        <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
-      </Pressable>
+      <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 4, alignSelf: 'flex-start' }} />
 
       {/* ── Player mini-profile ─────────────────────────────────────────── */}
       {player && (
@@ -142,9 +168,11 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
           </View>
 
           {age !== null && (
-            <PixelText size={6} dim style={{ marginBottom: 8 }}>
-              AGE {age} · {player.nationality}
-            </PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+              <PixelText size={6} dim>AGE {age} · </PixelText>
+              <FlagText nationality={player.nationality} size={10} />
+              <PixelText size={6} dim>{player.nationality}</PixelText>
+            </View>
           )}
 
           {/* OVR + ability bar */}
@@ -161,8 +189,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
 
           {/* Morale */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <PixelText size={14}>{moraleEmoji(player.morale ?? 70)}</PixelText>
-            <PixelText size={6} dim>MORALE {player.morale ?? 70}</PixelText>
+            <PixelText size={6} dim>{moraleLabel(player.morale ?? 70)}</PixelText>
           </View>
         </View>
       )}
@@ -193,14 +220,18 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
             <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-            <PixelText size={6} dim>AGENT COMMISSION</PixelText>
-            <PixelText size={6} color={WK.red}>
-              -{formatCurrencyCompact(offer.estimatedFee - offer.netProceeds)}
-            </PixelText>
+            <PixelText size={6} dim>AGENT ({offer.agentCommissionRate}%)</PixelText>
+            <PixelText size={6} color={WK.red}>-{formatCurrencyCompact(agentCutPence)}</PixelText>
           </View>
+          {investorCutPence > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>INVESTOR ({investorEquityPct}% EQUITY)</PixelText>
+              <PixelText size={6} color={WK.red}>-{formatCurrencyCompact(investorCutPence)}</PixelText>
+            </View>
+          )}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
             <PixelText size={6} color={WK.green}>NET PROCEEDS</PixelText>
-            <PixelText size={7} color={WK.green}>{formatCurrencyCompact(offer.netProceeds)}</PixelText>
+            <PixelText size={7} color={WK.green}>{formatCurrencyCompact(trueNetPence)}</PixelText>
           </View>
         </View>
 
@@ -226,7 +257,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
             <PixelText size={6} dim>EST. MARKET VALUE</PixelText>
-            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(coachOpinion.perceivedValue * 100)}</PixelText>
+            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(coachOpinion.perceivedValue)}</PixelText>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
             <PixelText size={6} dim>OFFER vs VALUATION</PixelText>
@@ -308,6 +339,33 @@ function isGemMeta(meta: unknown): meta is GemPlayerMeta {
   );
 }
 
+// ─── Multi-gem (mission) metadata ─────────────────────────────────────────────
+
+interface MultiGemMeta {
+  playerIds: string[];
+}
+
+function isMultiGemMeta(meta: unknown): meta is MultiGemMeta {
+  return Array.isArray((meta as MultiGemMeta)?.playerIds);
+}
+
+// ─── Mission summary metadata ─────────────────────────────────────────────────
+
+interface MissionSummaryMeta {
+  missionSummary: {
+    scoutName: string;
+    position: string;
+    targetNationality: string | null;
+    weeksTotal: number;
+    gemsFound: number;
+  };
+}
+
+function isMissionSummaryMeta(meta: unknown): meta is MissionSummaryMeta {
+  return typeof (meta as MissionSummaryMeta)?.missionSummary === 'object' &&
+    (meta as MissionSummaryMeta)?.missionSummary !== null;
+}
+
 // ─── Gem player card ───────────────────────────────────────────────────────────
 
 function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: string }) {
@@ -341,7 +399,8 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
     : null;
 
   const ovr = player.perceivedAbility ?? player.currentAbility;
-  const stars = '★'.repeat(player.potential ?? 0) + '☆'.repeat(5 - (player.potential ?? 0));
+  const potential = Math.min(5, Math.max(0, player.potential ?? 0));
+  const stars = '★'.repeat(potential) + '☆'.repeat(5 - potential);
   const askingPrice = getPlayerAskingPrice(player);
 
   function handleRecruit() {
@@ -378,9 +437,11 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
 
       {/* Age / nationality */}
       {(age !== null || player.nationality) && (
-        <PixelText size={6} dim style={{ marginBottom: 8 }}>
-          {[age !== null ? `AGE ${age}` : null, player.nationality].filter(Boolean).join(' · ')}
-        </PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+          {age !== null && <PixelText size={6} dim>AGE {age} · </PixelText>}
+          <FlagText nationality={player.nationality} size={10} />
+          <PixelText size={6} dim>{player.nationality}</PixelText>
+        </View>
       )}
 
       {/* Potential stars */}
@@ -489,6 +550,170 @@ function InboxMessageRow({
   );
 }
 
+// ─── Management panel (narrative messages with affected players) ───────────────
+
+function ManagementPanel({ playerIds }: { playerIds: string[] }) {
+  const router = useRouter();
+  const allPlayers = useSquadStore((s) => s.players);
+  const players = allPlayers.filter((p) => playerIds.includes(p.id));
+  const updatePlayer = useSquadStore((s) => s.updatePlayer);
+  const logInteraction = useInteractionStore((s) => s.logInteraction);
+  const allRecords = useInteractionStore((s) => s.records);
+  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const [feedback, setFeedback] = useState<Record<string, 'SUPPORTED' | 'DISCIPLINED'>>({});
+
+  function getCooldown(playerId: string) {
+    const last = allRecords
+      .filter((r) => r.actorId === 'amp' && r.targetId === playerId && (r.subtype === 'support' || r.subtype === 'punish'))
+      .sort((a, b) => b.week - a.week)[0];
+    if (!last) return { locked: false, availableWeek: weekNumber };
+    const availableWeek = last.week + 4;
+    return { locked: weekNumber < availableWeek, availableWeek };
+  }
+
+  if (players.length === 0) return null;
+
+  function handleSupport(p: typeof players[0]) {
+    const moraleDelta = 5;
+    updatePlayer(p.id, { morale: Math.min(100, (p.morale ?? 70) + moraleDelta) });
+    logInteraction({
+      week: weekNumber,
+      actorType: 'amp',
+      actorId: 'amp',
+      targetType: 'player',
+      targetId: p.id,
+      category: 'AMP_PLAYER',
+      subtype: 'support',
+      relationshipDelta: 0,
+      traitDeltas: {},
+      moraleDelta,
+      isVisibleToAmp: true,
+      visibilityReason: 'direct_action',
+      narrativeSummary: `You gave ${p.name} your support.`,
+    });
+    hapticTap();
+    setFeedback((prev) => ({ ...prev, [p.id]: 'SUPPORTED' }));
+    setTimeout(() => setFeedback((prev) => { const n = { ...prev }; delete n[p.id]; return n; }), 2000);
+  }
+
+  function handlePunish(p: typeof players[0]) {
+    const moraleDelta = -5;
+    updatePlayer(p.id, { morale: Math.max(0, (p.morale ?? 70) + moraleDelta) });
+    logInteraction({
+      week: weekNumber,
+      actorType: 'amp',
+      actorId: 'amp',
+      targetType: 'player',
+      targetId: p.id,
+      category: 'AMP_PLAYER',
+      subtype: 'punish',
+      relationshipDelta: 0,
+      traitDeltas: {},
+      moraleDelta,
+      isVisibleToAmp: true,
+      visibilityReason: 'direct_action',
+      narrativeSummary: `You disciplined ${p.name}.`,
+    });
+    hapticWarning();
+    setFeedback((prev) => ({ ...prev, [p.id]: 'DISCIPLINED' }));
+    setTimeout(() => setFeedback((prev) => { const n = { ...prev }; delete n[p.id]; return n; }), 2000);
+  }
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.border,
+      padding: 14,
+      marginTop: 10,
+      ...pixelShadow,
+    }}>
+      <PixelText size={8} upper style={{ marginBottom: 12 }}>Management</PixelText>
+      {players.map((p, idx) => {
+        const cooldown = getCooldown(p.id);
+        return (
+          <View key={p.id} style={idx < players.length - 1 ? { marginBottom: 16, paddingBottom: 16, borderBottomWidth: 2, borderBottomColor: WK.border } : {}}>
+            {/* Player row: avatar + name/morale */}
+            <Pressable
+              onPress={() => { hapticTap(); router.push(`/player/${p.id}`); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}
+            >
+              <Avatar appearance={p.appearance} role="PLAYER" size={56} morale={p.morale ?? 70} age={p.age} />
+              <View style={{ flex: 1 }}>
+                <PixelText size={8} upper color={WK.yellow} numberOfLines={1}>{p.name}</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <View style={{ borderWidth: 2, borderColor: WK.tealLight, paddingHorizontal: 5, paddingVertical: 2 }}>
+                    <PixelText size={6} color={WK.tealLight}>{p.position}</PixelText>
+                  </View>
+                  <PixelText size={6} color={
+                    (p.morale ?? 70) >= 60 ? WK.green : (p.morale ?? 70) >= 40 ? WK.yellow : WK.red
+                  }>
+                    {moraleLabel(p.morale ?? 70)}
+                  </PixelText>
+                </View>
+              </View>
+              <PixelText size={6} color={WK.yellow}>›</PixelText>
+            </Pressable>
+
+            {/* Feedback */}
+            {feedback[p.id] && (
+              <View style={{
+                marginBottom: 8,
+                paddingVertical: 4,
+                paddingHorizontal: 8,
+                borderWidth: 2,
+                borderColor: feedback[p.id] === 'SUPPORTED' ? WK.green : WK.red,
+                alignSelf: 'flex-start',
+              }}>
+                <PixelText size={6} color={feedback[p.id] === 'SUPPORTED' ? WK.green : WK.red}>
+                  ✓ {feedback[p.id]}
+                </PixelText>
+              </View>
+            )}
+
+            {/* Action buttons */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={cooldown.locked ? undefined : () => handleSupport(p)}
+                style={{
+                  flex: 1,
+                  backgroundColor: cooldown.locked ? WK.tealMid : WK.green,
+                  borderWidth: 2,
+                  borderColor: WK.border,
+                  padding: 10,
+                  alignItems: 'center',
+                  opacity: cooldown.locked ? 0.45 : 1,
+                }}
+              >
+                <PixelText size={7} color={cooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
+              </Pressable>
+              <Pressable
+                onPress={cooldown.locked ? undefined : () => handlePunish(p)}
+                style={{
+                  flex: 1,
+                  backgroundColor: cooldown.locked ? WK.tealMid : WK.red,
+                  borderWidth: 2,
+                  borderColor: WK.border,
+                  padding: 10,
+                  alignItems: 'center',
+                  opacity: cooldown.locked ? 0.45 : 1,
+                }}
+              >
+                <PixelText size={7} color={cooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
+              </Pressable>
+            </View>
+            {cooldown.locked && (
+              <PixelText size={6} dim style={{ marginTop: 6, textAlign: 'center' }}>
+                AVAILABLE WK {cooldown.availableWeek}
+              </PixelText>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Narrative message row ─────────────────────────────────────────────────────
 
 function NarrativeMessageRow({
@@ -560,17 +785,24 @@ function InboxMessageDetail({
   const typeConf = TYPE_CONFIG[message.type] ?? TYPE_CONFIG.system;
   const canRespond = message.requiresResponse && !message.response;
   const investorMeta = isInvestorMeta(message.metadata) ? message.metadata : null;
-  const gemMeta = !investorMeta && isGemMeta(message.metadata) ? message.metadata : null;
+  const multiGemMeta = !investorMeta && isMultiGemMeta(message.metadata) && Array.isArray(message.metadata?.playerIds) && (message.metadata as MultiGemMeta).playerIds.length > 0
+    ? (message.metadata as MultiGemMeta)
+    : null;
+  const gemMeta = !investorMeta && !multiGemMeta && isGemMeta(message.metadata) ? message.metadata : null;
+  const missionSummaryMeta = isMissionSummaryMeta(message.metadata) ? message.metadata : null;
+  const behaviouralPlayerIds: string[] = !multiGemMeta && Array.isArray(message.metadata?.playerIds)
+    ? (message.metadata!.playerIds as string[])
+    : [];
   const sponsorMeta = message.type === 'sponsor' && message.metadata ? message.metadata as {
     sponsorId: string; sponsorName: string; weeklyPayment: number; contractWeeks: number; companySize: string;
   } : null;
 
   function handleAccept() {
     if (message.type === 'investor' && message.entityId && investorMeta) {
-      addBalance(investorMeta.investmentAmount);
+      addBalance(investorMeta.investmentAmount); // investmentAmount is pence
       setInvestorId(message.entityId);
       useFinanceStore.getState().addTransaction({
-        amount: investorMeta.investmentAmount,
+        amount: Math.round(investorMeta.investmentAmount / 100), // pence → whole pounds for ledger
         category: 'investment',
         description: `${investorMeta.investorName} — ${investorMeta.equityPct}% equity deal`,
         weekNumber: message.week,
@@ -584,9 +816,7 @@ function InboxMessageDetail({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
-      <Pressable onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12 }}>
-        <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
-      </Pressable>
+      <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12, alignSelf: 'flex-start' }} />
 
       <View style={{
         backgroundColor: WK.tealCard,
@@ -619,7 +849,7 @@ function InboxMessageDetail({
         {message.type === 'investor' && investorMeta && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
             <PixelText size={7} color={WK.tealLight} style={{ marginBottom: 8 }}>OFFER DETAILS</PixelText>
-            <OfferRow label="INVESTMENT" value={`£${investorMeta.investmentAmount.toLocaleString()}`} />
+            <OfferRow label="INVESTMENT" value={formatCurrencyCompact(investorMeta.investmentAmount)} />
             <OfferRow label="EQUITY STAKE" value={`${investorMeta.equityPct}%`} />
             <OfferRow label="INVESTOR SIZE" value={String(investorMeta.investorSize)} />
             <View style={{ marginTop: 8 }}>
@@ -642,8 +872,53 @@ function InboxMessageDetail({
         )}
       </View>
 
-      {gemMeta && (
+      {multiGemMeta && multiGemMeta.playerIds.map((pid) => (
+        <GemPlayerCard key={pid} playerId={pid} messageId={message.id} />
+      ))}
+
+      {!multiGemMeta && gemMeta && (
         <GemPlayerCard playerId={gemMeta.playerId} messageId={message.id} />
+      )}
+
+      {missionSummaryMeta && (
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.yellow,
+          padding: 14,
+          marginTop: 10,
+          ...pixelShadow,
+        }}>
+          <PixelText size={8} upper style={{ marginBottom: 12 }}>Mission Complete</PixelText>
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>SCOUT</PixelText>
+              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.scoutName}</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>TARGET</PixelText>
+              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.position}</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>REGION</PixelText>
+              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.targetNationality ?? 'Domestic'}</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>DURATION</PixelText>
+              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.weeksTotal} WEEKS</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+              <PixelText size={6} dim>GEMS FOUND</PixelText>
+              <PixelText size={6} color={missionSummaryMeta.missionSummary.gemsFound > 0 ? WK.green : WK.dim}>
+                {missionSummaryMeta.missionSummary.gemsFound}
+              </PixelText>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {behaviouralPlayerIds.length > 0 && (
+        <ManagementPanel playerIds={behaviouralPlayerIds} />
       )}
 
       {canRespond && (
@@ -678,9 +953,7 @@ function NarrativeMessageDetail({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
-      <Pressable onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12 }}>
-        <PixelText size={8} color={WK.tealLight}>← BACK</PixelText>
-      </Pressable>
+      <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12, alignSelf: 'flex-start' }} />
 
       <View style={{
         backgroundColor: WK.tealCard,
@@ -713,9 +986,9 @@ function NarrativeMessageDetail({
                   <PixelText size={6} dim>{impact.label}</PixelText>
                   {isMorale ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <PixelText size={14}>{moraleEmoji(impact.from)}</PixelText>
-                      <PixelText size={6} dim>→</PixelText>
-                      <PixelText size={14}>{moraleEmoji(impact.to)}</PixelText>
+                      <PixelText size={6} color={WK.dim}>{impact.from}</PixelText>
+                      <PixelText size={6} dim> → </PixelText>
+                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>{impact.to}</PixelText>
                       <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>
                         ({impact.delta >= 0 ? '+' : ''}{impact.delta})
                       </PixelText>
@@ -746,6 +1019,10 @@ function NarrativeMessageDetail({
         )}
       </View>
 
+      {message.affectedEntities.length > 0 && (
+        <ManagementPanel playerIds={message.affectedEntities} />
+      )}
+
       {isPending && message.choices && (
         <View style={{ marginTop: 12, gap: 8 }}>
           {message.choices.map((choice, i) => (
@@ -767,12 +1044,12 @@ function NarrativeMessageDetail({
 
 export default function InboxScreen() {
   const inboxMessages = useInboxStore((s) => s.messages);
-  const inboxUnread = useInboxStore((s) => s.unreadCount());
+  const inboxUnread = useInboxStore((s) => s.messages.filter((m) => !m.isRead).length);
   const { markAllRead: inboxMarkAllRead, clearDeletable: inboxClearDeletable, deleteMessage: inboxDelete } = useInboxStore();
   const agentOffers = useInboxStore((s) => s.agentOffers);
   const pendingOffers = agentOffers.filter((o) => o.status === 'pending');
   const narrativeMessages = useNarrativeStore((s) => s.messages);
-  const narrativeUnread = useNarrativeStore((s) => s.unreadCount());
+  const narrativeUnread = useNarrativeStore((s) => s.messages.filter((m) => !m.readAt).length);
   const { markAllRead: narrativeMarkAllRead, clearDeletable: narrativeClearDeletable, deleteMessage: narrativeDelete } = useNarrativeStore();
 
   const [selectedInbox, setSelectedInbox] = useState<InboxMessage | null>(null);

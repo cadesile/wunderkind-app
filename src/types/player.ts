@@ -42,12 +42,14 @@ export type PlayerStatus =
 export type HairStyle = 'buzz' | 'shaggy' | 'afro' | 'crop' | 'bald';
 
 /** Role-specific overlay accessory. null = no accessory. */
-export type AppearanceAccessory = 'glasses' | 'whistle' | 'headset' | null;
+export type AppearanceAccessory = 'glasses' | 'sunglasses' | 'whistle' | 'headset' | 'beanie' | null;
 
 /** 0=neutral, 1=determined, 2=stern — mapped from personality traits when available */
 export type AppearanceExpression = 0 | 1 | 2;
 
 export type AppearanceRole = 'PLAYER' | 'COACH' | 'SCOUT' | 'AGENT';
+
+export type FacialHair = 'none' | 'stubble' | 'moustache' | 'goatee' | 'beard';
 
 export interface Appearance {
   /** Hex skin tone — one of 5 predefined shades (light → dark) */
@@ -56,12 +58,14 @@ export interface Appearance {
   hairStyle: HairStyle;
   /** Hex hair color — from predefined palette; ignored when hairStyle==='bald' */
   hairColor: string;
-  /** Eye/brow/mouth expression variant */
+  /** Eye/brow/mouth expression variant — retained for backward compat, no longer drives rendering */
   expression: AppearanceExpression;
   /** Role-specific overlay accessory, or null */
   accessory: AppearanceAccessory;
   /** Kit trim / accent color — vibrant for PLAYER, muted for staff */
   kitTrim: string;
+  /** Facial hair style — always 'none' for PLAYER; optional for backward compat with persisted data */
+  facialHair?: FacialHair;
 }
 
 // ─── Player Attributes ────────────────────────────────────────────────────────
@@ -77,6 +81,12 @@ export interface PlayerAttributes {
 }
 
 export type AttributeName = keyof PlayerAttributes;
+
+export interface DevelopmentSnapshot {
+  weekNumber: number;
+  overallRating: number;
+  attributes: PlayerAttributes;
+}
 
 // ─── Player ───────────────────────────────────────────────────────────────────
 
@@ -127,4 +137,13 @@ export interface Player {
   };
   /** Post-signing accuracy comparison between scout report and true stats */
   scoutingReport?: ScoutingReport;
+  /** Active injury — cleared automatically when weeksRemaining reaches 0 */
+  injury?: {
+    severity: 'minor' | 'moderate' | 'serious';
+    weeksRemaining: number;
+    /** Game week when the injury occurred */
+    injuredWeek: number;
+  };
+  /** Monthly (every-4-weeks) development snapshots — populated by GameLoop */
+  developmentLog?: DevelopmentSnapshot[];
 }

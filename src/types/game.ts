@@ -1,5 +1,11 @@
 import { PersonalityMatrix } from './player';
 
+export interface AltercationBlock {
+  playerAId: string;
+  playerBId: string;
+  severity: 'serious';
+}
+
 export interface WeeklyTick {
   week: number;
   processedAt: string; // ISO timestamp
@@ -9,6 +15,7 @@ export interface WeeklyTick {
   weeklyXP: number;
   reputationDelta: number;
   injuredPlayerIds: string[];
+  unresolvedAltercations?: AltercationBlock[];
 }
 
 export interface FinancialRecord {
@@ -32,4 +39,5 @@ export interface BehavioralIncident {
   description: string;
   traitAffected: string;
   delta: number;
+  severity?: 'minor' | 'serious';
 }

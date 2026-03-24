@@ -42,6 +42,18 @@ export const formatCurrencyCompact = (pence: number): string => {
   return formatCurrencyWhole(pence);
 };
 
+/**
+ * Format whole pounds (already converted from pence) with £ prefix.
+ * Handles negative values by prepending a minus sign.
+ * @example formatPounds(5000) → "£5,000"
+ * @example formatPounds(-200) → "-£200"
+ */
+export const formatPounds = (pounds: number, symbol: string = '£'): string => {
+  const abs = Math.abs(pounds);
+  const formatted = `${symbol}${abs.toLocaleString('en-GB')}`;
+  return pounds < 0 ? `-${formatted}` : formatted;
+};
+
 /** Returns true when a balance value represents debt (negative). */
 export const isDebt = (balance: number): boolean => balance < 0;
 

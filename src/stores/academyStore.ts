@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Academy, ReputationTier, ManagerPersonality } from '@/types/academy';
+import { Academy, ReputationTier, ManagerPersonality, ManagerProfile } from '@/types/academy';
 import { zustandStorage } from '@/utils/storage';
 import type { AcademyStatusResponse, SyncAcceptedResponse } from '@/types/api';
-import { penceToPounds } from '@/utils/currency';
 
 function computeTier(reputation: number): ReputationTier {
   if (reputation >= 75) return 'Elite';
@@ -24,6 +23,7 @@ interface AcademyState {
   setCreatedAt: (date: string) => void;
   setSponsorIds: (ids: string[]) => void;
   setInvestorId: (id: string | null) => void;
+  setCountry: (country: Academy['country']) => void;
   incrementWeek: () => void;
   /** 409 conflict resolution: hard-reset weekNumber to the server's authoritative value */
   rollbackWeek: (weekNumber: number) => void;
@@ -38,8 +38,12 @@ interface AcademyState {
    * Balance is optional (older backend versions omit it).
    */
   updateFromSyncResponse: (data: SyncAcceptedResponse['academy']) => void;
+  managerProfile: ManagerProfile | null;
+  setManagerProfile: (profile: ManagerProfile) => void;
   setManagerPersonality: (personality: ManagerPersonality) => void;
   updateManagerPersonality: (shifts: Partial<Pick<ManagerPersonality, 'temperament' | 'discipline' | 'ambition'>>) => void;
+  /** Record that a rep-positive event occurred this week (signing, upgrade, breakthrough, transfer). */
+  markRepActivity: () => void;
 }
 
 const DEFAULT_ACADEMY: Academy = {
@@ -57,6 +61,8 @@ const DEFAULT_ACADEMY: Academy = {
   createdAt: '',
   sponsorIds: [],
   investorId: null,
+  country: null,
+  lastRepActivityWeek: 1,
 };
 
 export const useAcademyStore = create<AcademyState>()(
@@ -64,6 +70,7 @@ export const useAcademyStore = create<AcademyState>()(
     (set) => ({
       academy: DEFAULT_ACADEMY,
       managerPersonality: null,
+      managerProfile: null,
       setName: (name) =>
         set((state) => ({ academy: { ...state.academy, name } })),
       setReputation: (delta) =>
@@ -99,6 +106,8 @@ export const useAcademyStore = create<AcademyState>()(
         set((state) => ({ academy: { ...state.academy, sponsorIds: ids } })),
       setInvestorId: (id) =>
         set((state) => ({ academy: { ...state.academy, investorId: id } })),
+      setCountry: (country) =>
+        set((state) => ({ academy: { ...state.academy, country } })),
       incrementWeek: () =>
         set((state) => ({
           academy: {
@@ -116,7 +125,8 @@ export const useAcademyStore = create<AcademyState>()(
             ...state.academy,
             reputation: data.reputation,
             reputationTier: computeTier(data.reputation),
-            totalCareerEarnings: data.totalCareerEarnings,
+            // Take max — frontend accumulates earnings locally; backend may lag or return 0
+            totalCareerEarnings: Math.max(state.academy.totalCareerEarnings, data.totalCareerEarnings),
             hallOfFamePoints: data.hallOfFamePoints,
           },
         })),
@@ -127,10 +137,10 @@ export const useAcademyStore = create<AcademyState>()(
             reputation: data.reputation,
             reputationTier: computeTier(data.reputation),
             weekNumber: data.weekNumber,
-            totalCareerEarnings: data.totalCareerEarnings,
+            totalCareerEarnings: Math.max(state.academy.totalCareerEarnings, data.totalCareerEarnings),
             hallOfFamePoints: data.hallOfFamePoints,
-            // API returns balance in pence — convert to whole pounds for local store
-            balance: penceToPounds(data.balance),
+            // API returns balance in pence — store directly in pence
+            balance: data.balance,
           },
         })),
       updateFromSyncResponse: (data) =>
@@ -139,14 +149,17 @@ export const useAcademyStore = create<AcademyState>()(
             ...state.academy,
             reputation: data.reputation,
             reputationTier: computeTier(data.reputation),
-            totalCareerEarnings: data.totalCareerEarnings,
+            totalCareerEarnings: Math.max(state.academy.totalCareerEarnings, data.totalCareerEarnings),
             hallOfFamePoints: data.hallOfFamePoints,
-            // balance is optional — only update if the server returned it (pence → pounds)
+            // balance is optional — only update if the server returned it; stored in pence
             ...(data.balance !== undefined
-              ? { balance: penceToPounds(data.balance) }
+              ? { balance: data.balance }
               : {}),
           },
         })),
+      setManagerProfile: (profile) =>
+        set({ managerProfile: profile }),
+
       setManagerPersonality: (personality) =>
         set({ managerPersonality: personality }),
 
@@ -169,6 +182,13 @@ export const useAcademyStore = create<AcademyState>()(
             },
           };
         }),
+      markRepActivity: () =>
+        set((state) => ({
+          academy: {
+            ...state.academy,
+            lastRepActivityWeek: state.academy.weekNumber,
+          },
+        })),
     }),
     { name: 'academy-store', storage: zustandStorage }
   )

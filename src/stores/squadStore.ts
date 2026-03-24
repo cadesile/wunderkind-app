@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Player, PersonalityMatrix, PlayerAttributes, Position, TraitName } from '@/types/player';
+import { Player, PersonalityMatrix, PlayerAttributes, AttributeName, Position, TraitName, DevelopmentSnapshot } from '@/types/player';
 import { generatePlayer } from '@/engine/personality';
 import { zustandStorage } from '@/utils/storage';
 import { getGameDate } from '@/utils/gameDate';
@@ -12,6 +12,8 @@ const STARTER_POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'MID', 'FWD'];
 export interface PlayerDevelopmentUpdate {
   attributes: PlayerAttributes;
   overallRating: number;
+  /** Present when a breakthrough spike fired this tick for this player. */
+  spike?: { attribute: AttributeName; gain: number };
 }
 
 interface SquadState {
@@ -42,6 +44,20 @@ interface SquadState {
     playerId: string,
     focus: Player['developmentFocus'] | null,
   ) => void;
+  /** Set or update the injury status on a player. */
+  setPlayerInjury: (playerId: string, injury: NonNullable<Player['injury']>) => void;
+  /** Clear injury from a player (fully recovered). */
+  clearPlayerInjury: (playerId: string) => void;
+  /**
+   * Decrement weeksRemaining on all injured players by 1.
+   * Players reaching 0 have their injury cleared automatically.
+   */
+  tickInjuries: () => void;
+  /**
+   * Records a DevelopmentSnapshot for every active player that has attributes.
+   * Called by GameLoop every 4 weeks.
+   */
+  recordDevelopmentSnapshots: (weekNumber: number) => void;
   /**
    * Release a player back to the market pool. Removes from local squad immediately
    * (fat-client model) and fires a best-effort backend call to set academy = null.
@@ -126,6 +142,34 @@ export const useSquadStore = create<SquadState>()(
           ),
         })),
 
+      setPlayerInjury: (playerId, injury) =>
+        set((state) => ({
+          players: state.players.map((p) =>
+            p.id === playerId ? { ...p, injury } : p,
+          ),
+        })),
+
+      clearPlayerInjury: (playerId) =>
+        set((state) => ({
+          players: state.players.map((p) => {
+            if (p.id !== playerId) return p;
+            const { injury: _, ...rest } = p;
+            return rest as Player;
+          }),
+        })),
+
+      tickInjuries: () =>
+        set((state) => ({
+          players: state.players.map((p) => {
+            if (!p.injury) return p;
+            if (p.injury.weeksRemaining <= 1) {
+              const { injury: _, ...rest } = p;
+              return rest as Player;
+            }
+            return { ...p, injury: { ...p.injury, weeksRemaining: p.injury.weeksRemaining - 1 } };
+          }),
+        })),
+
       setDevelopmentFocus: (playerId, focus) =>
         set((state) => ({
           players: state.players.map((p) =>
@@ -142,6 +186,19 @@ export const useSquadStore = create<SquadState>()(
               ? { ...p, morale: Math.max(0, Math.min(100, (p.morale ?? 70) + delta)) }
               : p,
           ),
+        })),
+
+      recordDevelopmentSnapshots: (weekNumber) =>
+        set((state) => ({
+          players: state.players.map((p) => {
+            if (!p.isActive || !p.attributes) return p;
+            const snapshot: DevelopmentSnapshot = {
+              weekNumber,
+              overallRating: p.overallRating,
+              attributes: { ...p.attributes },
+            };
+            return { ...p, developmentLog: [...(p.developmentLog ?? []), snapshot] };
+          }),
         })),
 
       releasePlayer: async (playerId) => {

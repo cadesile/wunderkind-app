@@ -7,11 +7,12 @@ import { Sponsor } from '@/types/market';
 import { calculateFacilityUpkeep } from '@/utils/facilityUpkeep';
 
 const FACILITY_TYPES = [
-  'trainingPitch',
-  'medicalLab',
-  'youthHostel',
-  'analyticsSuite',
-  'mediaCenter',
+  'technicalZone',
+  'strengthSuite',
+  'tacticalRoom',
+  'physioClinic',
+  'hydroPool',
+  'scoutingCenter',
 ] as const;
 
 /**

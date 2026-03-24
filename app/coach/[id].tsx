@@ -4,12 +4,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText } from '@/components/ui/PixelText';
+import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useCoachStore } from '@/stores/coachStore';
 import { useSquadStore } from '@/stores/squadStore';
-import { moraleEmoji } from '@/utils/morale';
 import { Relationship } from '@/types/player';
+import { moraleLabel } from '@/utils/morale';
 
 function moraleColor(morale: number): string {
   if (morale >= 60) return WK.green;
@@ -82,11 +83,14 @@ export default function CoachDetailScreen() {
 
         {/* Bio card */}
         <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, flexDirection: 'row', gap: 14, ...pixelShadow }}>
-          {coach.appearance && <Avatar appearance={coach.appearance} role="COACH" size={64} />}
+          {coach.appearance && <Avatar appearance={coach.appearance} role="COACH" size={64} morale={morale} age={coach.age ?? 35} />}
           <View style={{ flex: 1 }}>
             <PixelText size={10} upper numberOfLines={2}>{coach.name}</PixelText>
             <PixelText size={7} color={WK.tealLight} style={{ marginTop: 4 }}>{coach.role}</PixelText>
-            <PixelText size={6} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <FlagText nationality={coach.nationality} size={12} />
+              <PixelText size={6} dim>{coach.nationality}</PixelText>
+            </View>
             <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
               <View>
                 <PixelText size={6} dim>INFLUENCE</PixelText>
@@ -104,10 +108,7 @@ export default function CoachDetailScreen() {
         <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <PixelText size={8} upper>Morale</PixelText>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <PixelText size={14}>{moraleEmoji(morale)}</PixelText>
-              <PixelText size={8} color={moraleColor(morale)}>{morale}/100</PixelText>
-            </View>
+            <PixelText size={8} color={moraleColor(morale)}>{moraleLabel(morale)}</PixelText>
           </View>
           <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
             <View style={{ height: '100%', width: `${morale}%`, backgroundColor: moraleColor(morale) }} />

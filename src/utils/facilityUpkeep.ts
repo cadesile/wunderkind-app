@@ -2,17 +2,18 @@ import type { FacilityType, FacilityLevels } from '../types/facility';
 
 /** Base weekly upkeep costs per facility type (in pence). Level 0 = free. */
 const BASE_UPKEEP_COSTS: Record<FacilityType, number> = {
-  trainingPitch:  500, // 500p = £5/week base
-  medicalLab:     300, // 300p = £3/week base
-  youthHostel:    150, // 150p = £1.50/week base
-  analyticsSuite: 200, // 200p = £2/week base
-  mediaCenter:    200, // 200p = £2/week base
+  technicalZone:  500, // £5/wk base
+  strengthSuite:  400, // £4/wk base
+  tacticalRoom:   350, // £3.50/wk base
+  physioClinic:   600, // £6/wk base
+  hydroPool:      700, // £7/wk base
+  scoutingCenter: 300, // £3/wk base
 };
 
 /**
  * Calculate weekly upkeep cost for a facility.
  * Formula: baseCost × (1.5 ^ level). Level 0 = free.
- * @returns Weekly upkeep in pence (whole pounds × 100).
+ * @returns Weekly upkeep in pence.
  */
 export function calculateFacilityUpkeep(type: FacilityType, level: number): number {
   if (level === 0) return 0;

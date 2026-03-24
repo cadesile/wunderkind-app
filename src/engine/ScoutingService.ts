@@ -2,9 +2,9 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useAcademyStore } from '@/stores/academyStore';
-import { generateProspect } from '@/engine/recruitment';
-import { getGameDate } from '@/utils/gameDate';
-import { uuidv7 } from '@/utils/uuidv7';
+import { useProspectPoolStore } from '@/stores/prospectPoolStore';
+import { MarketPlayer } from '@/types/market';
+import { resolveNationalityForMission } from '@/utils/scoutingRegions';
 
 const MAX_ASSIGNMENTS = 5;
 
@@ -100,57 +100,125 @@ export function processScoutingTasks(): void {
   });
 }
 
-/** Check for random "gem" discoveries — called once per weekly tick */
-export function checkGemDiscovery(): void {
-  const { scouts } = useScoutStore.getState();
-  const { addMarketPlayer } = useMarketStore.getState();
+/** Process active scouting missions — called once per weekly tick */
+export function processMissions(): void {
+  const scouts = useScoutStore.getState().scouts;
+  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
   const { addMessage } = useInboxStore.getState();
-  const { academy } = useAcademyStore.getState();
+  const { addMarketPlayer } = useMarketStore.getState();
+  const { tickMission, completeMission, incrementGemsFound } = useScoutStore.getState();
 
-  const weekNumber = academy.weekNumber ?? 1;
+  for (const scout of scouts) {
+    const mission = scout.activeMission;
+    if (!mission || mission.status !== 'active') continue;
 
-  scouts.forEach((scout) => {
-    if ((scout.morale ?? 70) < 40) return;
+    // 1. Tick the mission
+    tickMission(scout.id);
 
-    const chance = (scout.successRate ?? 50) / 1000; // 0.04–0.09
-    if (Math.random() < chance) {
-      const gameDate = getGameDate(weekNumber);
-      const gem = generateProspect(gameDate);
-      // Override potential to 4-5 stars and boost ability
-      const gemMarketPlayer = {
-        id: uuidv7(),
-        firstName: gem.name.split(' ')[0],
-        lastName: gem.name.split(' ').slice(1).join(' '),
-        dateOfBirth: gem.dateOfBirth,
-        nationality: gem.nationality,
-        position: gem.position,
-        potential: 4 + Math.floor(Math.random() * 2), // 4-5 stars
-        currentAbility: clamp(gem.overallRating + 20 + Math.floor(Math.random() * 15), 0, 99),
-        personality: null as null,
-        agent: null as null,
-        scoutingStatus: 'revealed' as const,
-        scoutingProgress: 2,
-        marketValue: 0,
-        currentOffer: 0,
-        perceivedAbility: 0,
-      };
-      gemMarketPlayer.marketValue = gemMarketPlayer.currentAbility * 1000;
-      gemMarketPlayer.currentOffer = gemMarketPlayer.marketValue;
-      gemMarketPlayer.perceivedAbility = gemMarketPlayer.currentAbility;
+    // 2. Roll for player count
+    const roll = Math.random();
+    const count =
+      roll >= 0.94 ? 4 :
+      roll >= 0.85 ? 3 :
+      roll >= 0.75 ? 2 :
+      roll >= 0.25 ? 1 : 0;
 
-      addMarketPlayer(gemMarketPlayer);
+    // 3. Pull from the backend prospect pool — never generate locally.
+    //    Filter by position (required); prefer nationality match from the mission target.
+    //    If the pool has fewer matching prospects than the rolled count, use what's available.
+    const foundPlayers: MarketPlayer[] = [];
+    if (count > 0) {
+      const { prospects, consumeProspect } = useProspectPoolStore.getState();
+      const nationality = resolveNationalityForMission(mission.targetNationality);
 
+      // Split pool into nationality-matched and position-only candidates
+      const natMatch = prospects.filter(
+        (p) => p.position === mission.position && p.nationality === nationality,
+      );
+      const posOnly = prospects.filter(
+        (p) => p.position === mission.position && p.nationality !== nationality,
+      );
+      // Prefer nationality match; fall back to any matching position
+      const candidates = [...natMatch, ...posOnly];
+      const actualCount = Math.min(count, candidates.length);
+
+      for (let i = 0; i < actualCount; i++) {
+        const prospect = candidates[i];
+        // Mark as revealed (scout has identified this player)
+        const gem: MarketPlayer = {
+          ...prospect,
+          scoutingStatus: 'revealed',
+          scoutingProgress: 2,
+          perceivedAbility: prospect.currentAbility,
+        };
+        consumeProspect(prospect.id);
+        addMarketPlayer(gem);
+        foundPlayers.push(gem);
+      }
+    }
+
+    if (foundPlayers.length > 0) {
+      incrementGemsFound(scout.id, foundPlayers.length);
+    }
+
+    // 4. Read updated state after tick
+    const updatedScout = useScoutStore.getState().scouts.find(s => s.id === scout.id);
+    const weeksElapsed = updatedScout?.activeMission?.weeksElapsed ?? mission.weeksElapsed + 1;
+
+    // 5. Check completion
+    const isComplete = weeksElapsed >= mission.weeksTotal;
+
+    // 6. Fire inbox messages
+    if (foundPlayers.length > 0) {
+      let body = '';
+      if (foundPlayers.length === 1) {
+        body = `${scout.name} has identified ${foundPlayers[0].firstName} ${foundPlayers[0].lastName}, a highly-rated ${foundPlayers[0].position} prospect. Move fast — opportunities like this don't wait.`;
+      } else if (foundPlayers.length === 2) {
+        body = `${scout.name} has unearthed two prospects worth your attention: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}) and ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}).`;
+      } else if (foundPlayers.length === 3) {
+        body = `${scout.name} has had a remarkable week, identifying three prospects: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}), ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}), and ${foundPlayers[2].firstName} ${foundPlayers[2].lastName} (${foundPlayers[2].position}).`;
+      } else {
+        body = `${scout.name} has delivered an extraordinary report — four prospects found: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}), ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}), ${foundPlayers[2].firstName} ${foundPlayers[2].lastName} (${foundPlayers[2].position}), and ${foundPlayers[3].firstName} ${foundPlayers[3].lastName} (${foundPlayers[3].position}).`;
+      }
       addMessage({
-        id: `gem-${gemMarketPlayer.id}-wk${weekNumber}`,
+        id: `gem-${scout.id}-wk${weekNumber}-${Math.random().toString(36).slice(2, 7)}`,
         type: 'system',
         week: weekNumber,
         subject: `${scout.name} has found a gem!`,
-        body: `Your scout has identified ${gemMarketPlayer.firstName} ${gemMarketPlayer.lastName}, a highly-rated ${gemMarketPlayer.position} prospect.`,
+        body,
         isRead: false,
-        metadata: { playerId: gemMarketPlayer.id },
+        metadata: { playerIds: foundPlayers.map(p => p.id) },
       });
     }
-  });
+
+    if (isComplete) {
+      completeMission(scout.id);
+      const finalGems = useScoutStore.getState().scouts.find(s => s.id === scout.id)?.activeMission?.gemsFound ?? 0;
+      let completionBody = `Your scout has returned from a ${mission.weeksTotal}-week search for a ${mission.position}.`;
+      if (finalGems > 0) {
+        completionBody += ` They identified ${finalGems} prospect(s) during the assignment.`;
+      } else {
+        completionBody += ` Unfortunately, they returned empty-handed this time.`;
+      }
+      addMessage({
+        id: `mission-complete-${scout.id}-wk${weekNumber}`,
+        type: 'system',
+        week: weekNumber,
+        subject: `${scout.name} has completed their scouting mission`,
+        body: completionBody,
+        isRead: false,
+        metadata: {
+          missionSummary: {
+            scoutName: scout.name,
+            position: mission.position,
+            targetNationality: mission.targetNationality,
+            weeksTotal: mission.weeksTotal,
+            gemsFound: finalGems,
+          },
+        },
+      });
+    }
+  }
 }
 
 /** Regenerate market offers — 10% chance per player per week */

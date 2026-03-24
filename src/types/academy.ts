@@ -1,3 +1,14 @@
+import type { AcademyCountryCode } from '@/utils/nationality';
+import type { Appearance } from '@/types/player';
+
+export interface ManagerProfile {
+  name: string;
+  dateOfBirth: string; // YYYY-MM-DD
+  gender: 'male' | 'female';
+  nationality: string;
+  appearance: Appearance;
+}
+
 export type ReputationTier = 'Local' | 'Regional' | 'National' | 'Elite';
 
 export interface ManagerPersonality {
@@ -26,4 +37,11 @@ export interface Academy {
   sponsorIds: string[];
   /** ID of assigned investor, or null */
   investorId: string | null;
+  /** Academy home country — restricts market/scouting at Local reputation tier */
+  country: AcademyCountryCode | null;
+  /**
+   * Game week of the last rep-positive event (sign, hire, upgrade, breakthrough, transfer).
+   * Used to detect inactivity and trigger passive reputation decay.
+   */
+  lastRepActivityWeek: number;
 }

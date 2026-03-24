@@ -3,6 +3,7 @@ import { Coach } from '@/types/coach';
 import { FacilityLevels } from '@/types/facility';
 import { PlayerDevelopmentUpdate } from '@/stores/squadStore';
 import { useInboxStore } from '@/stores/inboxStore';
+import { useAcademyStore } from '@/stores/academyStore';
 
 const ATTRIBUTE_NAMES: AttributeName[] = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
 
@@ -46,16 +47,21 @@ export function computeCoachPerformanceScore(coach: Coach): number {
  * Calculates weekly attribute gains for one player.
  * Uses a single assigned coach rather than summing all coaches indiscriminately.
  * Players with no assigned coach still develop via base growth alone.
+ *
+ * A global 0.2× scalar is applied to rawGain — this is the single control knob
+ * for the overall development rate. All multipliers (facility, age, personality,
+ * coach, focus, strength) still compound on top of the reduced base.
  */
 function calcGains(
   player: Player,
   assignedCoach: Coach | null,
   facilityLevel: number,
+  strengthLevel: number,
   weekNumber: number,
 ): Partial<PlayerAttributes> {
   const cap = attrCap(player.potential);
   const attrs = player.attributes ?? {
-    pace: 30, technical: 30, vision: 30, power: 30, stamina: 30, heart: 30,
+    pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
   };
 
   const facilityMod = 1 + (facilityLevel - 1) * 0.1; // 1.0–1.9
@@ -95,21 +101,105 @@ function calcGains(
     // Focus bonus: +10% on the prioritised attribute
     const focusBonus = focusActive && focus!.attribute === attr ? 0.1 : 0;
 
+    // Strength Suite bonus: +2% for power/stamina per level
+    const strengthBonus = (attr === 'power' || attr === 'stamina')
+      ? 1 + strengthLevel * 0.02
+      : 1;
+
     const rawGain =
       (baseGrowth * facilityMod * am * personalityMod + coachBonus) *
-      (1 + focusBonus);
+      (1 + focusBonus) * strengthBonus;
 
-    gains[attr] = Math.min(rawGain, cap - current);
+    // Global development rate scalar — single control knob for overall pace
+    const scaledGain = rawGain * 0.2;
+
+    gains[attr] = Math.min(scaledGain, cap - current);
   });
 
   return gains;
 }
 
+// ─── Breakthrough spike ───────────────────────────────────────────────────────
+
+const SPIKE_FLAVOUR: Record<AttributeName, string> = {
+  pace:      'Something clicked in conditioning this week.',
+  technical: 'Hours on the ball are finally showing.',
+  vision:    'The game is starting to slow down for them.',
+  power:     'A physical transformation no one saw coming.',
+  stamina:   'They outlasted everyone in every session.',
+  heart:     'Pure will. They simply refused to stop improving.',
+};
+
+/**
+ * Rolls for a weekly breakthrough spike on a single player.
+ *
+ * Eligibility: coach assigned, morale ≥ 65, at least one attribute below cap.
+ * Probability: base 1.5%, scaled by age and determination.
+ * Magnitude: +3.0–6.0 on the attribute furthest from cap, never exceeding it.
+ *
+ * Returns null if no spike fires.
+ */
+export function checkBreakthroughSpike(
+  player: Player,
+  assignedCoach: Coach | null,
+  weekNumber: number,
+): { attribute: AttributeName; gain: number } | null {
+  // Eligibility gates
+  if (!assignedCoach) return null;
+  if ((player.morale ?? 50) < 65) return null;
+
+  const cap = attrCap(player.potential);
+  const attrs = player.attributes ?? {
+    pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
+  };
+
+  // Probability modifiers
+  const age = player.age;
+  const ageFactor =
+    age <= 14 ? 1.6 :
+    age <= 15 ? 1.4 :
+    age <= 16 ? 1.2 : 1.0;
+
+  const det = player.personality.determination;
+  const detFactor = 0.7 + ((det - 1) / 19) * 0.6; // 0.7×–1.3×
+
+  const spikeProbability = 0.015 * ageFactor * detFactor;
+
+  if (Math.random() >= spikeProbability) return null;
+
+  // Select attribute furthest from cap
+  let maxRoom = -1;
+  let candidates: AttributeName[] = [];
+
+  ATTRIBUTE_NAMES.forEach((attr) => {
+    const room = cap - attrs[attr];
+    if (room <= 0) return;
+    if (room > maxRoom) {
+      maxRoom = room;
+      candidates = [attr];
+    } else if (room === maxRoom) {
+      candidates.push(attr);
+    }
+  });
+
+  if (candidates.length === 0) return null;
+
+  const attribute = candidates[Math.floor(Math.random() * candidates.length)];
+  const rawGain = 3 + Math.random() * 3; // 3.0–6.0
+  const gain = Math.round(Math.min(rawGain, cap - attrs[attribute]) * 10) / 10;
+
+  if (gain <= 0) return null;
+
+  return { attribute, gain };
+}
+
+// ─── Main development computation ─────────────────────────────────────────────
+
 /**
  * Computes weekly attribute development for all active players.
  * Returns a map of playerId → development updates (to be applied by the caller
  * alongside trait shifts in a single Zustand set() call via applyWeeklyPlayerUpdates).
- * Also fires a fortnightly digest inbox message.
+ * Also fires a fortnightly digest inbox message and per-player spike notifications.
  */
 export function computePlayerDevelopment(
   players: Player[],
@@ -117,12 +207,15 @@ export function computePlayerDevelopment(
   facilityLevels: FacilityLevels,
   weekNumber: number,
 ): Record<string, PlayerDevelopmentUpdate> {
-  const trainingLevel = facilityLevels.trainingPitch ?? 1;
+  const trainingLevel = facilityLevels.technicalZone ?? 1;
+  const strengthLevel = facilityLevels.strengthSuite ?? 0;
   const devUpdates: Record<string, PlayerDevelopmentUpdate> = {};
-  const highlights: { name: string; attr: string; newVal: number }[] = [];
+  const highlights: { id: string; name: string; attr: string; newVal: number }[] = [];
 
   players.forEach((player) => {
     if (!player.isActive) return;
+    // No development while injured
+    if (player.injury) return;
 
     // Resolve assigned coach — null if unassigned or coach not found
     const assignedCoach = player.assignedCoachId
@@ -130,10 +223,10 @@ export function computePlayerDevelopment(
       : null;
 
     const currentAttrs = player.attributes ?? {
-      pace: 30, technical: 30, vision: 30, power: 30, stamina: 30, heart: 30,
+      pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
     };
 
-    const gains = calcGains(player, assignedCoach, trainingLevel, weekNumber);
+    const gains = calcGains(player, assignedCoach, trainingLevel, strengthLevel, weekNumber);
 
     const updated: PlayerAttributes = { ...currentAttrs };
     ATTRIBUTE_NAMES.forEach((attr) => {
@@ -141,13 +234,25 @@ export function computePlayerDevelopment(
       updated[attr] = Math.round((currentAttrs[attr] + gain) * 10) / 10;
     });
 
-    // Increment OVR by average gain this tick — avoids resetting from attribute average
-    // which would cause a first-tick drop for players whose OVR was trait-seeded.
-    const totalGain = ATTRIBUTE_NAMES.reduce((s, a) => s + (gains[a] ?? 0), 0);
-    const avgGain = totalGain / ATTRIBUTE_NAMES.length;
-    const overallRating = Math.min(100, Math.round(player.overallRating + avgGain));
+    // ── Breakthrough spike ───────────────────────────────────────────────────
+    const spike = checkBreakthroughSpike(player, assignedCoach, weekNumber);
+    if (spike) {
+      const cap = attrCap(player.potential);
+      updated[spike.attribute] = Math.round(
+        Math.min(updated[spike.attribute] + spike.gain, cap) * 10,
+      ) / 10;
+    }
 
-    devUpdates[player.id] = { attributes: updated, overallRating };
+    // OVR = mean of updated attributes (single source of truth, matches backend)
+    const overallRating = Math.round(
+      ATTRIBUTE_NAMES.reduce((s, a) => s + updated[a], 0) / ATTRIBUTE_NAMES.length,
+    );
+
+    devUpdates[player.id] = {
+      attributes: updated,
+      overallRating,
+      ...(spike ? { spike } : {}),
+    };
 
     if (weekNumber % 4 === 0) {
       let topAttr: AttributeName = 'pace';
@@ -156,18 +261,18 @@ export function computePlayerDevelopment(
         const g = gains[attr] ?? 0;
         if (g > topGain) { topGain = g; topAttr = attr; }
       });
-      if (topGain >= 0.5) {
-        highlights.push({ name: player.name, attr: topAttr, newVal: Math.round(updated[topAttr]) });
+      if (topGain >= 0.1) {
+        highlights.push({ id: player.id, name: player.name, attr: topAttr, newVal: Math.round(updated[topAttr]) });
       }
     }
   });
 
-  // Fortnightly development digest (fires outside the set() call — inbox-only)
+  const { addMessage } = useInboxStore.getState();
+
+  // Fortnightly development digest
   if (weekNumber % 4 === 0 && highlights.length > 0) {
-    const { addMessage } = useInboxStore.getState();
-    const lines = highlights.slice(0, 3)
-      .map((h) => `${h.name}: ${h.attr.toUpperCase()} now ${h.newVal}`)
-      .join('\n');
+    const top = highlights.slice(0, 3);
+    const lines = top.map((h) => `${h.name}: ${h.attr.toUpperCase()} now ${h.newVal}`).join('\n');
     addMessage({
       id: `dev-report-wk${weekNumber}`,
       type: 'system',
@@ -175,8 +280,30 @@ export function computePlayerDevelopment(
       subject: 'Development Report',
       body: `Squad development update:\n${lines}`,
       isRead: false,
+      metadata: { playerIds: top.map((h) => h.id) },
     });
   }
+
+  // Breakthrough spike inbox notifications — one message per spiking player
+  const { setReputation, markRepActivity } = useAcademyStore.getState();
+  Object.entries(devUpdates).forEach(([playerId, update]) => {
+    if (!update.spike) return;
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+    const { attribute, gain } = update.spike;
+    addMessage({
+      id: `spike-${playerId}-wk${weekNumber}`,
+      type: 'system',
+      week: weekNumber,
+      subject: 'Breakthrough Development',
+      body: `${SPIKE_FLAVOUR[attribute]}\n${player.name} — ${attribute.toUpperCase()} +${gain}`,
+      isRead: false,
+      metadata: { playerIds: [playerId] },
+    });
+    // A visible development breakthrough signals a thriving academy
+    setReputation(0.5);
+    markRepActivity();
+  });
 
   return devUpdates;
 }

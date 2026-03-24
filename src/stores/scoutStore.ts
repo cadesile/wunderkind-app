@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Scout } from '@/types/market';
+import { Scout, ScoutingMission } from '@/types/market';
 import { zustandStorage } from '@/utils/storage';
 
 interface ScoutState {
@@ -12,6 +12,11 @@ interface ScoutState {
   removeAssignment: (scoutId: string, playerId: string) => void;
   getWorkload: (scoutId: string) => number;
   updateMorale: (scoutId: string, delta: number) => void;
+  assignMission: (scoutId: string, mission: ScoutingMission) => void;
+  tickMission: (scoutId: string) => void;
+  incrementGemsFound: (scoutId: string, count: number) => void;
+  completeMission: (scoutId: string) => void;
+  cancelMission: (scoutId: string) => void;
 }
 
 export const useScoutStore = create<ScoutState>()(
@@ -58,6 +63,63 @@ export const useScoutStore = create<ScoutState>()(
               ? { ...s, morale: Math.max(0, Math.min(100, (s.morale ?? 70) + delta)) }
               : s,
           ),
+        })),
+
+      assignMission: (scoutId, mission) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) =>
+            s.id === scoutId ? { ...s, activeMission: mission } : s,
+          ),
+        })),
+
+      tickMission: (scoutId) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) => {
+            if (s.id !== scoutId || !s.activeMission) return s;
+            return {
+              ...s,
+              activeMission: {
+                ...s.activeMission,
+                weeksElapsed: s.activeMission.weeksElapsed + 1,
+              },
+            };
+          }),
+        })),
+
+      incrementGemsFound: (scoutId, count) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) => {
+            if (s.id !== scoutId || !s.activeMission) return s;
+            return {
+              ...s,
+              activeMission: {
+                ...s.activeMission,
+                gemsFound: s.activeMission.gemsFound + count,
+              },
+            };
+          }),
+        })),
+
+      completeMission: (scoutId) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) => {
+            if (s.id !== scoutId || !s.activeMission) return s;
+            return {
+              ...s,
+              activeMission: { ...s.activeMission, status: 'completed' as const },
+            };
+          }),
+        })),
+
+      cancelMission: (scoutId) =>
+        set((state) => ({
+          scouts: state.scouts.map((s) => {
+            if (s.id !== scoutId || !s.activeMission) return s;
+            return {
+              ...s,
+              activeMission: { ...s.activeMission, status: 'cancelled' as const },
+            };
+          }),
         })),
     }),
     { name: 'scout-store', storage: zustandStorage }

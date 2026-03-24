@@ -59,13 +59,33 @@ class SimulationService {
     // If the template requires specific targets but none were resolved, skip.
     if (template.impacts.selection_logic && Object.keys(entityMap).length === 0) return;
 
-    // If the body references {player} but no player was resolved (e.g. no selection_logic),
-    // pick a random active player so the placeholder is always substituted.
-    if (/\{player/i.test(template.bodyTemplate) && !entityMap['player_1']) {
+    // Ensure every {player_N} placeholder referenced in the body has a resolved entity.
+    // This handles: (a) templates with no selection_logic, (b) selection_logic that
+    // resolves fewer players than the body references (e.g. count:1 but body uses {player_2}).
+    if (/\{player/i.test(template.bodyTemplate)) {
       const active = this.filterPlayers(undefined).filter((p) => p.isActive);
       if (active.length === 0) return;
-      const picked = this.randomSample(active, 1);
-      entityMap = { ...entityMap, player_1: picked[0].id };
+
+      // Find all distinct player slot indices referenced in the body: {player_1}, {player_2}, etc.
+      const slotMatches = [...template.bodyTemplate.matchAll(/\{player_(\d+)\}/gi)];
+      const requiredIndices = [...new Set(slotMatches.map((m) => parseInt(m[1], 10)))];
+      // Also handle bare {player} alias (maps to slot 1)
+      if (/\{player\}/i.test(template.bodyTemplate) && !requiredIndices.includes(1)) {
+        requiredIndices.push(1);
+      }
+
+      // For each required slot not yet filled, pick a distinct active player
+      const usedIds = new Set(Object.values(entityMap));
+      for (const idx of requiredIndices.sort((a, b) => a - b)) {
+        const key = `player_${idx}`;
+        if (!entityMap[key]) {
+          const available = active.filter((p) => !usedIds.has(p.id));
+          if (available.length === 0) break; // not enough players — stop
+          const picked = this.randomSample(available, 1)[0];
+          entityMap = { ...entityMap, [key]: picked.id };
+          usedIds.add(picked.id);
+        }
+      }
     }
 
     // Same for {facility} — pick a random facility if none resolved.
@@ -179,7 +199,8 @@ class SimulationService {
     Object.entries(entityMap).forEach(([key, id]) => {
       if (key.startsWith('player_')) {
         const player = players.find((p) => p.id === id);
-        if (player) replacements[key] = player.name;
+        // Fallback to 'a player' if ID is stale (transferred/released since event was queued)
+        replacements[key] = player?.name ?? 'a player';
       } else if (key.startsWith('facility_')) {
         replacements[key] = this.formatFacilityLabel(id);
       }

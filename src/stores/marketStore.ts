@@ -60,6 +60,12 @@ interface MarketState {
   fetchMarketData: () => Promise<void>;
 
   /**
+   * Force a market data refresh, bypassing the 5-minute cache.
+   * Called every 2 game weeks from the game loop to keep the pool topped up.
+   */
+  refreshMarketPool: () => Promise<void>;
+
+  /**
    * Remove a recruited entity from the available market pool so it can't
    * be signed twice. Call immediately after a local recruit action.
    */
@@ -133,10 +139,25 @@ export const useMarketStore = create<MarketState>()(
 
         set({ isLoading: true, error: null });
         try {
-          const data = await marketApi.getMarketData();
+          const country = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.country;
+          const data = await marketApi.getMarketData(country);
           get().setMarketData(data);
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Failed to fetch market data' });
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      refreshMarketPool: async () => {
+        if (get().isLoading) return;
+        set({ isLoading: true, error: null });
+        try {
+          const country = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.country;
+          const data = await marketApi.getMarketData(country);
+          get().setMarketData(data);
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to refresh market pool' });
         } finally {
           set({ isLoading: false });
         }
@@ -224,14 +245,21 @@ export const useMarketStore = create<MarketState>()(
           agentId: player.agent?.id ?? null,
           joinedWeek: weekNumber,
           isActive: true,
-          morale: 70,
+          morale: 40,
           relationships: [],
           scoutingReport,
+          // Pass backend attributes through so GameLoop doesn't need to generate them
+          ...(player.attributes ? { attributes: player.attributes } : {}),
         });
 
         set((state) => ({
           players: state.players.filter((p) => p.id !== playerId),
         }));
+
+        // Signing a player is a visible academy activity — meaningful rep boost
+        const { setReputation: setRep, markRepActivity } = useAcademyStore.getState();
+        setRep(1.0);
+        markRepActivity();
       },
 
       rejectPlayer: (playerId) => {
@@ -278,10 +306,16 @@ export const useMarketStore = create<MarketState>()(
           appearance: generateAppearance(marketCoach.id, 'COACH', 35, personality),
           nationality: marketCoach.nationality,
           joinedWeek: weekNumber,
-          morale: 70,
+          morale: marketCoach.morale ?? 70,
+          specialisms: marketCoach.specialisms,
           relationships: [],
         });
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== coachId) }));
+
+        // Hiring a coach signals investment in the academy — moderate rep boost
+        const { setReputation: setRep, markRepActivity } = useAcademyStore.getState();
+        setRep(1.0);
+        markRepActivity();
       },
 
       hireScout: (scoutId, weekNumber) => {
@@ -289,6 +323,11 @@ export const useMarketStore = create<MarketState>()(
         if (!marketScout) return;
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { generateAppearance } = require('@/engine/appearance');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { computePlayerAge, getGameDate } = require('@/utils/gameDate');
+        const gameDate = getGameDate(weekNumber);
+        const ageRaw = marketScout.dateOfBirth ? computePlayerAge(marketScout.dateOfBirth, gameDate) : 35;
+        const scoutAge = typeof ageRaw === 'number' ? ageRaw : 35;
         useScoutStore.getState().addScout({
           id: marketScout.id,
           name: `${marketScout.firstName} ${marketScout.lastName}`,
@@ -297,7 +336,7 @@ export const useMarketStore = create<MarketState>()(
           successRate: marketScout.successRate,
           nationality: marketScout.nationality,
           joinedWeek: weekNumber,
-          appearance: generateAppearance(marketScout.id, 'SCOUT', 35),
+          appearance: generateAppearance(marketScout.id, 'SCOUT', scoutAge),
           morale: 70,
           relationships: [],
           assignedPlayerIds: [],

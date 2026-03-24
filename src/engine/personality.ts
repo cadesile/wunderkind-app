@@ -3,6 +3,7 @@ import { BehavioralIncident } from '@/types/game';
 import { generateDOB } from '@/utils/gameDate';
 import { generateAppearance } from '@/engine/appearance';
 import { uuidv7 } from '@/utils/uuidv7';
+import { getRelationshipValue } from '@/engine/RelationshipService';
 
 export const TRAIT_NAMES: TraitName[] = [
   'determination',
@@ -101,11 +102,12 @@ export function generatePersonality(): PersonalityMatrix {
 export function generatePlayer(position: Position, currentGameDate: Date): Player {
   const id = uuidv7(); // generate first — used as appearance seed
   const personality = generatePersonality();
-  const avgTrait = Object.values(personality).reduce((a, b) => a + b, 0) / TRAIT_NAMES.length;
   const ageYears = 15 + Math.floor(Math.random() * 3); // 15–17
-  const overallRating = Math.round((avgTrait / 20) * 100);
 
   const attributes = generateAttributes(position);
+  const overallRating = Math.round(
+    Object.values(attributes).reduce((a, b) => a + b, 0) / Object.values(attributes).length,
+  );
 
   return {
     id,
@@ -120,7 +122,7 @@ export function generatePlayer(position: Position, currentGameDate: Date): Playe
     personality,
     attributes,
     appearance: generateAppearance(id, 'PLAYER', ageYears, personality),
-    morale: 70,
+    morale: 40,
     relationships: [],
     guardianId: null,
     agentId: null,
@@ -157,6 +159,7 @@ export function calculateTraitShifts(player: Player): Partial<PersonalityMatrix>
 export function generateIncidents(
   player: Player,
   week: number,
+  squadMates?: Player[],
 ): BehavioralIncident[] {
   const incidents: BehavioralIncident[] = [];
 
@@ -182,6 +185,38 @@ export function generateIncidents(
       traitAffected: 'consistency',
       delta: 1,
     });
+  }
+
+  // Player-on-player altercation (only when squad context is available)
+  if (squadMates && squadMates.length > 0 && Math.random() < 0.10) {
+    const partner = squadMates[Math.floor(Math.random() * squadMates.length)];
+    // Deduplicate: only generate once per pair (lower UUID initiates)
+    if (player.id < partner.id) {
+      const existingRelationship = getRelationshipValue(player, partner.id);
+
+      let severity: 'minor' | 'serious' = 'minor';
+      if (existingRelationship < 0) {
+        const avgTemperament =
+          (player.personality.temperament + partner.personality.temperament) / 2;
+        // temperament is 1–20; higher = more volatile
+        const seriousChance = 0.2 + (avgTemperament / 20) * 0.5;
+        if (Math.random() < seriousChance) {
+          severity = 'serious';
+        }
+      }
+
+      incidents.push({
+        // Colon-delimited so GameLoop can safely extract IDs without UUID ambiguity
+        id: `altercation:${player.id}:${partner.id}:${week}`,
+        playerId: player.id,
+        week,
+        type: 'negative',
+        description: `${player.name} and ${partner.name} had a heated altercation during training.`,
+        traitAffected: 'temperament',
+        delta: -1,
+        severity,
+      });
+    }
   }
 
   return incidents;

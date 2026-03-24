@@ -1,0 +1,86 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from './authStore';
+import { useAcademyStore } from './academyStore';
+import { useSquadStore } from './squadStore';
+import { useCoachStore } from './coachStore';
+import { useScoutStore } from './scoutStore';
+
+/**
+ * All Zustand persist store keys registered in AsyncStorage.
+ * Update this list whenever a new persisted store is added.
+ */
+const ALL_STORE_KEYS = [
+  'auth-store',
+  'academy-store',
+  'squad-store',
+  'coach-store',
+  'scout-store',
+  'market-store',
+  'facility-store',
+  'inbox-store',
+  'finance-store',
+  'loan-store',
+  'altercation-store',
+  'active-effect-store',
+  'narrative-store',
+  'interaction-store',
+  'event-store',
+  'prospect-pool-store',
+  'game-config-store',
+  'archetype-store',
+  'loss-condition-store',
+];
+
+/**
+ * Resets critical stores' in-memory state so a fresh onboarding run doesn't
+ * accumulate stale data (e.g. `addCoach` on top of leftover coaches).
+ *
+ * Called before showing the onboarding screen mid-session (game over → new game).
+ * Not needed on cold launch because stores hydrate from cleared AsyncStorage.
+ */
+export function resetInMemoryStores(): void {
+  useAuthStore.getState().clearAuth();
+
+  useAcademyStore.setState({
+    academy: {
+      id: 'academy-1',
+      name: '',
+      foundedWeek: 1,
+      weekNumber: 1,
+      reputation: 0,
+      reputationTier: 'Local',
+      totalCareerEarnings: 0,
+      hallOfFamePoints: 0,
+      squadSize: 0,
+      staffCount: 1,
+      balance: 0,
+      createdAt: '',
+      sponsorIds: [],
+      investorId: null,
+      country: null,
+      lastRepActivityWeek: 1,
+    },
+    managerPersonality: null,
+  });
+
+  useSquadStore.setState({ players: [] });
+  useCoachStore.setState({ coaches: [] });
+  useScoutStore.setState({ scouts: [] });
+}
+
+/**
+ * Wipes all academy data — both persisted (AsyncStorage) and in-memory (Zustand).
+ *
+ * Call this only when the backend definitively reports that the academy no longer
+ * exists (HTTP 404 on /api/academy/check), or when the player starts a new game
+ * after a game over. Never call on transient network errors.
+ *
+ * After this returns, the caller is responsible for redirecting to onboarding.
+ */
+export async function clearAllAcademyData(): Promise<void> {
+  // Remove all persisted store data so the next app launch starts clean
+  await AsyncStorage.multiRemove(ALL_STORE_KEYS);
+
+  // Reset in-memory state so the current session also behaves correctly
+  resetInMemoryStores();
+}

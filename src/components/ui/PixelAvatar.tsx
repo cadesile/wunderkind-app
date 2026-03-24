@@ -6,21 +6,29 @@ interface Props {
   size?: number;
 }
 
+const PADDING_RATIO = 0.12; // 12% of size on each side
+
 /** Pixel-art player avatar — matches the style guide's CSS pixel art person */
 export function PixelAvatar({ size = 48 }: Props) {
+  const padding = Math.round(size * PADDING_RATIO);
+  const innerSize = size - padding * 2;
+
   return (
     <View
       style={{
         width: size,
         height: size,
-        backgroundColor: WK.tealMid,
+        backgroundColor: '#ffffff',
         borderWidth: 3,
         borderColor: WK.border,
+        borderRadius: 0,
         overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
         ...pixelShadow,
       }}
     >
-      <Svg width={size} height={size} viewBox="0 0 16 16">
+      <Svg width={innerSize} height={innerSize} viewBox="0 0 16 16">
         {/* Head */}
         <Rect x="5" y="1" width="6" height="6" fill="#c8a068" />
         {/* Body */}

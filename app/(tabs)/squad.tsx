@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, FlatList, Pressable, ScrollView, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -9,6 +9,7 @@ import { useCoachStore } from '@/stores/coachStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { FlagText } from '@/components/ui/FlagText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
@@ -16,6 +17,45 @@ import { Badge } from '@/components/ui/Badge';
 import { Player } from '@/types/player';
 import { Clique, CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+
+function getInjuryStatusStyle(player: Player): {
+  borderColor: string;
+  backgroundColor: string;
+  badgeLabel: string;
+  badgeColor: string;
+} {
+  if (!player.injury) {
+    return {
+      borderColor: WK.border,
+      backgroundColor: WK.tealCard,
+      badgeLabel: 'AVAILABLE',
+      badgeColor: WK.green,
+    };
+  }
+  switch (player.injury.severity) {
+    case 'minor':
+      return {
+        borderColor: WK.yellow,
+        backgroundColor: '#3a3010',
+        badgeLabel: `MINOR ${player.injury.weeksRemaining}W`,
+        badgeColor: WK.yellow,
+      };
+    case 'moderate':
+      return {
+        borderColor: WK.orange,
+        backgroundColor: '#3a2010',
+        badgeLabel: `MODERATE ${player.injury.weeksRemaining}W`,
+        badgeColor: WK.orange,
+      };
+    case 'serious':
+      return {
+        borderColor: WK.red,
+        backgroundColor: '#3a1010',
+        badgeLabel: `SERIOUS ${player.injury.weeksRemaining}W`,
+        badgeColor: WK.red,
+      };
+  }
+}
 
 const SQUAD_TABS = ['PLAYERS', 'DRESSING ROOM'] as const;
 type SquadTab = typeof SQUAD_TABS[number];
@@ -31,6 +71,7 @@ function PlayerCard({ player }: { player: Player }) {
   const playerClique = cliques.find((c) => c.isDetected && c.memberIds.includes(player.id));
   const cliqueColor = playerClique ? CLIQUE_PALETTE[playerClique.color] : NO_GROUP_COLOR;
   const cliqueLabel = playerClique ? playerClique.name.toUpperCase() : 'NO GROUP';
+  const statusStyle = getInjuryStatusStyle(player);
 
   const traitValues = [
     player.personality.determination,
@@ -46,9 +87,9 @@ function PlayerCard({ player }: { player: Player }) {
   return (
     <Pressable onPress={() => { hapticTap(); router.push(`/player/${player.id}`); }}>
       <View style={{
-        backgroundColor: WK.tealCard,
+        backgroundColor: statusStyle.backgroundColor,
         borderWidth: 3,
-        borderColor: WK.border,
+        borderColor: statusStyle.borderColor,
         padding: 8,
         marginBottom: 6,
         flexDirection: 'row',
@@ -56,12 +97,15 @@ function PlayerCard({ player }: { player: Player }) {
         gap: 12,
         ...pixelShadow,
       }}>
-        <Avatar appearance={player.appearance} role="PLAYER" size={44} />
+        <Avatar appearance={player.appearance} role="PLAYER" size={44} morale={player.morale ?? 70} age={player.age} />
 
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
           <BodyText size={11} color={WK.tealLight}>{player.position} · AGE {player.age}</BodyText>
-          <BodyText size={11} dim>{player.nationality}</BodyText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <FlagText nationality={player.nationality} size={11} />
+            <BodyText size={11} dim>{player.nationality}</BodyText>
+          </View>
 
           {/* 2×4 trait grid */}
           <View style={{ marginTop: 4, gap: 2 }}>
@@ -96,7 +140,18 @@ function PlayerCard({ player }: { player: Player }) {
           </View>
         </View>
 
-        <Badge label={`${player.overallRating}`} color="yellow" />
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          <Badge label={`${player.overallRating}`} color="yellow" />
+          <View style={{
+            backgroundColor: statusStyle.badgeColor,
+            borderWidth: 2,
+            borderColor: WK.border,
+            paddingHorizontal: 4,
+            paddingVertical: 2,
+          }}>
+            <PixelText size={5} color={WK.text}>{statusStyle.badgeLabel}</PixelText>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -230,7 +285,8 @@ function handleGroupSession(targetType: 'squad' | 'staff'): void {
 function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) => void }) {
   const health = useInteractionStore((s) => s.dressingRoomHealth);
   const cliques = useInteractionStore((s) => s.cliques);
-  const activePlayers = useSquadStore((s) => s.players.filter((p) => p.isActive));
+  const allSquadPlayers = useSquadStore((s) => s.players);
+  const activePlayers = useMemo(() => allSquadPlayers.filter((p) => p.isActive), [allSquadPlayers]);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const groupSessionLog = useInteractionStore((s) => s.groupSessionLog);
 
@@ -426,7 +482,8 @@ export default function SquadScreen() {
   const [renameTarget, setRenameTarget] = useState<Clique | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameClique = useInteractionStore((s) => s.renameClique);
-  const activePlayers = useSquadStore((s) => s.players.filter((p) => p.isActive));
+  const allPlayers = useSquadStore((s) => s.players);
+  const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>

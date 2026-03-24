@@ -5,12 +5,14 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText } from '@/components/ui/PixelText';
+import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { Scout } from '@/types/market';
-import { moraleEmoji } from '@/utils/morale';
+import { moraleLabel } from '@/utils/morale';
+import { Badge } from '@/components/ui/Badge';
 
 function moraleColor(morale: number): string {
   if (morale >= 60) return WK.green;
@@ -24,12 +26,13 @@ const RANGE_COLOR: Record<Scout['scoutingRange'], string> = {
   international: WK.orange,
 };
 
-function ScoutCard({ scout }: { scout: Scout }) {
+function ScoutCard({ scout, onPress }: { scout: Scout; onPress: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const marketPlayers = useMarketStore((s) => s.players);
   const morale = scout.morale ?? 70;
   const assigned = scout.assignedPlayerIds ?? [];
   const workload = assigned.length;
+  const isOnMission = scout.activeMission?.status === 'active';
 
   const assignedPlayerNames = assigned
     .map((id) => marketPlayers.find((p) => p.id === id))
@@ -37,10 +40,11 @@ function ScoutCard({ scout }: { scout: Scout }) {
     .map((p) => `${p!.firstName} ${p!.lastName}`);
 
   return (
+    <Pressable onPress={onPress}>
     <View style={{
       backgroundColor: WK.tealCard,
       borderWidth: 3,
-      borderColor: WK.border,
+      borderColor: isOnMission ? WK.orange : WK.border,
       padding: 12,
       marginBottom: 10,
       ...pixelShadow,
@@ -48,18 +52,26 @@ function ScoutCard({ scout }: { scout: Scout }) {
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         {scout.appearance && (
-          <Avatar appearance={scout.appearance} role="SCOUT" size={48} />
+          <Avatar appearance={scout.appearance} role="SCOUT" size={48} morale={70} />
         )}
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{scout.name}</PixelText>
           <PixelText size={6} color={RANGE_COLOR[scout.scoutingRange]} style={{ marginTop: 2 }}>
             {scout.scoutingRange.toUpperCase()} SCOUT
           </PixelText>
-          <PixelText size={6} dim style={{ marginTop: 2 }}>{scout.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={scout.nationality} size={10} />
+            <PixelText size={6} dim>{scout.nationality}</PixelText>
+          </View>
+          <View style={{ marginTop: 4 }}>
+            <Badge
+              label={isOnMission ? 'ON MISSION' : 'AVAILABLE'}
+              color={isOnMission ? 'yellow' : 'green'}
+            />
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <PixelText size={14}>{moraleEmoji(morale)}</PixelText>
-          <PixelText size={6} color={moraleColor(morale)}>MORALE {morale}</PixelText>
+          <PixelText size={6} color={moraleColor(morale)}>{moraleLabel(morale)}</PixelText>
         </View>
       </View>
 
@@ -146,6 +158,7 @@ function ScoutCard({ scout }: { scout: Scout }) {
         </View>
       )}
     </View>
+    </Pressable>
   );
 }
 
@@ -182,7 +195,11 @@ export default function MarketScoutsScreen() {
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
           {scouts.map((scout) => (
-            <ScoutCard key={scout.id} scout={scout} />
+            <ScoutCard
+              key={scout.id}
+              scout={scout}
+              onPress={() => router.push(`/scout/${scout.id}`)}
+            />
           ))}
         </ScrollView>
       )}

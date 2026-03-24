@@ -6,7 +6,8 @@ export type FinancialCategory =
   | 'facility_upgrade'
   | 'upkeep'
   | 'earnings'
-  | 'contract_termination';
+  | 'contract_termination'
+  | 'investor_buyout';
 
 export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   wages:                'WAGES',
@@ -17,6 +18,7 @@ export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   upkeep:               'UPKEEP',
   earnings:             'EARNINGS',
   contract_termination: 'TERMINATION',
+  investor_buyout:      'BUYOUT',
 };
 
 export interface FinancialTransaction {

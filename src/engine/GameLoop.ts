@@ -3,9 +3,10 @@ import { calculateWeeklyFinances } from './finance';
 import { simulationService } from './SimulationService';
 import { generateAgentOffer } from './agentOffers';
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
-import { processScoutingTasks, checkGemDiscovery, refreshMarketOffers } from './ScoutingService';
+import { processScoutingTasks, processMissions, refreshMarketOffers } from './ScoutingService';
 import { processMoraleAndRelationships } from './MoraleEngine';
 import { processSocialGraph } from './SocialGraphEngine';
+import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -14,12 +15,44 @@ import { useFacilityStore } from '@/stores/facilityStore';
 import { useLoanStore } from '@/stores/loanStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useFinanceStore } from '@/stores/financeStore';
-import { WeeklyTick } from '@/types/game';
+import { useAltercationStore } from '@/stores/altercationStore';
+import { useLossConditionStore } from '@/stores/lossConditionStore';
+import { WeeklyTick, AltercationBlock } from '@/types/game';
+import { FacilityType } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
+import { calculateAcademyValuation } from '@/hooks/useAcademyMetrics';
 
 const BASE_XP = 10;
 const BASE_INJURY_PROB = 0.05; // 5% per player per week
+
+const INJURY_TIERS = [
+  { severity: 'minor'    as const, minWeeks: 2, maxWeeks: 3,  weight: 60 },
+  { severity: 'moderate' as const, minWeeks: 4, maxWeeks: 6,  weight: 30 },
+  { severity: 'serious'  as const, minWeeks: 8, maxWeeks: 12, weight: 10 },
+] as const;
+
+function pickInjurySeverity(): typeof INJURY_TIERS[number] {
+  const totalWeight = INJURY_TIERS.reduce((s, t) => s + t.weight, 0);
+  let rand = Math.random() * totalWeight;
+  for (const tier of INJURY_TIERS) {
+    rand -= tier.weight;
+    if (rand <= 0) return tier;
+  }
+  return INJURY_TIERS[0];
+}
+
+function computeInjuryDuration(
+  tier: typeof INJURY_TIERS[number],
+  physioEffective: number,
+  hydroEffective: number,
+): number {
+  const base = tier.minWeeks + Math.floor(Math.random() * (tier.maxWeeks - tier.minWeeks + 1));
+  // Physio Clinic reduces duration; Hydro Pool provides multiplicative additional reduction
+  const reduction = (1 - physioEffective * 0.08) * (1 - hydroEffective * 0.10);
+  const reduced = Math.round(base * Math.max(reduction, 0.2));
+  return Math.max(reduced, 1);
+}
 
 /**
  * Processes one Weekly Tick entirely on-device.
@@ -31,11 +64,14 @@ const BASE_INJURY_PROB = 0.05; // 5% per player per week
  * Mutates Zustand stores; returns a WeeklyTick for sync queuing.
  */
 export function processWeeklyTick(): WeeklyTick {
-  const { players, applyWeeklyPlayerUpdates } = useSquadStore.getState();
+  const { players, applyWeeklyPlayerUpdates, setPlayerInjury, tickInjuries } = useSquadStore.getState();
   const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
   const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
-  const { levels } = useFacilityStore.getState();
+  const { levels, conditions } = useFacilityStore.getState();
+
+  // Effective level = level × (condition / 100), used to scale all facility benefits
+  const eff = (type: FacilityType) => levels[type] * (conditions[type] / 100);
   const { processWeeklyRepayments, totalWeeklyRepayment } = useLoanStore.getState();
   const { sponsors: allSponsors, investors: allInvestors } = useMarketStore.getState();
 
@@ -48,80 +84,169 @@ export function processWeeklyTick(): WeeklyTick {
   simulationService.processDailyTick();
 
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
-  // Dynamic coach performance replaces flat influence sum
+  // Tactical Room boosts coach performance; conditions scale all benefits
+  const tacticalBoost = 1 + eff('tacticalRoom') * 0.05;
   const totalCoachPerformance = coaches.reduce(
     (sum, c) => sum + computeCoachPerformanceScore(c), 0,
-  );
+  ) * tacticalBoost;
   const weeklyXP =
     BASE_XP *
-    (1 + levels.trainingPitch * 0.05) *
+    (1 + eff('technicalZone') * 0.05) *
     (1 + totalCoachPerformance / 100);
 
   // ── 2. Injury Probability ─────────────────────────────────────────────────────
-  const injuryProb = Math.max(0, BASE_INJURY_PROB * (1 - levels.medicalLab * 0.08));
+  const injuryProb = Math.max(0, BASE_INJURY_PROB * (1 - eff('physioClinic') * 0.08));
 
   // ── 3. Personality shifts ─────────────────────────────────────────────────────
   const traitShifts: Record<string, Partial<PersonalityMatrix>> = {};
-  const injuredPlayerIds: string[] = [];
 
   players.forEach((player) => {
     traitShifts[player.id] = calculateTraitShifts(player);
-    if (Math.random() < injuryProb) {
-      injuredPlayerIds.push(player.id);
-    }
   });
 
   // Trait shifts are applied later alongside development updates (single set() call).
 
-  // ── 4. Behavioral incidents ───────────────────────────────────────────────────
-  const incidents = players.flatMap((p) => generateIncidents(p, weekNumber));
-  incidents.forEach(addIncident);
+  // ── 3b. Injury rolls ──────────────────────────────────────────────────────────
+  // Only uninjured players are eligible. Cap: no more than 30% of squad injured at once.
+  const currentInjuredCount = players.filter((p) => !!p.injury).length;
+  const maxAllowed = Math.floor(players.length * 0.3);
+  const eligibleForInjury = players.filter((p) => !p.injury);
 
-  // Negative behavioral incidents → inbox message
-  incidents
-    .filter((i) => i.type === 'negative')
-    .forEach((incident) => {
-      addMessage({
-        id: `incident-${incident.id}`,
-        type: 'system',
-        week: weekNumber,
-        subject: 'Behavioral Report',
-        body: incident.description,
-        isRead: false,
-        entityId: incident.playerId,
-      });
-    });
-
-  injuredPlayerIds.forEach((id) => {
-    const player = players.find((p) => p.id === id);
-    if (player) {
-      addIncident({
-        id: `${id}-${weekNumber}-injury`,
-        playerId: id,
-        week: weekNumber,
-        type: 'negative',
-        description: `${player.name} picked up a knock in training this week.`,
-        traitAffected: 'consistency',
-        delta: -1,
-      });
+  const injuryCandidates: string[] = [];
+  eligibleForInjury.forEach((player) => {
+    if (Math.random() < injuryProb) {
+      injuryCandidates.push(player.id);
     }
   });
 
-  // Injury summary → single inbox message (if any)
-  if (injuredPlayerIds.length > 0) {
-    const injuredNames = injuredPlayerIds
-      .map((id) => players.find((p) => p.id === id)?.name)
-      .filter(Boolean)
-      .join(', ');
+  const slotsAvailable = Math.max(0, maxAllowed - currentInjuredCount);
+  const injuredPlayerIds = injuryCandidates.slice(0, slotsAvailable);
+
+  // Apply injuries and collect metadata for inbox messages
+  type NewInjury = { playerId: string; severity: 'minor' | 'moderate' | 'serious'; weeksRemaining: number };
+  const newInjuries: NewInjury[] = [];
+  injuredPlayerIds.forEach((id) => {
+    const tier = pickInjurySeverity();
+    const weeksRemaining = computeInjuryDuration(tier, eff('physioClinic'), eff('hydroPool'));
+    setPlayerInjury(id, { severity: tier.severity, weeksRemaining, injuredWeek: weekNumber });
+    newInjuries.push({ playerId: id, severity: tier.severity, weeksRemaining });
+  });
+
+  // ── 4. Behavioral incidents ───────────────────────────────────────────────────
+  const incidents = players.flatMap((p) =>
+    generateIncidents(p, weekNumber, players.filter((m) => m.id !== p.id)),
+  );
+  incidents.forEach(addIncident);
+
+  // ── 4b. Behavioral digest + altercation morale / relationship effects ──────────
+  // All behavioral incidents are grouped into one digest message per week.
+  // Block-triggering serious altercations are suppressed from inbox — surfaced via dialog only.
+  const digestLines: string[] = [];
+  const digestPlayerIds = new Set<string>();
+
+  // Non-altercation negative incidents → digest
+  incidents
+    .filter((i) => i.type === 'negative' && !i.id.startsWith('altercation:'))
+    .forEach((incident) => {
+      digestLines.push(incident.description);
+      digestPlayerIds.add(incident.playerId);
+    });
+
+  const altercationIncidents = incidents.filter((i) => i.id.startsWith('altercation:'));
+  const newAltercationBlocks: AltercationBlock[] = [];
+
+  altercationIncidents.forEach((incident) => {
+    // ID format: "altercation:<playerAId>:<playerBId>:<week>"
+    const [, playerAId, playerBId] = incident.id.split(':');
+    const playerA = players.find((p) => p.id === playerAId);
+    const playerB = players.find((p) => p.id === playerBId);
+    if (!playerA || !playerB) return;
+
+    const severity = incident.severity ?? 'minor';
+    const moraleDelta = severity === 'serious' ? -20 : -8;
+    const relDelta    = severity === 'serious' ? -40 : -15;
+
+    const { updateMorale } = useSquadStore.getState();
+    updateMorale(playerAId, moraleDelta);
+    updateMorale(playerBId, moraleDelta);
+    updatePlayerRelationship(playerAId, playerBId, 'player', relDelta);
+    updatePlayerRelationship(playerBId, playerAId, 'player', relDelta);
+
+    let triggeredBlock = false;
+
+    if (severity === 'serious') {
+      // Squad unease: all other players suffer morale loss
+      players.forEach((mate) => {
+        if (mate.id === playerAId || mate.id === playerBId) return;
+        updateMorale(mate.id, -5);
+        if (
+          getRelationshipValue(mate, playerAId) > 20 ||
+          getRelationshipValue(mate, playerBId) > 20
+        ) {
+          updateMorale(mate.id, -5);
+        }
+      });
+
+      // Check if the updated relationship drops below the block threshold
+      const updatedPlayerA = useSquadStore.getState().players.find((p) => p.id === playerAId);
+      if (updatedPlayerA) {
+        const updatedRelationship = getRelationshipValue(updatedPlayerA, playerBId);
+        triggeredBlock = updatedRelationship < -50;
+        if (triggeredBlock) {
+          useAltercationStore.getState().addBlock({ playerAId, playerBId, severity: 'serious' });
+          newAltercationBlocks.push({ playerAId, playerBId, severity: 'serious' });
+        }
+      }
+    }
+
+    // Digest routing:
+    //   minor            → always included in digest
+    //   serious, no block → included in digest with [SERIOUS] label
+    //   serious, blocked  → no inbox message; dialog surfaces it
+    if (!triggeredBlock) {
+      const prefix = severity === 'serious' ? '[SERIOUS] ' : '';
+      digestLines.push(`${prefix}${incident.description}`);
+      digestPlayerIds.add(playerAId);
+      digestPlayerIds.add(playerBId);
+    }
+  });
+
+  // Send one grouped behavioral digest message if there are any items
+  if (digestLines.length > 0) {
     addMessage({
-      id: `injuries-wk${weekNumber}`,
+      id: `digest-wk${weekNumber}`,
       type: 'system',
       week: weekNumber,
-      subject: `Training Injury Report`,
-      body: `${injuredNames} picked up knock${injuredPlayerIds.length > 1 ? 's' : ''} in training this week. Monitor their condition carefully.`,
+      subject: 'Behavioural Report',
+      body: digestLines.map((line) => `• ${line}`).join('\n'),
       isRead: false,
+      metadata: { playerIds: Array.from(digestPlayerIds) },
     });
   }
+
+  // Per-player injury incident + inbox message with severity and duration
+  newInjuries.forEach(({ playerId, severity, weeksRemaining }) => {
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+    addIncident({
+      id: `${playerId}-${weekNumber}-injury`,
+      playerId,
+      week: weekNumber,
+      type: 'negative',
+      description: `${player.name} picked up a ${severity} injury in training this week.`,
+      traitAffected: 'consistency',
+      delta: -1,
+    });
+    addMessage({
+      id: `injury-${playerId}-wk${weekNumber}`,
+      type: 'system',
+      week: weekNumber,
+      subject: 'Training Injury',
+      body: `${player.name} picked up a ${severity} injury in training this week. Expected recovery: ${weeksRemaining} week${weeksRemaining !== 1 ? 's' : ''}.`,
+      isRead: false,
+      entityId: playerId,
+    });
+  });
 
   // ── 5. Loan repayments ────────────────────────────────────────────────────────
   const weeklyLoanRepayment = totalWeeklyRepayment();
@@ -138,8 +263,8 @@ export function processWeeklyTick(): WeeklyTick {
     weekNumber, academy, players, coaches, levels, activeSponsors, weeklyLoanRepayment,
   );
 
-  // Balance tracks spendable cash (financialSummary.net is in pence; addBalance takes whole pounds)
-  addBalance(Math.round(financialSummary.net / 100));
+  // Balance tracks spendable cash — net is in pence, stored directly in pence
+  addBalance(financialSummary.net);
 
   // HoF tracker: positive sponsor income only
   if (sponsorIncome > 0) {
@@ -180,26 +305,428 @@ export function processWeeklyTick(): WeeklyTick {
   clearOldTransactions();
 
   // ── 6b. Player development + trait shifts — ONE combined set() ──────────────
-  // Compute development updates first (pure calculation, no store writes),
-  // then apply BOTH trait shifts and attribute gains in a single Zustand set().
-  // This prevents multiple rapid squad store updates which break
-  // useSyncExternalStore's tearing-prevention consistency check.
-  const devUpdates = computePlayerDevelopment(players, coaches, levels, weekNumber);
+  // Re-read players to pick up injuries set in step 3b so the injury check
+  // inside computePlayerDevelopment sees the current state.
+  const playersWithInjuries = useSquadStore.getState().players;
+  // Pass effective levels (scaled by condition) so development benefits degrade with facility wear
+  const effectiveLevels = Object.fromEntries(
+    (Object.keys(levels) as FacilityType[]).map((type) => [type, eff(type)]),
+  ) as typeof levels;
+  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
 
-  // ── 7. Reputation ─────────────────────────────────────────────────────────────
-  // Scaled for 0–100: base 0.5 + Media Center level × 1.2 per week
-  const reputationDelta = 0.5 + levels.mediaCenter * 1.2;
+  // Decrement all active injury timers (clears expired injuries automatically)
+  tickInjuries();
+
+  // ── 6c. Monthly development snapshot (every 4 weeks) ──────────────────────────
+  if (weekNumber % 4 === 0) {
+    useSquadStore.getState().recordDevelopmentSnapshots(weekNumber);
+  }
+
+  // ── 7. Loss Condition Engine ──────────────────────────────────────────────────
+  // Runs after all finances, development, and morale are settled for the tick.
+  // Returns early (aborting the rest of the tick) if a game-over condition fires.
+  {
+    const {
+      weeksNegativeBalance,
+      weeksUnderPlayerFloor,
+      weeksUnderCoachRatio,
+      weeksCoachesWithFewPlayers,
+      atRiskPlayers,
+      atRiskCoaches,
+      setWeeksNegativeBalance,
+      setWeeksUnderPlayerFloor,
+      setWeeksUnderCoachRatio,
+      setWeeksCoachesWithFewPlayers,
+      setAtRiskPlayer,
+      removeAtRiskPlayer,
+      setAtRiskCoach,
+      removeAtRiskCoach,
+      triggerGameOver,
+    } = useLossConditionStore.getState();
+
+    const { removePlayer } = useSquadStore.getState();
+    const { removeCoach, updateMorale: updateCoachMorale } = useCoachStore.getState();
+    const { addTransfer } = useFinanceStore.getState();
+    const { setSponsorIds } = useAcademyStore.getState();
+
+    // Re-read live state — morale engine (section 11) may not have run yet but
+    // player/coach arrays reflect any removals that happened earlier this tick.
+    const lcPlayers = useSquadStore.getState().players;
+    const lcCoaches = useCoachStore.getState().coaches;
+
+    // ── 7a. Financial Insolvency ─────────────────────────────────────────────
+    if (academy.balance < 0) {
+      const newWeeksNeg = weeksNegativeBalance + 1;
+      setWeeksNegativeBalance(newWeeksNeg);
+
+      if (newWeeksNeg === 1) {
+        addMessage({
+          id: `insolvency-warn-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Academy Finances Critical',
+          body: 'The academy is operating at a loss. Resolve this within 8 weeks or the academy will be forced to close.',
+          isRead: false,
+        });
+      }
+
+      if (newWeeksNeg === 5) {
+        const currentAcademy = useAcademyStore.getState().academy;
+        if (currentAcademy.sponsorIds.length > 0) {
+          setSponsorIds(currentAcademy.sponsorIds.slice(1));
+          addMessage({
+            id: `admin-sponsor-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: 'Sponsor Withdraws',
+            body: "A sponsor has pulled out due to the academy's financial instability. Creditors are watching.",
+            isRead: false,
+          });
+        }
+      }
+
+      if (newWeeksNeg >= 5 && newWeeksNeg < 9) {
+        lcCoaches.forEach((coach) => updateCoachMorale(coach.id, -10));
+      }
+
+      if (newWeeksNeg >= 9) {
+        triggerGameOver('insolvency');
+        return {
+          week: weekNumber,
+          processedAt: new Date().toISOString(),
+          traitShifts,
+          incidents,
+          financialSummary,
+          weeklyXP,
+          reputationDelta: 0,
+          injuredPlayerIds,
+        };
+      }
+    } else {
+      setWeeksNegativeBalance(0);
+    }
+
+    // Shared flag: only one entity (player or coach) can exit per tick
+    let exitProcessedThisTick = false;
+
+    // ── 7b. Morale Exit — Players ────────────────────────────────────────────
+    const sortedByMorale = [...lcPlayers].sort(
+      (a, b) => (a.morale ?? 50) - (b.morale ?? 50),
+    );
+
+    for (const player of sortedByMorale) {
+      const morale = player.morale ?? 50;
+      const existing = atRiskPlayers[player.id];
+
+      if (morale < 20) {
+        const weeksAtRisk = (existing?.weeksAtRisk ?? 0) + 1;
+        setAtRiskPlayer(player.id, { weeksAtRisk });
+
+        if (weeksAtRisk === 1) {
+          addMessage({
+            id: `at-risk-player-1-${player.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${player.name} Is Unhappy`,
+            body: `${player.name}'s morale has collapsed. They are considering leaving the academy.`,
+            isRead: false,
+          });
+        } else if (weeksAtRisk === 2) {
+          addMessage({
+            id: `at-risk-player-2-${player.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${player.name} Close to Walking Out`,
+            body: `${player.name} is on the verge of leaving. Intervene immediately.`,
+            isRead: false,
+          });
+        } else if (weeksAtRisk >= 3 && !exitProcessedThisTick) {
+          removePlayer(player.id);
+          removeAtRiskPlayer(player.id);
+          exitProcessedThisTick = true;
+          addTransfer({
+            playerId: player.id,
+            playerName: player.name,
+            destinationClub: 'Left Academy',
+            grossFee: 0,
+            agentCommission: 0,
+            netProceeds: 0,
+            type: 'free_release',
+            week: weekNumber,
+          });
+          addMessage({
+            id: `morale-exit-${player.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${player.name} Has Left`,
+            body: `${player.name} walked out of the academy. Their morale had been critically low for too long.`,
+            isRead: false,
+          });
+          // A walkout damages the academy's reputation
+          setReputation(-1.0);
+        }
+      } else if (existing) {
+        removeAtRiskPlayer(player.id);
+        addMessage({
+          id: `morale-recover-player-${player.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: `${player.name} Has Settled`,
+          body: `${player.name}'s morale has recovered. They've decided to stay at the academy.`,
+          isRead: false,
+        });
+      }
+    }
+
+    // ── 7c. Morale Exit — Coaches ────────────────────────────────────────────
+    const sortedCoachesByMorale = [...lcCoaches].sort(
+      (a, b) => (a.morale ?? 50) - (b.morale ?? 50),
+    );
+
+    for (const coach of sortedCoachesByMorale) {
+      const morale = coach.morale ?? 50;
+      const existing = atRiskCoaches[coach.id];
+
+      if (morale < 20) {
+        const weeksAtRisk = (existing?.weeksAtRisk ?? 0) + 1;
+        setAtRiskCoach(coach.id, { weeksAtRisk });
+
+        if (weeksAtRisk === 1) {
+          addMessage({
+            id: `at-risk-coach-1-${coach.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${coach.name} Is Unhappy`,
+            body: `${coach.name}'s morale has collapsed. They are considering leaving the academy.`,
+            isRead: false,
+          });
+        } else if (weeksAtRisk === 2) {
+          addMessage({
+            id: `at-risk-coach-2-${coach.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${coach.name} Close to Resigning`,
+            body: `${coach.name} is on the verge of leaving. Intervene immediately.`,
+            isRead: false,
+          });
+        } else if (weeksAtRisk >= 3 && !exitProcessedThisTick) {
+          removeCoach(coach.id);
+          removeAtRiskCoach(coach.id);
+          exitProcessedThisTick = true;
+          addTransfer({
+            playerId: coach.id,
+            playerName: coach.name,
+            destinationClub: 'Resigned',
+            grossFee: 0,
+            agentCommission: 0,
+            netProceeds: 0,
+            type: 'free_release',
+            week: weekNumber,
+          });
+          addMessage({
+            id: `morale-exit-coach-${coach.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${coach.name} Has Left`,
+            body: `${coach.name} walked out of the academy. Their morale had been critically low for too long.`,
+            isRead: false,
+          });
+          // A coach resignation is visible and damages the academy's standing
+          setReputation(-1.0);
+        }
+      } else if (existing) {
+        removeAtRiskCoach(coach.id);
+        addMessage({
+          id: `morale-recover-coach-${coach.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: `${coach.name} Has Settled`,
+          body: `${coach.name}'s morale has recovered. They've decided to stay at the academy.`,
+          isRead: false,
+        });
+      }
+    }
+
+    // ── 7d. Coach:Player Ratio (1:5 rule) ────────────────────────────────────
+    const ratioPlayerCount = lcPlayers.length;
+    const ratioCoachCount = lcCoaches.length;
+    const ratioBreached =
+      ratioCoachCount > 0 && ratioPlayerCount > ratioCoachCount * 5;
+
+    if (ratioBreached) {
+      const newWeeksRatio = weeksUnderCoachRatio + 1;
+      setWeeksUnderCoachRatio(newWeeksRatio);
+
+      if (newWeeksRatio === 1) {
+        addMessage({
+          id: `ratio-warn-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Squad Understaffed',
+          body: `You have ${ratioPlayerCount} players but only ${ratioCoachCount} coach${ratioCoachCount !== 1 ? 'es' : ''}. Sign a coach within 2 weeks or a player will leave.`,
+          isRead: false,
+        });
+      }
+
+      if (newWeeksRatio >= 2 && !exitProcessedThisTick) {
+        const lowestMoralePlayer = [...lcPlayers].sort(
+          (a, b) => (a.morale ?? 50) - (b.morale ?? 50),
+        )[0];
+        if (lowestMoralePlayer) {
+          removePlayer(lowestMoralePlayer.id);
+          removeAtRiskPlayer(lowestMoralePlayer.id);
+          exitProcessedThisTick = true;
+          setWeeksUnderCoachRatio(0);
+          addTransfer({
+            playerId: lowestMoralePlayer.id,
+            playerName: lowestMoralePlayer.name,
+            destinationClub: 'Left Academy',
+            grossFee: 0,
+            agentCommission: 0,
+            netProceeds: 0,
+            type: 'free_release',
+            week: weekNumber,
+          });
+          addMessage({
+            id: `ratio-exit-${lowestMoralePlayer.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${lowestMoralePlayer.name} Left — Overloaded Coach`,
+            body: `${lowestMoralePlayer.name} left the academy. There aren't enough coaches to support the squad.`,
+            isRead: false,
+          });
+          setReputation(-1.0);
+        }
+      }
+    } else {
+      setWeeksUnderCoachRatio(0);
+    }
+
+    // ── 7e. Coaches Leave When Too Few Players ───────────────────────────────
+    if (lcPlayers.length <= 3 && lcCoaches.length > 0) {
+      const newWeeksCoachFew = weeksCoachesWithFewPlayers + 1;
+      setWeeksCoachesWithFewPlayers(newWeeksCoachFew);
+
+      if (newWeeksCoachFew >= 2 && !exitProcessedThisTick) {
+        const lowestMoraleCoach = [...lcCoaches].sort(
+          (a, b) => (a.morale ?? 50) - (b.morale ?? 50),
+        )[0];
+        if (lowestMoraleCoach) {
+          removeCoach(lowestMoraleCoach.id);
+          removeAtRiskCoach(lowestMoraleCoach.id);
+          exitProcessedThisTick = true;
+          setWeeksCoachesWithFewPlayers(0);
+          addMessage({
+            id: `coach-few-exit-${lowestMoraleCoach.id}-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: `${lowestMoraleCoach.name} Has Left`,
+            body: `${lowestMoraleCoach.name} resigned — not enough players to coach at this academy.`,
+            isRead: false,
+          });
+        }
+      }
+    } else {
+      setWeeksCoachesWithFewPlayers(0);
+    }
+
+    // ── 7f. Player Floor Game Over ───────────────────────────────────────────
+    // Re-read player count to reflect any exits that fired above this tick.
+    const currentPlayerCount = useSquadStore.getState().players.length;
+
+    if (currentPlayerCount < 3) {
+      const newWeeksFloor = weeksUnderPlayerFloor + 1;
+      setWeeksUnderPlayerFloor(newWeeksFloor);
+
+      if (newWeeksFloor === 1) {
+        addMessage({
+          id: `floor-warn-1-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Academy Near Collapse',
+          body: 'Fewer than 3 players remain. The academy cannot continue operating at this level.',
+          isRead: false,
+        });
+      } else if (newWeeksFloor === 2) {
+        addMessage({
+          id: `floor-warn-2-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Academy on Life Support',
+          body: 'The squad is still critically small. Sign players immediately or the academy will close.',
+          isRead: false,
+        });
+      } else if (newWeeksFloor >= 4) {
+        triggerGameOver('talent_drain');
+        return {
+          week: weekNumber,
+          processedAt: new Date().toISOString(),
+          traitShifts,
+          incidents,
+          financialSummary,
+          weeklyXP,
+          reputationDelta: 0,
+          injuredPlayerIds,
+        };
+      }
+    } else {
+      setWeeksUnderPlayerFloor(0);
+    }
+  }
+
+  // ── 8. Reputation ─────────────────────────────────────────────────────────────
+  // Passive base is a meaningful weekly driver, especially early game.
+  // Scouting Center adds to this on top.
+  const rep = academy.reputation;
+  const passiveRepDelta = 0.15 + eff('scoutingCenter') * 0.15;
+
+  // Tier maintenance drain — each tier requires progressively more active investment
+  // to advance. This creates roughly 2× longer progression per tier:
+  //   Local  (0–14):  no drain  → ~52 weeks well-managed to reach Regional
+  //   Regional (15–39): –0.10   → ~104 weeks to reach National
+  //   National (40–74): –0.25   → ~208 weeks to reach Elite
+  //   Elite  (75–100): –0.50   → sustained Elite requires constant activity
+  const tierDrain =
+    rep >= 75 ? 0.50 :
+    rep >= 40 ? 0.25 :
+    rep >= 15 ? 0.10 :
+    0;
+
+  // Inactivity nudge — secondary penalty on top of tier drain for pure idling
+  const weeksSinceActivity = weekNumber - (academy.lastRepActivityWeek ?? 1);
+  const inactivityDecay =
+    weeksSinceActivity >= 8 ? 0.15 :
+    weeksSinceActivity >= 4 ? 0.08 :
+    0;
+
+  const reputationDelta = passiveRepDelta - tierDrain - inactivityDecay;
   setReputation(reputationDelta);
 
   // ── 8a. Agent offers: expire stale, generate new ──────────────────────────────
   expireOldOffers(weekNumber);
   const { agents: allAgents } = useMarketStore.getState();
   const agentOffer = generateAgentOffer(weekNumber, players, allAgents, academy.reputation);
-  if (agentOffer) addAgentOffer(agentOffer);
+  if (agentOffer) {
+    // Agents don't pursue injured players — they wait for full recovery
+    const offerTarget = useSquadStore.getState().players.find((p) => p.id === agentOffer.playerId);
+    if (!offerTarget?.injury) {
+      addAgentOffer(agentOffer);
+    }
+  }
 
-  // ── 8b. Advance week ─────────────────────────────────────────────────────────
+  // ── 8b. Advance week + facility decay ────────────────────────────────────────
+  // Decay runs after benefits have been applied, so this week's condition is used in full
+  useFacilityStore.getState().decayCondition();
   incrementWeek();
+
+  // ── 8c. Bi-weekly market pool refresh ─────────────────────────────────────────
+  // Every 2 game weeks, replenish the market pool from the backend (fire-and-forget).
+  // Bypasses the 5-min real-time cache so the pool stays topped up regardless of
+  // how quickly the player advances weeks.
+  if (weekNumber % 2 === 0) {
+    void useMarketStore.getState().refreshMarketPool();
+  }
 
   // ── 9. Week-1 investor offer ──────────────────────────────────────────────────
   // Only fires once: when this is the first week tick, no investor is assigned yet,
@@ -212,18 +739,25 @@ export function processWeeklyTick(): WeeklyTick {
       const investor = smallInvestors[0] ?? allInvestors[0] ?? null;
 
       if (investor) {
+        const equityPct = 10;
+        const academyValuation = calculateAcademyValuation(players, levels, coaches, academy.balance, academy.reputation);
+        const rawOffer = Math.round(academyValuation * (equityPct / 100));
+        const roundedOffer = Math.ceil(rawOffer / 100_000) * 100_000;
+        const multiplier = Math.floor(Math.random() * 3) + 1;
+        const finalOffer = roundedOffer * multiplier; // pence
+
         addMessage({
           id: `investor-offer-wk1-${investor.id}`,
           type: 'investor',
           week: weekNumber,
           subject: 'Investment Offer',
-          body: `${investor.name} is interested in backing your academy. They are offering £100,000 in funding in exchange for a 10% stake in all future player sales. This could give you the working capital to upgrade facilities and sign stronger players — but remember, every transfer fee will be shared.`,
+          body: `${investor.name} is interested in backing your academy. They are offering £${(finalOffer / 100).toLocaleString()} in funding in exchange for a ${equityPct}% stake in all future player sales. This could give you the working capital to upgrade facilities and sign stronger players — but remember, every transfer fee will be shared.`,
           isRead: false,
           requiresResponse: true,
           entityId: investor.id,
           metadata: {
-            investmentAmount: 100_000,  // £100,000 in whole pounds
-            equityPct: 10,
+            investmentAmount: finalOffer, // pence
+            equityPct,
             investorName: investor.name,
             investorSize: 'SMALL',
           },
@@ -296,20 +830,26 @@ export function processWeeklyTick(): WeeklyTick {
       : null;
 
     if (investor) {
-      const investmentPounds = Math.round(investor.investmentAmount / 100);
-      const size: CompanySize = investor.equityTaken <= 10 ? 'SMALL' : investor.equityTaken <= 20 ? 'MEDIUM' : 'LARGE';
+      const equityPct = investor.equityTaken;
+      const size: CompanySize = equityPct <= 10 ? 'SMALL' : equityPct <= 20 ? 'MEDIUM' : 'LARGE';
+      const academyValuation = calculateAcademyValuation(players, levels, coaches, academy.balance, academy.reputation);
+      const rawOffer = Math.round(academyValuation * (equityPct / 100));
+      const roundedOffer = Math.ceil(rawOffer / 100_000) * 100_000;
+      const multiplier = Math.floor(Math.random() * 3) + 1;
+      const finalOffer = roundedOffer * multiplier; // pence
+
       addMessage({
         id: `investor-offer-wk${weekNumber}-${investor.id}`,
         type: 'investor',
         week: weekNumber,
         subject: 'Investment Offer',
-        body: `${investor.name} has expressed interest in backing your academy. They are offering £${investmentPounds.toLocaleString()} in funding in exchange for a ${investor.equityTaken}% stake in all future player sales. Your growing reputation has made you an attractive proposition.`,
+        body: `${investor.name} has expressed interest in backing your academy. They are offering £${(finalOffer / 100).toLocaleString()} in funding in exchange for a ${equityPct}% stake in all future player sales. Your growing reputation has made you an attractive proposition.`,
         isRead: false,
         requiresResponse: true,
         entityId: investor.id,
         metadata: {
-          investmentAmount: investmentPounds,
-          equityPct: investor.equityTaken,
+          investmentAmount: finalOffer, // pence
+          equityPct,
           investorName: investor.name,
           investorSize: size,
         },
@@ -319,7 +859,7 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 10. Scouting progression ──────────────────────────────────────────────────
   processScoutingTasks();
-  checkGemDiscovery();
+  processMissions();
   refreshMarketOffers();
 
   // ── 11. Relationship & morale ─────────────────────────────────────────────────
@@ -337,5 +877,6 @@ export function processWeeklyTick(): WeeklyTick {
     weeklyXP,
     reputationDelta,
     injuredPlayerIds,
+    unresolvedAltercations: newAltercationBlocks.length > 0 ? newAltercationBlocks : undefined,
   };
 }

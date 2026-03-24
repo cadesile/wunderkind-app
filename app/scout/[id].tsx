@@ -1,0 +1,252 @@
+import { useState } from 'react';
+import { View, ScrollView, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ChevronLeft } from 'lucide-react-native';
+import { PitchBackground } from '@/components/ui/PitchBackground';
+import { PixelText } from '@/components/ui/PixelText';
+import { PixelDialog } from '@/components/ui/PixelDialog';
+import { FlagText } from '@/components/ui/FlagText';
+import { Avatar } from '@/components/ui/Avatar';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { WK, pixelShadow } from '@/constants/theme';
+import { useScoutStore } from '@/stores/scoutStore';
+import { useAcademyStore } from '@/stores/academyStore';
+import { useFinanceStore } from '@/stores/financeStore';
+import { moraleLabel } from '@/utils/morale';
+import { formatCurrencyWhole, penceToPounds } from '@/utils/currency';
+import { AssignMissionOverlay } from '@/components/AssignMissionOverlay';
+
+const RANGE_LABEL: Record<string, string> = {
+  local: 'LOCAL',
+  national: 'NATIONAL',
+  international: 'INTL',
+};
+
+export default function ScoutDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const scout = useScoutStore((s) => s.scouts.find((sc) => sc.id === id));
+  const cancelMission = useScoutStore((s) => s.cancelMission);
+  const removeScout = useScoutStore((s) => s.removeScout);
+  const { academy, addBalance } = useAcademyStore();
+  const [missionOverlayVisible, setMissionOverlayVisible] = useState(false);
+  const [releaseDialogVisible, setReleaseDialogVisible] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+
+  function confirmRelease() {
+    if (!scout) return;
+    const penaltyPence = Math.floor(scout.salary * 26 * 0.25);
+    const penaltyPounds = Math.round(penaltyPence / 100);
+    if (penceToPounds(academy.balance ?? 0) < penaltyPounds) {
+      setReleaseError(`INSUFFICIENT FUNDS — need £${penaltyPounds.toLocaleString()}`);
+      setReleaseDialogVisible(false);
+      return;
+    }
+    addBalance(-penaltyPounds * 100);
+    useFinanceStore.getState().addTransaction({
+      amount: -penaltyPence,
+      category: 'contract_termination',
+      description: `Released ${scout.name} (25% early termination)`,
+      weekNumber: academy.weekNumber ?? 1,
+    });
+    removeScout(scout.id);
+    router.back();
+  }
+
+  if (!scout) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark, alignItems: 'center', justifyContent: 'center' }}>
+        <PixelText size={8} dim>SCOUT NOT FOUND</PixelText>
+      </SafeAreaView>
+    );
+  }
+
+  const morale = scout.morale ?? 70;
+  const isOnMission = scout.activeMission?.status === 'active';
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }}>
+      <PitchBackground />
+
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 4,
+        borderBottomColor: WK.border,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        gap: 10,
+      }}>
+        <Pressable onPress={() => router.back()} hitSlop={8}>
+          <ChevronLeft size={18} color={WK.text} />
+        </Pressable>
+        <PixelText size={9} upper style={{ flex: 1 }} numberOfLines={1}>{scout.name}</PixelText>
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
+
+        {/* Bio card */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          flexDirection: 'row',
+          gap: 14,
+          ...pixelShadow,
+        }}>
+          {scout.appearance && (
+            <Avatar appearance={scout.appearance} role="SCOUT" size={64} />
+          )}
+          <View style={{ flex: 1 }}>
+            <PixelText size={10} upper numberOfLines={2}>{scout.name}</PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <Badge
+                label={RANGE_LABEL[scout.scoutingRange] ?? scout.scoutingRange.toUpperCase()}
+                color={scout.scoutingRange === 'local' ? 'dim' : scout.scoutingRange === 'national' ? 'yellow' : 'green'}
+              />
+              <FlagText nationality={scout.nationality} size={16} />
+            </View>
+            <PixelText size={6} dim style={{ marginTop: 4 }}>{scout.nationality}</PixelText>
+          </View>
+        </View>
+
+        {/* Stats card */}
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 14,
+          ...pixelShadow,
+        }}>
+          <PixelText size={8} upper style={{ marginBottom: 12 }}>Scout Profile</PixelText>
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>SUCCESS RATE</PixelText>
+              <PixelText size={6} color={WK.yellow}>{scout.successRate}%</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>WEEKLY SALARY</PixelText>
+              <PixelText size={6} color={WK.tealLight}>{formatCurrencyWhole(scout.salary)}/wk</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={6} dim>MORALE</PixelText>
+              <PixelText size={6} color={morale >= 60 ? WK.green : morale >= 40 ? WK.yellow : WK.red}>
+                {moraleLabel(morale)}
+              </PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+              <PixelText size={6} dim>STATUS</PixelText>
+              <PixelText size={6} color={isOnMission ? WK.orange : WK.green}>
+                {isOnMission ? 'ON MISSION' : 'AVAILABLE'}
+              </PixelText>
+            </View>
+          </View>
+        </View>
+
+        {/* Active mission card */}
+        {isOnMission && scout.activeMission && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.orange,
+            padding: 14,
+            ...pixelShadow,
+          }}>
+            <PixelText size={8} upper style={{ marginBottom: 12 }}>Active Mission</PixelText>
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={6} dim>POSITION</PixelText>
+                <PixelText size={6} color={WK.text}>{scout.activeMission.position}</PixelText>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={6} dim>REGION</PixelText>
+                <PixelText size={6} color={WK.text}>{scout.activeMission.targetNationality ?? 'Domestic'}</PixelText>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={6} dim>PROGRESS</PixelText>
+                <PixelText size={6} color={WK.yellow}>
+                  Week {scout.activeMission.weeksElapsed} of {scout.activeMission.weeksTotal}
+                </PixelText>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+                <PixelText size={6} dim>GEMS FOUND</PixelText>
+                <PixelText size={6} color={scout.activeMission.gemsFound > 0 ? WK.green : WK.dim}>
+                  {scout.activeMission.gemsFound}
+                </PixelText>
+              </View>
+            </View>
+
+            {/* Progress bar */}
+            <View style={{
+              height: 6,
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              borderWidth: 2,
+              borderColor: WK.border,
+              marginTop: 12,
+            }}>
+              <View style={{
+                height: '100%',
+                width: `${Math.min(100, (scout.activeMission.weeksElapsed / scout.activeMission.weeksTotal) * 100)}%`,
+                backgroundColor: WK.orange,
+              }} />
+            </View>
+
+            <View style={{ marginTop: 12 }}>
+              <Button
+                label="CANCEL MISSION"
+                variant="red"
+                fullWidth
+                onPress={() => cancelMission(scout.id)}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Assign mission button */}
+        <Button
+          label={isOnMission ? 'SCOUT ON MISSION' : 'ASSIGN SCOUTING MISSION'}
+          variant="yellow"
+          fullWidth
+          disabled={isOnMission}
+          onPress={() => setMissionOverlayVisible(true)}
+        />
+
+        {/* Release */}
+        {releaseError && (
+          <PixelText size={6} color={WK.red} style={{ textAlign: 'center', marginTop: 4 }}>
+            {releaseError}
+          </PixelText>
+        )}
+        <Button
+          label="RELEASE SCOUT"
+          variant="red"
+          fullWidth
+          onPress={() => { setReleaseError(null); setReleaseDialogVisible(true); }}
+          style={{ marginTop: 4 }}
+        />
+
+      </ScrollView>
+
+      <PixelDialog
+        visible={releaseDialogVisible}
+        title="Release Scout?"
+        message={scout ? `Release ${scout.name}?\n\nEarly termination fee: £${Math.round(scout.salary * 26 * 0.25 / 100).toLocaleString()}\n(25% of 26 remaining weeks)` : ''}
+        onClose={() => setReleaseDialogVisible(false)}
+        onConfirm={confirmRelease}
+        confirmLabel="RELEASE"
+        confirmVariant="red"
+      />
+
+      <AssignMissionOverlay
+        scout={scout}
+        visible={missionOverlayVisible}
+        onClose={() => setMissionOverlayVisible(false)}
+      />
+    </SafeAreaView>
+  );
+}

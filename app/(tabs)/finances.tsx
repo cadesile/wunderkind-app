@@ -17,6 +17,8 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { Loan } from '@/types/market';
 import { type FinancialCategory, type FinancialTransaction } from '@/types/finance';
 import { calculateWeeklyFinances } from '@/engine/finance';
+import { penceToPounds, formatCurrencyCompact, formatPounds } from '@/utils/currency';
+import useAcademyMetrics from '@/hooks/useAcademyMetrics';
 
 const FINANCE_TABS = ['BALANCE', 'INVESTORS', 'SPONSORS', 'LOANS', 'LEDGER'] as const;
 type FinanceTab = typeof FINANCE_TABS[number];
@@ -49,7 +51,10 @@ function BalancePane() {
   const coaches = useCoachStore((s) => s.coaches);
   const facilityLevels = useFacilityStore((s) => s.levels);
 
-  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance)) ? academy.balance : 0;
+  // balance is stored in pence — convert to whole pounds for display
+  const balance = penceToPounds(
+    typeof academy.balance === 'number' && !isNaN(academy.balance) ? academy.balance : 0,
+  );
 
   const activeSponsors = sponsors.filter((s) => academy.sponsorIds.includes(s.id));
   const weeklyRepayment = totalWeeklyRepayment();
@@ -92,7 +97,7 @@ function BalancePane() {
       }}>
         <PixelText size={7} dim style={{ marginBottom: 6 }}>CURRENT BALANCE</PixelText>
         <PixelText size={22} color={balance >= 0 ? WK.yellow : WK.red}>
-          {balance < 0 ? '-' : ''}£{Math.abs(balance).toLocaleString()}
+          {formatPounds(balance)}
         </PixelText>
       </View>
 
@@ -183,54 +188,152 @@ function BalancePane() {
 
 function InvestorsPane() {
   const academy = useAcademyStore((s) => s.academy);
+  const { addBalance, setInvestorId } = useAcademyStore();
   const investors = useMarketStore((s) => s.investors);
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const { totalValuation } = useAcademyMetrics();
+  const [showBuyout, setShowBuyout] = useState(false);
 
   const assignedInvestor = investors.find((inv) => inv.id === academy.investorId) ?? null;
+
+  // Buyout cost = equity% of total academy valuation (pence)
+  const buyoutCostPence = assignedInvestor
+    ? Math.round((assignedInvestor.equityTaken / 100) * totalValuation)
+    : 0;
+  const canAfford = academy.balance >= buyoutCostPence;
+
+  function handleBuyout() {
+    if (!assignedInvestor || !canAfford) return;
+    addBalance(-buyoutCostPence);
+    addTransaction({
+      weekNumber: academy.weekNumber ?? 1,
+      category: 'investor_buyout',
+      amount: -buyoutCostPence,
+      description: `Investor buyout — ${assignedInvestor.name} (${assignedInvestor.equityTaken}% equity)`,
+    });
+    setInvestorId(null);
+    setShowBuyout(false);
+  }
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
       {assignedInvestor ? (
-        <View style={{
-          backgroundColor: WK.tealCard,
-          borderWidth: 3,
-          borderColor: WK.tealMid,
-          padding: 16,
-          ...pixelShadow,
-        }}>
-          <PixelText size={9} upper style={{ marginBottom: 12 }}>{assignedInvestor.name}</PixelText>
-          <FinanceRow
-            label="EQUITY TAKEN"
-            value={`${assignedInvestor.equityTaken}%`}
-            accent={WK.orange}
-          />
-          <FinanceRow
-            label="INVESTMENT"
-            value={`£${Math.round(assignedInvestor.investmentAmount / 100).toLocaleString()}`}
-            accent={WK.yellow}
-          />
+        <>
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.tealMid,
+            padding: 16,
+            ...pixelShadow,
+          }}>
+            <PixelText size={9} upper style={{ marginBottom: 12 }}>{assignedInvestor.name}</PixelText>
+            <FinanceRow
+              label="EQUITY TAKEN"
+              value={`${assignedInvestor.equityTaken}%`}
+              accent={WK.orange}
+            />
+            <FinanceRow
+              label="INVESTMENT"
+              value={`£${Math.round(assignedInvestor.investmentAmount / 100).toLocaleString()}`}
+              accent={WK.yellow}
+            />
+            <FinanceRow
+              label="BUYOUT COST"
+              value={formatCurrencyCompact(buyoutCostPence)}
+              accent={canAfford ? WK.tealLight : WK.red}
+            />
 
-          {/* Ownership bar */}
-          <View style={{ marginTop: 14 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <PixelText size={6} dim>ACADEMY OWNERSHIP</PixelText>
-              <PixelText size={6} color={WK.green}>{100 - assignedInvestor.equityTaken}%</PixelText>
+            {/* Ownership bar */}
+            <View style={{ marginTop: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <PixelText size={6} dim>ACADEMY OWNERSHIP</PixelText>
+                <PixelText size={6} color={WK.green}>{100 - assignedInvestor.equityTaken}%</PixelText>
+              </View>
+              <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, flexDirection: 'row' }}>
+                <View style={{ height: '100%', width: `${100 - assignedInvestor.equityTaken}%`, backgroundColor: WK.green }} />
+                <View style={{ height: '100%', flex: 1, backgroundColor: WK.orange }} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
+                <PixelText size={6} dim>ACADEMY</PixelText>
+                <PixelText size={6} color={WK.orange}>INVESTOR {assignedInvestor.equityTaken}%</PixelText>
+              </View>
             </View>
-            <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, flexDirection: 'row' }}>
-              <View style={{ height: '100%', width: `${100 - assignedInvestor.equityTaken}%`, backgroundColor: WK.green }} />
-              <View style={{ height: '100%', flex: 1, backgroundColor: WK.orange }} />
+
+            <View style={{ marginTop: 12 }}>
+              <PixelText size={6} dim>
+                INVESTOR RECEIVES {assignedInvestor.equityTaken}% OF ALL PLAYER SALES
+              </PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-              <PixelText size={6} dim>ACADEMY</PixelText>
-              <PixelText size={6} color={WK.orange}>INVESTOR {assignedInvestor.equityTaken}%</PixelText>
+
+            {/* Buyout CTA */}
+            <View style={{ marginTop: 16 }}>
+              <Button
+                label="BUY OUT INVESTOR"
+                variant="yellow"
+                fullWidth
+                disabled={!canAfford}
+                onPress={() => setShowBuyout(true)}
+              />
+              {!canAfford && (
+                <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+                  INSUFFICIENT FUNDS
+                </PixelText>
+              )}
             </View>
           </View>
 
-          <View style={{ marginTop: 12 }}>
-            <PixelText size={6} dim>
-              INVESTOR RECEIVES {assignedInvestor.equityTaken}% OF ALL PLAYER SALES
-            </PixelText>
-          </View>
-        </View>
+          {/* Buyout confirmation modal */}
+          <Modal visible={showBuyout} transparent animationType="fade">
+            <View style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.75)',
+              justifyContent: 'center',
+              padding: 24,
+            }}>
+              <View style={{
+                backgroundColor: WK.tealCard,
+                borderWidth: 3,
+                borderColor: WK.yellow,
+                padding: 20,
+                ...pixelShadow,
+              }}>
+                <PixelText size={9} upper style={{ marginBottom: 16 }}>CONFIRM BUYOUT</PixelText>
+
+                <FinanceRow label="INVESTOR" value={assignedInvestor.name} />
+                <FinanceRow
+                  label="EQUITY RECLAIMED"
+                  value={`${assignedInvestor.equityTaken}%`}
+                  accent={WK.green}
+                />
+                <FinanceRow
+                  label="COST"
+                  value={formatCurrencyCompact(buyoutCostPence)}
+                  accent={WK.yellow}
+                />
+                <FinanceRow
+                  label="BALANCE AFTER"
+                  value={formatCurrencyCompact(academy.balance - buyoutCostPence)}
+                  accent={(academy.balance - buyoutCostPence) < 0 ? WK.red : WK.tealLight}
+                />
+
+                <View style={{ marginTop: 8, marginBottom: 16, borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 12 }}>
+                  <PixelText size={6} dim style={{ lineHeight: 14 }}>
+                    YOU WILL OWN 100% OF YOUR ACADEMY. THE INVESTOR WILL NO LONGER RECEIVE A CUT OF PLAYER SALES.
+                  </PixelText>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Button label="CONFIRM" variant="yellow" fullWidth onPress={handleBuyout} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button label="CANCEL" variant="teal" fullWidth onPress={() => setShowBuyout(false)} />
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
       ) : (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 }}>
           <PixelText size={8} dim>NO INVESTOR ASSIGNED</PixelText>
@@ -363,8 +466,8 @@ function LoansPane() {
       setLoanError(result.message);
       return;
     }
-    // Credit balance with loan proceeds
-    addBalance(amount);
+    // Credit balance with loan proceeds — amount is whole pounds, store is pence
+    addBalance(amount * 100);
     setAmountText('');
     setShowModal(false);
   }
@@ -482,6 +585,7 @@ const CAT_BADGE_CONFIG: Record<FinancialCategory, { label: string; color: string
   facility_upgrade:     { label: 'FAC', color: WK.orange },
   earnings:             { label: 'ERN', color: WK.green },
   contract_termination: { label: 'TRM', color: WK.red },
+  investor_buyout:      { label: 'BYO', color: WK.red },
 };
 
 function LedgerPane() {
@@ -495,8 +599,8 @@ function LedgerPane() {
     ? allTx
     : allTx.filter((tx) => tx.category === catFilter);
 
-  const incomeCats: FinancialCategory[] = ['sponsor_payment', 'investment', 'earnings'];
-  const expenseCats: FinancialCategory[] = ['wages', 'upkeep', 'transfer_fee', 'facility_upgrade', 'contract_termination'];
+  const incomeCats: FinancialCategory[] = ['sponsor_payment', 'investment', 'earnings', 'transfer_fee'];
+  const expenseCats: FinancialCategory[] = ['wages', 'upkeep', 'facility_upgrade', 'contract_termination'];
   const totalIncome = incomeCats.reduce((s, c) => s + Math.max(0, getTotalByCategory(c, rangeWeeks)), 0);
   const totalExpenses = expenseCats.reduce((s, c) => s + Math.abs(Math.min(0, getTotalByCategory(c, rangeWeeks))), 0);
   const netTotal = totalIncome - totalExpenses;
@@ -710,9 +814,12 @@ export default function FinanceHubScreen() {
   const [activeTab, setActiveTab] = useState<FinanceTab>('BALANCE');
   const academy = useAcademyStore((s) => s.academy);
 
-  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
-    ? academy.balance
-    : academy.totalCareerEarnings;
+  // balance is stored in pence — convert to whole pounds for display
+  const balance = penceToPounds(
+    typeof academy.balance === 'number' && !isNaN(academy.balance)
+      ? academy.balance
+      : academy.totalCareerEarnings * 100,
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
@@ -735,7 +842,7 @@ export default function FinanceHubScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Finances</PixelText>
-        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
+        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
 
       {activeTab === 'BALANCE' && <BalancePane />}

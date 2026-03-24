@@ -7,6 +7,7 @@ import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
+import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFinanceStore } from '@/stores/financeStore';
@@ -14,6 +15,7 @@ import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { generateCoachProspects, generateScoutProspects } from '@/engine/recruitment';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { FlagText } from '@/components/ui/FlagText';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import { Avatar } from '@/components/ui/Avatar';
@@ -21,17 +23,32 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { penceToPounds, formatPounds } from '@/utils/currency';
 import { hapticTap, hapticWarning } from '@/utils/haptics';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
 import { ArchetypeBadge } from '@/components/ArchetypeBadge';
-import { moraleEmoji } from '@/utils/morale';
 
 const ACADEMY_TABS = ['SQUAD', 'COACHES', 'SCOUTS'] as const;
 type AcademyTab = typeof ACADEMY_TABS[number];
 
 // ─── Player card ──────────────────────────────────────────────────────────────
+
+function injuryStyle(player: Player): { borderColor: string; backgroundColor: string } {
+  if (!player.injury) return { borderColor: WK.border, backgroundColor: WK.tealCard };
+  switch (player.injury.severity) {
+    case 'minor':    return { borderColor: WK.yellow, backgroundColor: WK.yellow + '26' };
+    case 'moderate': return { borderColor: WK.orange,  backgroundColor: WK.orange  + '26' };
+    case 'serious':  return { borderColor: WK.red,     backgroundColor: WK.red     + '26' };
+  }
+}
+
+function injuryBadgeLabel(player: Player): string | null {
+  if (!player.injury) return null;
+  const abbrev = player.injury.severity === 'minor' ? 'MINOR' : player.injury.severity === 'moderate' ? 'MOD' : 'SERIOUS';
+  return `${abbrev} ${player.injury.weeksRemaining}W`;
+}
 
 function PlayerCard({ player }: { player: Player }) {
   const router = useRouter();
@@ -39,6 +56,8 @@ function PlayerCard({ player }: { player: Player }) {
   const playerClique = cliques.find((c) => c.isDetected && c.memberIds.includes(player.id));
   const cliqueColor = playerClique ? CLIQUE_PALETTE[playerClique.color] : NO_GROUP_COLOR;
   const cliqueLabel = playerClique ? playerClique.name.toUpperCase() : 'NO GROUP';
+  const cardStyle = injuryStyle(player);
+  const badgeLabel = injuryBadgeLabel(player);
 
   const traitValues = [
     player.personality.determination,
@@ -54,9 +73,9 @@ function PlayerCard({ player }: { player: Player }) {
   return (
     <Pressable onPress={() => { hapticTap(); router.push(`/player/${player.id}`); }}>
       <View style={{
-        backgroundColor: WK.tealCard,
+        backgroundColor: cardStyle.backgroundColor,
         borderWidth: 3,
-        borderColor: WK.border,
+        borderColor: cardStyle.borderColor,
         padding: 8,
         marginBottom: 6,
         flexDirection: 'row',
@@ -64,14 +83,17 @@ function PlayerCard({ player }: { player: Player }) {
         gap: 12,
         ...pixelShadow,
       }}>
-        <Avatar appearance={player.appearance} role="PLAYER" size={44} />
+        <Avatar appearance={player.appearance} role="PLAYER" size={44} morale={player.morale ?? 70} age={player.age} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper style={{ marginBottom: 2 }}>{player.name}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
             <BodyText size={11} color={WK.tealLight}>{player.position} · AGE {player.age}</BodyText>
             <ArchetypeBadge player={player} />
           </View>
-          <BodyText size={11} dim>{player.nationality}</BodyText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <FlagText nationality={player.nationality} size={11} />
+            <BodyText size={11} dim>{player.nationality}</BodyText>
+          </View>
 
           {/* 2×4 trait grid */}
           <View style={{ marginTop: 4, gap: 2 }}>
@@ -107,7 +129,17 @@ function PlayerCard({ player }: { player: Player }) {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${player.overallRating}`} color="yellow" />
-          <PixelText size={12}>{moraleEmoji(player.morale ?? 70)}</PixelText>
+          {badgeLabel ? (
+            <View style={{
+              backgroundColor: cardStyle.borderColor,
+              borderWidth: 2,
+              borderColor: WK.border,
+              paddingHorizontal: 4,
+              paddingVertical: 2,
+            }}>
+              <PixelText size={5} color={WK.text}>{badgeLabel}</PixelText>
+            </View>
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -127,11 +159,14 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} />
+        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={coach.age ?? 35} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
-          <PixelText size={7} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={coach.nationality} size={12} />
+            <PixelText size={7} dim>{coach.nationality}</PixelText>
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`INF ${coach.influence}`} color="yellow" />
@@ -176,11 +211,14 @@ function CoachProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} />
+        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
-          <PixelText size={7} dim style={{ marginTop: 2 }}>{coach.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={coach.nationality} size={12} />
+            <PixelText size={7} dim>{coach.nationality}</PixelText>
+          </View>
         </View>
         <Badge label={`INF ${coach.influence}`} color="green" />
       </View>
@@ -200,28 +238,38 @@ const RANGE_LABEL: Record<Scout['scoutingRange'], string> = {
   international: 'INTL',
 };
 
-function ScoutCard({ scout, onFire }: { scout: Scout; onFire: () => void }) {
+function ScoutCard({ scout }: { scout: Scout }) {
+  const router = useRouter();
+  const isOnMission = scout.activeMission?.status === 'active';
+
   return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: WK.border,
-      padding: 12,
-      marginBottom: 10,
-      ...pixelShadow,
-    }}>
+    <Pressable
+      onPress={() => { hapticTap(); router.push(`/scout/${scout.id}`); }}
+      style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: isOnMission ? WK.orange : WK.border,
+        padding: 12,
+        marginBottom: 10,
+        ...pixelShadow,
+      }}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar appearance={scout.appearance} role="SCOUT" size={44} />
+        <Avatar appearance={scout.appearance} role="SCOUT" size={44} morale={scout.morale ?? 70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{scout.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>
             {RANGE_LABEL[scout.scoutingRange]} SCOUT
           </PixelText>
-          <PixelText size={7} dim style={{ marginTop: 2 }}>{scout.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={scout.nationality} size={12} />
+            <PixelText size={7} dim>{scout.nationality}</PixelText>
+          </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${scout.successRate}%`} color="yellow" />
           <PixelText size={6} dim>£{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
+          {isOnMission && <Badge label="ON MISSION" color="yellow" />}
         </View>
       </View>
       <View style={{ marginTop: 8 }}>
@@ -229,10 +277,7 @@ function ScoutCard({ scout, onFire }: { scout: Scout; onFire: () => void }) {
           <View style={{ height: '100%', width: `${scout.successRate}%`, backgroundColor: traitColor(Math.round(scout.successRate / 5)) }} />
         </View>
       </View>
-      <Pressable onPress={() => { hapticWarning(); onFire(); }} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
-        <PixelText size={6} color={WK.red}>[ RELEASE ]</PixelText>
-      </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -247,13 +292,16 @@ function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <Avatar appearance={scout.appearance} role="SCOUT" size={44} />
+        <Avatar appearance={scout.appearance} role="SCOUT" size={44} morale={scout.morale ?? 70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{scout.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>
             {RANGE_LABEL[scout.scoutingRange]} SCOUT
           </PixelText>
-          <PixelText size={7} dim style={{ marginTop: 2 }}>{scout.nationality}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagText nationality={scout.nationality} size={12} />
+            <PixelText size={7} dim>{scout.nationality}</PixelText>
+          </View>
         </View>
         <Badge label={`${scout.successRate}%`} color="green" />
       </View>
@@ -346,13 +394,13 @@ function CoachesPane() {
   }
 
   function signCoach(coach: Coach) {
-    const signingFee = coach.salary * 4;
-    if ((academy.balance ?? academy.totalCareerEarnings) < signingFee) {
+    const signingFee = coach.salary * 4; // whole pounds
+    if (academy.balance < signingFee * 100) { // balance is pence
       setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addBalance(-signingFee);
+    addBalance(-signingFee * 100); // deduct pence
     addCoach({ ...coach, joinedWeek: weekNumber });
     setProspects((prev) => prev.filter((p) => p.id !== coach.id));
   }
@@ -367,13 +415,13 @@ function CoachesPane() {
   function confirmFireCoach() {
     if (!pendingFire) return;
     const { coach, penalty, penaltyPence } = pendingFire;
-    const currentBalance = academy.balance ?? 0;
-    if (currentBalance < penalty) {
+    const currentBalancePounds = penceToPounds(academy.balance ?? 0);
+    if (currentBalancePounds < penalty) {
       setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
       setPendingFire(null);
       return;
     }
-    addBalance(-penalty);
+    addBalance(-penalty * 100); // penalty is whole pounds → pence
     useFinanceStore.getState().addTransaction({
       amount: -penaltyPence,
       category: 'contract_termination',
@@ -498,13 +546,13 @@ function ScoutsPane() {
   }
 
   function signScout(scout: Scout) {
-    const signingFee = scout.salary * 4;
-    if ((academy.balance ?? academy.totalCareerEarnings) < signingFee) {
+    const signingFee = scout.salary * 4; // whole pounds
+    if (academy.balance < signingFee * 100) { // balance is pence
       setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addBalance(-signingFee);
+    addBalance(-signingFee * 100); // deduct pence
     addScout({ ...scout, joinedWeek: weekNumber });
     setProspects((prev) => prev.filter((p) => p.id !== scout.id));
   }
@@ -519,13 +567,13 @@ function ScoutsPane() {
   function confirmFireScout() {
     if (!pendingFire) return;
     const { scout, penalty, penaltyPence } = pendingFire;
-    const currentBalance = academy.balance ?? 0;
-    if (currentBalance < penalty) {
+    const currentBalancePounds = penceToPounds(academy.balance ?? 0);
+    if (currentBalancePounds < penalty) {
       setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
       setPendingFire(null);
       return;
     }
-    addBalance(-penalty);
+    addBalance(-penalty * 100); // penalty is whole pounds → pence
     useFinanceStore.getState().addTransaction({
       amount: -penaltyPence,
       category: 'contract_termination',
@@ -562,7 +610,7 @@ function ScoutsPane() {
         <FlatList
           data={scouts}
           keyExtractor={(s) => s.id}
-          renderItem={({ item }) => <ScoutCard scout={item} onFire={() => fireScout(item)} />}
+          renderItem={({ item }) => <ScoutCard scout={item} />}
           contentContainerStyle={{ padding: 10 }}
         />
       )}
@@ -633,13 +681,81 @@ function ScoutsPane() {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
+function DangerStatusCard() {
+  const {
+    weeksNegativeBalance,
+    weeksUnderPlayerFloor,
+    weeksUnderCoachRatio,
+    weeksCoachesWithFewPlayers,
+  } = useLossConditionStore();
+  const players = useSquadStore((s) => s.players);
+  const coaches = useCoachStore((s) => s.coaches);
+
+  const warnings: { label: string; color: string }[] = [];
+
+  if (weeksNegativeBalance > 0) {
+    const weeksLeft = Math.max(0, 8 - weeksNegativeBalance);
+    const color = weeksNegativeBalance >= 5 ? WK.red : WK.orange;
+    warnings.push({
+      label: `FINANCES: In the red — ${weeksLeft} week${weeksLeft !== 1 ? 's' : ''} remaining`,
+      color,
+    });
+  }
+
+  if (weeksUnderPlayerFloor > 0) {
+    const weeksLeft = Math.max(0, 4 - weeksUnderPlayerFloor);
+    warnings.push({
+      label: `SQUAD: Only ${players.length} player${players.length !== 1 ? 's' : ''} — ${weeksLeft}wk to closure`,
+      color: WK.red,
+    });
+  }
+
+  if (weeksUnderCoachRatio > 0) {
+    warnings.push({
+      label: `RATIO: ${players.length} players, ${coaches.length} coach${coaches.length !== 1 ? 'es' : ''} — sign a coach`,
+      color: WK.orange,
+    });
+  }
+
+  if (weeksCoachesWithFewPlayers > 0) {
+    warnings.push({
+      label: 'COACHES: Too few players — coaches may leave',
+      color: WK.orange,
+    });
+  }
+
+  if (warnings.length === 0) return null;
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.red,
+      marginHorizontal: 10,
+      marginTop: 10,
+      padding: 12,
+      gap: 8,
+      ...pixelShadow,
+    }}>
+      <PixelText size={8} color={WK.red} upper>⚠ Academy Alerts</PixelText>
+      {warnings.map((w, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: 6, height: 6, backgroundColor: w.color }} />
+          <PixelText size={6} color={w.color} style={{ flex: 1 }}>{w.label}</PixelText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function UpkeepWarningBanner() {
-  const balance = useAcademyStore((s) => s.academy.balance ?? 0);
+  const balancePence = useAcademyStore((s) => s.academy.balance ?? 0);
   const levels = useFacilityStore((s) => s.levels);
-  const totalUpkeep = calculateTotalUpkeep(levels);
+  const totalUpkeep = calculateTotalUpkeep(levels); // pence
 
   if (totalUpkeep === 0) return null;
-  const weeksUntilBroke = Math.floor(balance / totalUpkeep);
+  // Both values in pence — division gives correct weeks
+  const weeksUntilBroke = Math.floor(balancePence / totalUpkeep);
   if (weeksUntilBroke >= 10) return null;
 
   return (
@@ -655,7 +771,7 @@ function UpkeepWarningBanner() {
     }}>
       <PixelText size={6} color={WK.text}>HIGH UPKEEP</PixelText>
       <PixelText size={6} color={WK.text}>
-        £{totalUpkeep.toLocaleString()}/WK · {weeksUntilBroke}WK LEFT
+        £{penceToPounds(totalUpkeep).toLocaleString()}/WK · {weeksUntilBroke}WK LEFT
       </PixelText>
     </View>
   );
@@ -665,9 +781,12 @@ export default function AcademyHubScreen() {
   const [activeTab, setActiveTab] = useState<AcademyTab>('SQUAD');
   const academy = useAcademyStore((s) => s.academy);
 
-  const balance = (typeof academy.balance === 'number' && !isNaN(academy.balance))
-    ? academy.balance
-    : academy.totalCareerEarnings;
+  // balance is stored in pence — convert to whole pounds for display
+  const balance = penceToPounds(
+    typeof academy.balance === 'number' && !isNaN(academy.balance)
+      ? academy.balance
+      : academy.totalCareerEarnings * 100,
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
@@ -690,9 +809,10 @@ export default function AcademyHubScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Academy</PixelText>
-        <PixelText size={7} color={WK.yellow}>£{balance.toLocaleString()}</PixelText>
+        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
       <UpkeepWarningBanner />
+      <DangerStatusCard />
 
       {activeTab === 'SQUAD' && <SquadPane />}
       {activeTab === 'COACHES' && <CoachesPane />}

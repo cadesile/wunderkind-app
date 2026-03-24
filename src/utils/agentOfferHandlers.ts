@@ -9,7 +9,7 @@ import { calculateNetSalePrice } from '@/engine/finance';
  * Accept an agent transfer offer:
  * 1. Mark offer accepted in inbox store
  * 2. Mark player as transferred (isActive: false, status: 'transferred_via_agent')
- * 3. Credit net proceeds to academy balance (whole pounds)
+ * 3. Credit net proceeds to academy balance (pence)
  * 4. Record in ledger (transfer_fee) and transfer history
  */
 export function handleAcceptAgentOffer(offerId: string): void {
@@ -42,11 +42,14 @@ export function handleAcceptAgentOffer(offerId: string): void {
     offer.agentCommissionRate,
     investorEquityPcts,
   );
-  const netPounds = Math.round(netPence / 100);
+  const netPounds = Math.round(netPence / 100); // whole pounds — used for ledger display only
   const agentCutPence = offer.estimatedFee - Math.round(offer.estimatedFee * (1 - offer.agentCommissionRate / 100));
   const investorCutPence = Math.round(offer.estimatedFee * (1 - offer.agentCommissionRate / 100)) - netPence;
 
-  useAcademyStore.getState().addBalance(netPounds);
+  // balance is stored in pence — credit pence directly
+  // addEarnings updates totalCareerEarnings (the SALES dashboard stat)
+  useAcademyStore.getState().addBalance(netPence);
+  useAcademyStore.getState().addEarnings(netPence);
 
   const weekNumber = academy.weekNumber;
   const financeStore = useFinanceStore.getState();
@@ -81,6 +84,32 @@ export function handleAcceptAgentOffer(offerId: string): void {
     week: weekNumber,
     type: 'agent_assisted',
   });
+
+  // Reputation effects: compare fee against rough fair value (OVR × £1,000 in pence)
+  const { players: currentSquad } = useSquadStore.getState();
+  const soldPlayer = currentSquad.find((p) => p.id === offer.playerId);
+  const { setReputation, markRepActivity } = useAcademyStore.getState();
+
+  if (soldPlayer) {
+    const fairValuePence = soldPlayer.overallRating * 100_000; // OVR × £1,000
+    const ratio = fairValuePence > 0 ? offer.estimatedFee / fairValuePence : 1;
+
+    if (ratio >= 1.25) {
+      // Excellent sale — well above market
+      setReputation(2.5);
+      markRepActivity();
+    } else if (ratio >= 0.85) {
+      // Fair sale
+      setReputation(1.5);
+      markRepActivity();
+    } else if (ratio < 0.5) {
+      // Significantly undersold — damages reputation
+      setReputation(-2.0);
+    } else {
+      // Below fair value — minor rep hit
+      setReputation(-1.0);
+    }
+  }
 }
 
 /**

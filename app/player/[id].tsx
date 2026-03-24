@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -16,8 +17,9 @@ import { AttributesRadar } from '@/components/radar/AttributesRadar';
 import { WK, pixelShadow } from '@/constants/theme';
 import { AttributeName } from '@/types/player';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
-import { moraleEmoji } from '@/utils/morale';
+import { moraleLabel } from '@/utils/morale';
 import { ScoutReportCard } from '@/components/ScoutReportCard';
+import { DevelopmentChart } from '@/components/ui/DevelopmentChart';
 
 // ─── Attribute bars (football skills) ────────────────────────────────────────
 
@@ -66,7 +68,7 @@ export default function PlayerDetailScreen() {
   const player = useSquadStore((s) => s.players.find((p) => p.id === id));
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const analyticsUnlocked = useFacilityStore((s) => s.analyticsUnlocked());
+  const analyticsUnlocked = useFacilityStore((s) => s.levels.scoutingCenter > 0);
 
   // Contract metrics
   const weeksRemaining = player
@@ -82,10 +84,32 @@ export default function PlayerDetailScreen() {
   const [matrixExpanded, setMatrixExpanded] = useState(false);
   const [showReleaseDialog, setShowReleaseDialog] = useState(false);
   const [releaseResultDialog, setReleaseResultDialog] = useState<{ title: string; message: string } | null>(null);
+  const [lastAction, setLastAction] = useState<'SUPPORTED' | 'DISCIPLINED' | null>(null);
 
   const updatePlayer = useSquadStore((s) => s.updatePlayer);
   const logInteraction = useInteractionStore((s) => s.logInteraction);
-  const recentInteractions = useInteractionStore((s) => s.getVisibleRecords(id ?? '', 5));
+  const interactionRecords = useInteractionStore((s) => s.records);
+
+  const managementCooldown = useMemo(() => {
+    const last = interactionRecords
+      .filter((r) => r.actorId === 'amp' && r.targetId === id && (r.subtype === 'support' || r.subtype === 'punish'))
+      .sort((a, b) => b.week - a.week)[0];
+    if (!last) return { locked: false, availableWeek: weekNumber };
+    const availableWeek = last.week + 4;
+    return { locked: weekNumber < availableWeek, availableWeek };
+  }, [interactionRecords, id, weekNumber]);
+
+  const recentInteractions = useMemo(
+    () =>
+      interactionRecords
+        .filter(
+          (r) =>
+            r.isVisibleToAmp &&
+            (r.actorId === id || r.targetId === id || r.secondaryTargetId === id),
+        )
+        .slice(0, 5),
+    [interactionRecords, id],
+  );
 
   const gameDate = getGameDate(weekNumber);
   const displayAge = player?.dateOfBirth
@@ -126,6 +150,8 @@ export default function PlayerDetailScreen() {
       visibilityReason: 'direct_action',
       narrativeSummary: `You gave ${p.name} your support.`,
     });
+    setLastAction('SUPPORTED');
+    setTimeout(() => setLastAction(null), 2000);
   }
 
   function handlePunish() {
@@ -147,6 +173,8 @@ export default function PlayerDetailScreen() {
       visibilityReason: 'direct_action',
       narrativeSummary: `You disciplined ${p.name}.`,
     });
+    setLastAction('DISCIPLINED');
+    setTimeout(() => setLastAction(null), 2000);
   }
 
   function handleRelease() {
@@ -204,14 +232,16 @@ export default function PlayerDetailScreen() {
           gap: 14,
           ...pixelShadow,
         }}>
-          <Avatar appearance={player.appearance} role="PLAYER" size={100} />
+          <Avatar appearance={player.appearance} role="PLAYER" size={100} morale={player.morale ?? 70} age={player.age} />
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <PixelText size={10} upper style={{ flex: 1 }} numberOfLines={2}>{player.name}</PixelText>
-              <PixelText size={14}>{moraleEmoji(player.morale ?? 70)}</PixelText>
             </View>
             <PixelText size={7} color={WK.tealLight}>{player.position} · AGE {displayAge}</PixelText>
-            <PixelText size={7} dim style={{ marginTop: 2 }}>{player.nationality}</PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <FlagText nationality={player.nationality} size={12} />
+              <PixelText size={7} dim>{player.nationality}</PixelText>
+            </View>
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
               <View>
                 <PixelText size={6} dim>OVR</PixelText>
@@ -220,6 +250,48 @@ export default function PlayerDetailScreen() {
             </View>
           </View>
         </View>
+
+        {/* Injury status card — only shown when injured */}
+        {player.injury && (() => {
+          const { severity, weeksRemaining, injuredWeek } = player.injury!;
+          const severityColor =
+            severity === 'minor'    ? WK.yellow :
+            severity === 'moderate' ? WK.orange  : WK.red;
+          return (
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: severityColor,
+              padding: 14,
+              ...pixelShadow,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <PixelText size={8} upper>Injury Status</PixelText>
+                <View style={{
+                  backgroundColor: severityColor,
+                  borderWidth: 2,
+                  borderColor: WK.border,
+                  paddingHorizontal: 6,
+                  paddingVertical: 3,
+                }}>
+                  <PixelText size={7} upper color={severity === 'minor' ? WK.border : WK.text}>
+                    {severity}
+                  </PixelText>
+                </View>
+              </View>
+              <View style={{ borderTopWidth: 2, borderTopColor: WK.border, gap: 0 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                  <PixelText size={7} dim>RECOVERY</PixelText>
+                  <PixelText size={7} color={severityColor}>{weeksRemaining}w remaining</PixelText>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                  <PixelText size={7} dim>INJURED WK</PixelText>
+                  <PixelText size={7} dim>Week {injuredWeek}</PixelText>
+                </View>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Football Attributes — collapsible */}
         {attrEntries && (
@@ -281,6 +353,11 @@ export default function PlayerDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* Development Chart — visible once 3+ monthly snapshots exist */}
+        {(player.developmentLog?.length ?? 0) >= 3 && (
+          <DevelopmentChart log={player.developmentLog!} />
+        )}
 
         {/* Scout Report — personality archetype (no raw numbers) */}
         <ScoutReportCard player={player} />
@@ -428,7 +505,7 @@ export default function PlayerDetailScreen() {
               {player.morale !== undefined && (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <PixelText size={7} dim>MORALE</PixelText>
-                  <PixelText size={16}>{moraleEmoji(player.morale)}</PixelText>
+                  <PixelText size={7} color={player.morale >= 60 ? WK.green : player.morale >= 40 ? WK.yellow : WK.red}>{moraleLabel(player.morale)}</PixelText>
                 </View>
               )}
               {(player.extensionCount ?? 0) > 0 && (
@@ -450,34 +527,55 @@ export default function PlayerDetailScreen() {
           ...pixelShadow,
         }}>
           <PixelText size={8} upper style={{ marginBottom: 10 }}>Management</PixelText>
+          {lastAction && (
+            <View style={{
+              marginBottom: 10,
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderWidth: 2,
+              borderColor: lastAction === 'SUPPORTED' ? WK.green : WK.red,
+              alignItems: 'center',
+            }}>
+              <PixelText size={7} color={lastAction === 'SUPPORTED' ? WK.green : WK.red}>
+                ✓ {lastAction}
+              </PixelText>
+            </View>
+          )}
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Pressable
-              onPress={handleSupport}
+              onPress={managementCooldown.locked ? undefined : handleSupport}
               style={{
                 flex: 1,
-                backgroundColor: WK.green,
+                backgroundColor: managementCooldown.locked ? WK.tealMid : WK.green,
                 borderWidth: 2,
                 borderColor: WK.border,
                 padding: 10,
                 alignItems: 'center',
+                opacity: managementCooldown.locked ? 0.45 : 1,
               }}
             >
-              <PixelText size={7} color={WK.text}>SUPPORT</PixelText>
+              <PixelText size={7} color={managementCooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
             </Pressable>
             <Pressable
-              onPress={handlePunish}
+              onPress={managementCooldown.locked ? undefined : handlePunish}
               style={{
                 flex: 1,
-                backgroundColor: WK.red,
+                backgroundColor: managementCooldown.locked ? WK.tealMid : WK.red,
                 borderWidth: 2,
                 borderColor: WK.border,
                 padding: 10,
                 alignItems: 'center',
+                opacity: managementCooldown.locked ? 0.45 : 1,
               }}
             >
-              <PixelText size={7} color={WK.text}>PUNISH</PixelText>
+              <PixelText size={7} color={managementCooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
             </Pressable>
           </View>
+          {managementCooldown.locked && (
+            <PixelText size={6} dim style={{ marginTop: 8, textAlign: 'center' }}>
+              AVAILABLE WK {managementCooldown.availableWeek}
+            </PixelText>
+          )}
         </View>
 
         {/* Recent Interactions */}

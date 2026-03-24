@@ -128,16 +128,22 @@ export interface ApiInboxMessage {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
+export interface ManagerProfileInput {
+  name: string;
+  dateOfBirth: string; // YYYY-MM-DD
+  gender: 'male' | 'female';
+  nationality: string; // e.g. 'English'
+}
+
 export interface RegisterRequest {
   email: string;
   password: string;
-  academyName: string;
+  manager?: ManagerProfileInput;
 }
 
 export interface RegisterResponse {
   id: string;
   email: string;
-  academyName: string;
 }
 
 export interface LoginRequest {
