@@ -20,10 +20,10 @@ function moraleColor(morale: number): string {
   return WK.red;
 }
 
-const RANGE_COLOR: Record<Scout['scoutingRange'], string> = {
-  local: WK.tealLight,
-  national: WK.yellow,
-  international: WK.orange,
+const RANGE_BADGE_COLOR: Record<Scout['scoutingRange'], 'dim' | 'yellow' | 'red'> = {
+  local:         'dim',
+  national:      'yellow',
+  international: 'red',
 };
 
 function ScoutCard({ scout, onPress }: { scout: Scout; onPress: () => void }) {
@@ -56,9 +56,9 @@ function ScoutCard({ scout, onPress }: { scout: Scout; onPress: () => void }) {
         )}
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{scout.name}</PixelText>
-          <PixelText size={6} color={RANGE_COLOR[scout.scoutingRange]} style={{ marginTop: 2 }}>
-            {scout.scoutingRange.toUpperCase()} SCOUT
-          </PixelText>
+          <View style={{ marginTop: 2 }}>
+            <Badge label={`${scout.scoutingRange.toUpperCase()} SCOUT`} color={RANGE_BADGE_COLOR[scout.scoutingRange]} />
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
             <FlagText nationality={scout.nationality} size={10} />
             <PixelText size={6} dim>{scout.nationality}</PixelText>

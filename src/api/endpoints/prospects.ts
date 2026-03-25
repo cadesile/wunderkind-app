@@ -1,5 +1,6 @@
 import { apiRequest } from '@/api/client';
 import { MarketPlayer } from '@/types/market';
+import type { ApiGuardian } from '@/types/api';
 
 // ─── Raw backend shape — same as RawPlayer in market.ts ───────────────────────
 
@@ -20,6 +21,7 @@ interface RawProspectPlayer {
     commissionRate: string;
     nationality: string;
   } | null;
+  guardians?: ApiGuardian[];
 }
 
 interface RawProspectResponse {
@@ -58,6 +60,7 @@ function transformProspect(p: RawProspectPlayer): MarketPlayer {
     marketValue: p.currentAbility * 1000,
     currentOffer: p.currentAbility * 1000,
     perceivedAbility: p.currentAbility,
+    guardians: p.guardians ?? [],
   };
 }
 

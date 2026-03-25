@@ -14,6 +14,7 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { marketApi } from '@/api/endpoints/market';
 import { generatePersonality } from '@/engine/personality';
 import { generateAppearance } from '@/engine/appearance';
+import { Avatar } from '@/components/ui/Avatar';
 import { MarketCoach, MarketScout, Scout } from '@/types/market';
 import { Coach } from '@/types/coach';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
@@ -73,10 +74,14 @@ function StatBar({ value, max = 100 }: { value: number; max?: number }) {
 
 function MarketCoachCard({ coach }: { coach: MarketCoach }) {
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const balance = useAcademyStore((s) => s.academy.balance ?? 0);
   const addCoach = useCoachStore((s) => s.addCoach);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
   const [hireError, setHireError] = useState<string | null>(null);
+
+  const signingCost = coach.salary * 4; // 4 weeks upfront, pence
+  const canAfford = balance >= signingCost;
 
   async function handleHire() {
     setHiring(true);
@@ -97,12 +102,19 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
     <View style={{
       backgroundColor: WK.tealCard,
       borderWidth: 3,
-      borderColor: WK.border,
+      borderColor: canAfford ? WK.border : WK.tealMid,
       padding: 12,
       marginBottom: 10,
+      opacity: canAfford ? 1 : 0.55,
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        <Avatar
+          appearance={generateAppearance(coach.id, 'COACH', 35)}
+          role="COACH"
+          size={44}
+          morale={70}
+        />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>
             {coach.firstName} {coach.lastName}
@@ -121,7 +133,25 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
         </View>
       </View>
 
+      {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+          {(Object.entries(coach.specialisms) as [string, number][]).map(([key, val]) => (
+            <Badge
+              key={key}
+              label={key.toUpperCase()}
+              color={val >= 70 ? 'green' : val >= 40 ? 'yellow' : 'dim'}
+            />
+          ))}
+        </View>
+      )}
+
       <StatBar value={coach.influence} max={20} />
+
+      {!canAfford && (
+        <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+          INSUFFICIENT FUNDS
+        </PixelText>
+      )}
 
       <View style={{ marginTop: 10 }}>
         <Button
@@ -129,7 +159,7 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
           variant="teal"
           fullWidth
           onPress={handleHire}
-          disabled={hiring}
+          disabled={hiring || !canAfford}
         />
         {hireError && (
           <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
@@ -143,18 +173,22 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
 
 // ─── Market scout card ────────────────────────────────────────────────────────
 
-const RANGE_COLOR: Record<MarketScout['scoutingRange'], string> = {
-  local:         WK.tealLight,
-  national:      WK.yellow,
-  international: WK.orange,
+const RANGE_BADGE_COLOR: Record<MarketScout['scoutingRange'], 'dim' | 'yellow' | 'red'> = {
+  local:         'dim',
+  national:      'yellow',
+  international: 'red',
 };
 
 function MarketScoutCard({ scout }: { scout: MarketScout }) {
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const balance = useAcademyStore((s) => s.academy.balance ?? 0);
   const addScout = useScoutStore((s) => s.addScout);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
   const [hireError, setHireError] = useState<string | null>(null);
+
+  const signingCost = scout.salary * 4; // 4 weeks upfront, pence
+  const canAfford = balance >= signingCost;
 
   async function handleHire() {
     setHiring(true);
@@ -175,24 +209,27 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
     <View style={{
       backgroundColor: WK.tealCard,
       borderWidth: 3,
-      borderColor: WK.border,
+      borderColor: canAfford ? WK.border : WK.tealMid,
       padding: 12,
       marginBottom: 10,
+      opacity: canAfford ? 1 : 0.55,
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        <Avatar
+          appearance={generateAppearance(scout.id, 'SCOUT', 35)}
+          role="SCOUT"
+          size={44}
+          morale={70}
+        />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>
             {scout.firstName} {scout.lastName}
           </PixelText>
-          <PixelText
-            size={7}
-            color={RANGE_COLOR[scout.scoutingRange]}
-            style={{ marginTop: 2 }}
-          >
-            {scout.scoutingRange.toUpperCase()} SCOUT
-          </PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+          <View style={{ marginTop: 2 }}>
+            <Badge label={`${scout.scoutingRange.toUpperCase()} SCOUT`} color={RANGE_BADGE_COLOR[scout.scoutingRange]} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
             <FlagText nationality={scout.nationality} size={10} />
             <PixelText size={6} dim>{scout.nationality}</PixelText>
           </View>
@@ -205,13 +242,19 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
 
       <StatBar value={scout.successRate} max={100} />
 
+      {!canAfford && (
+        <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+          INSUFFICIENT FUNDS
+        </PixelText>
+      )}
+
       <View style={{ marginTop: 10 }}>
         <Button
           label={hiring ? 'HIRING...' : 'HIRE'}
           variant="teal"
           fullWidth
           onPress={handleHire}
-          disabled={hiring}
+          disabled={hiring || !canAfford}
         />
         {hireError && (
           <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>

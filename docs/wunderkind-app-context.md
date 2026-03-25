@@ -1,12 +1,12 @@
 # wunderkind-app — Project Context
 
-> Generated: 2026-03-24 20:04:20 | Stack: unknown | Dev: bare
+> Generated: 2026-03-24 23:19:17 | Stack: unknown | Dev: bare
 
 ---
 
 ## Overview
 
-The Wunderkind Factory is a React Native mobile game where players manage a football academy — recruiting players, hiring staff, and developing talent through a dynamic 8-trait Personality Matrix engine. The app runs an offline-first "Weekly Tick" game loop that processes attribute shifts, finances, and behavioral incidents entirely on-device using Zustand with AsyncStorage persistence. High-level metrics sync asynchronously to a Symfony backend API via TanStack Query offline mutations, making the game fully playable without a network connection.
+The Wunderkind Factory is a React Native mobile game where players manage a football academy, recruiting and developing players through an 8-trait Personality Matrix engine while balancing finances, staff, and reputation. The app is client-authoritative and offline-first, processing the core "Weekly Tick" game loop entirely on-device using Zustand with AsyncStorage persistence, then asynchronously syncing high-level metrics to a Symfony backend via TanStack Query offline mutations. Built with Expo SDK 54 and NativeWind v4, it features file-based navigation via Expo Router and a pixel-art design system throughout.
 
 ---
 
@@ -14,7 +14,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 
 | Category | Count |
 |---|---|
-| TypeScript files  | 172 |
+| TypeScript files  | 173 |
 | Entities/Models   | 0 |
 | Controllers       | 0 |
 | Services          | 0 |
@@ -202,6 +202,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 │       ├── currency.ts
 │       ├── facilityUpkeep.ts
 │       ├── gameDate.ts
+│       ├── guardianNarrative.ts
 │       ├── haptics.ts
 │       ├── morale.ts
 │       ├── nationality.ts
@@ -221,7 +222,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 ├── tailwind.config.js
 └── tsconfig.json
 
-26 directories, 126 files
+26 directories, 127 files
 ```
 
 ---
@@ -274,6 +275,7 @@ composer install
 ## Recent Git Activity
 
 ```
+3e6d0cd latest project
 d9f2b8a updated latest context
 175602e latest
 250f9e7 Fix currency formatting, scout gem source, and major feature additions
@@ -288,25 +290,24 @@ b13672d Centralise player asking price into getPlayerAskingPrice utility
 0a1aacc Fix agent offer UX, player rating stability, and coach valuation alignment
 92d2c56 Complete scouting & relationship system — missing elements
 704dd4f Implement Scouting, Relationship & Market Valuation systems
-5b4d7c1 UI: flip tab/title order on Facilities and Market screens
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Store/Command pattern** — Zustand stores under `src/stores/` act as centralized state containers with explicit mutating commands (e.g. `setPlayers`, `addBalance`, `takeLoan`), separating state ownership from UI.
-- **Service layer** — `src/engine/` (GameLoop, ScoutingService, ReactionHandler, personality, recruitment) encapsulates domain logic independently of UI and persistence, functioning as a pure business-logic tier.
-- **Repository / API gateway pattern** — `src/api/endpoints/` isolates each backend resource (market, squad, staff, facilities, inbox) behind typed fetch wrappers, with `src/api/client.ts` as a shared transport; consumers never call `fetch` directly.
-- **Mutation hook pattern (CQRS-lite)** — `src/api/mutations/` separates write operations (sync, market assignment) into dedicated TanStack Query mutation hooks, keeping reads (`endpoints/`) and writes structurally distinct.
-- **DTO / transform layer** — raw backend responses are mapped to app-internal types inside `src/api/endpoints/` (e.g. `ATT→FWD`, pence→pounds, `coachingAbility→influence`), acting as an anti-corruption layer between the Symfony API contract and the front-end domain model.
+- **Store/Slice pattern (Flux-like)** — `src/stores/` contains domain-scoped state slices (academyStore, squadStore, loanStore, etc.), each owning its own state and mutations, consistent with Zustand's atomic store pattern.
+- **Engine/Domain layer** — `src/engine/` isolates pure game logic (GameLoop, personality, recruitment, finance) from UI and state, analogous to a domain service layer.
+- **API Gateway + DTO transformation** — `src/api/endpoints/` acts as an anti-corruption layer, mapping raw backend types to app-internal types (e.g. ATT→FWD, pence→pounds, coachingAbility→influence); `src/api/mutations/` separates write operations from queries.
+- **Command/Query separation** — `src/api/mutations/` (commands/writes) is structurally separated from `src/api/endpoints/` (queries/reads), a lightweight CQRS split without a full event bus.
+- **Component hierarchy with design system** — `src/components/ui/` provides atomic primitives (PixelText, Avatar, PixelTopTabBar), `src/components/` holds composite/domain components (GlobalHeader, radar), and `src/constants/theme.ts` acts as a centralized design token registry.
 
 ---
 
 ## Current Development Focus
 
-- **Guardian/NPC Engine** — three new files (`GuardianEngine.ts`, `guardianStore.ts`, `guardian.ts`) alongside `ReactionHandler.ts` signal an emerging behavioural AI layer; generating contextually realistic guardian reactions, escalation logic, and dialogue trees is a strong AI candidate.
-- **Transfer Market & Player Valuation** — centralising asking-price logic and populating a weekly transfer ledger suggests the valuation model is still being defined; AI could generate dynamic market demand curves, transfer rumour narratives, and negotiation outcomes.
-- **Financial Event Generation** — sponsor/investor offer events are newly wired but appear rules-based; AI could drive richer, reputation-sensitive deal offers, investor pressure events, and financial crisis narratives to deepen the simulation.
-- **Scouting & Report Narrative** — `ScoutingService.ts` and `ScoutReportCard.tsx` are both active; AI is well-suited to generating scout report prose, gem/dud classification reasoning, and scouting trip incident events from underlying trait data.
-- **Game-Over & Career Reflection** — `game-over.tsx` is a recently touched screen; AI could produce personalised end-of-career summaries, hall-of-fame citations, and branching "what went wrong" post-mortems based on the session's ledger data.
+- **Transfer market & player valuation** — `getPlayerAskingPrice` utility added, transfers wired into weekly sync payload, and active changes in `market/players.tsx`; pricing logic and transfer flow likely need consistency checks and edge-case hardening.
+- **NPC interaction ledger & coach performance** — new ledger system linking coach behaviour to outcomes (commit `dd2e47b`) is a complex domain model; AI could help validate scoring logic, surface gaps in coverage, and generate realistic NPC decision trees.
+- **Weekly sync payload integrity** — ledger and transfer data now included in `POST /api/sync`; the backend contract is growing and prone to drift; AI assistance useful for schema validation, serialization correctness, and regression testing.
+- **Multi-screen UI consistency** — two consecutive "ui fixes" commits touching nearly every tab (`index`, `squad`, `coaches`, `finances`, `market`, `inbox`, `facilities`) suggest a systemic design-system issue; AI can audit NativeWind/pixel-art token usage across screens and flag deviations from `theme.ts`.
+- **Staff detail screens** (`coach/[id].tsx`, `scout/[id].tsx`) — newly active alongside the coach-performance link; these screens likely need coherent stat display, radar/trait visualisation parity with `player/[id].tsx`, and hire/fire flow wiring.

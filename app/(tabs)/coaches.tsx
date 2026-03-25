@@ -43,6 +43,17 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
           <PixelText size={6} dim>£{coach.salary.toLocaleString()}/wk</PixelText>
         </View>
       </View>
+      {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+          {(Object.entries(coach.specialisms) as [string, number][]).map(([key, val]) => (
+            <Badge
+              key={key}
+              label={key.toUpperCase()}
+              color={val >= 70 ? 'green' : val >= 40 ? 'yellow' : 'dim'}
+            />
+          ))}
+        </View>
+      )}
       {/* Influence bar */}
       <View style={{ marginTop: 8 }}>
         <View style={{
