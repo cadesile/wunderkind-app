@@ -3,11 +3,10 @@ import { useMarketStore } from '@/stores/marketStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { MarketPlayer } from '@/types/market';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
 import { ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
-
-const MAX_ASSIGNMENTS = 5;
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -24,12 +23,13 @@ function randomInt(min: number, max: number): number {
 export function assignScoutToPlayer(scoutId: string, playerId: string): boolean {
   const { scouts, updateScout } = useScoutStore.getState();
   const { players, updateMarketPlayer } = useMarketStore.getState();
+  const { scoutMaxAssignments } = useGameConfigStore.getState().config;
 
   const scout = scouts.find((s) => s.id === scoutId);
   if (!scout) return false;
 
   const assigned = scout.assignedPlayerIds ?? [];
-  if (assigned.length >= MAX_ASSIGNMENTS) return false;
+  if (assigned.length >= scoutMaxAssignments) return false;
   if (assigned.includes(playerId)) return false;
 
   const player = players.find((p) => p.id === playerId);
@@ -67,8 +67,11 @@ export function processScoutingTasks(): void {
   const { scouts } = useScoutStore.getState();
   const { players, updateMarketPlayer } = useMarketStore.getState();
 
+  const { scoutMoraleThreshold, scoutRevealWeeks, scoutAbilityErrorRange } =
+    useGameConfigStore.getState().config;
+
   scouts.forEach((scout) => {
-    if ((scout.morale ?? 70) < 40) return; // Low morale scouts make no progress
+    if ((scout.morale ?? 70) < scoutMoraleThreshold) return;
 
     const assigned = scout.assignedPlayerIds ?? [];
     assigned.forEach((playerId) => {
@@ -80,11 +83,11 @@ export function processScoutingTasks(): void {
 
       const newProgress = (player.scoutingProgress ?? 0) + 1;
 
-      if (newProgress >= 2) {
+      if (newProgress >= scoutRevealWeeks) {
         // Reveal the player with scout-error variance
         const errorMargin = (100 - (scout.successRate ?? 50)) / 100;
         const perceivedAbility = clamp(
-          player.currentAbility + Math.round(randomInt(-30, 30) * errorMargin),
+          player.currentAbility + Math.round(randomInt(-scoutAbilityErrorRange, scoutAbilityErrorRange) * errorMargin),
           0,
           100,
         );
@@ -116,13 +119,14 @@ export function processMissions(): void {
     // 1. Tick the mission
     tickMission(scout.id);
 
-    // 2. Roll for player count
+    // 2. Roll for player count using config-driven thresholds
+    const [t0, t1, t2, t3] = useGameConfigStore.getState().config.missionGemRollThresholds;
     const roll = Math.random();
     const count =
-      roll >= 0.94 ? 4 :
-      roll >= 0.85 ? 3 :
-      roll >= 0.75 ? 2 :
-      roll >= 0.25 ? 1 : 0;
+      roll >= t3 ? 4 :
+      roll >= t2 ? 3 :
+      roll >= t1 ? 2 :
+      roll >= t0 ? 1 : 0;
 
     // 3. Pull from the backend prospect pool — never generate locally.
     //    Allowed nationalities are determined by the academy's reputation tier and
@@ -211,7 +215,7 @@ export function processMissions(): void {
       }
       addMessage({
         id: `gem-${scout.id}-wk${weekNumber}-${Math.random().toString(36).slice(2, 7)}`,
-        type: 'system',
+        type: 'scout',
         week: weekNumber,
         subject: `${scout.name} has found a gem!`,
         body,
@@ -231,7 +235,7 @@ export function processMissions(): void {
       }
       addMessage({
         id: `mission-complete-${scout.id}-wk${weekNumber}`,
-        type: 'system',
+        type: 'scout',
         week: weekNumber,
         subject: `${scout.name} has completed their scouting mission`,
         body: completionBody,

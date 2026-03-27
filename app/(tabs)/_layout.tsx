@@ -17,7 +17,7 @@ import { useLossConditionStore } from '@/stores/lossConditionStore';
 import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { WeeklyTickOverlay } from '@/components/WeeklyTickOverlay';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap, hapticPress, hapticConfirm, hapticWarning } from '@/utils/haptics';
@@ -29,76 +29,87 @@ type NavTabDef = {
 };
 
 const NAV_TABS: NavTabDef[] = [
-  { name: 'home',       Icon: Home },
   { name: 'index',      Icon: LayoutGrid },
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
   { name: 'market',     Icon: Store },
 ];
 
-function CustomTabBar({ state, navigation }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
+function NavTabButton({ name, Icon, state, navigation }: NavTabDef & { state: BottomTabBarProps['state']; navigation: BottomTabBarProps['navigation'] }) {
+  const routeIndex = state.routes.findIndex((r) => r.name === name);
+  const isActive = routeIndex !== -1 && state.index === routeIndex;
+  const route = state.routes[routeIndex];
 
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        backgroundColor: WK.tealDark,
-        borderTopWidth: 3,
-        borderTopColor: WK.border,
-        height: 60 + insets.bottom,
-        paddingBottom: insets.bottom + 8,
+    <Pressable
+      key={name}
+      onPress={() => {
+        hapticTap();
+        if (!route) return;
+        const event = navigation.emit({
+          type: 'tabPress',
+          target: route.key,
+          canPreventDefault: true,
+        });
+        if (!isActive && !event.defaultPrevented) {
+          navigation.navigate(route.name, route.params);
+        }
       }}
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 44 }}
     >
-      {NAV_TABS.map(({ name, Icon }) => {
-        const routeIndex = state.routes.findIndex((r) => r.name === name);
-        const isActive = routeIndex !== -1 && state.index === routeIndex;
-        const route = state.routes[routeIndex];
+      <View
+        style={[
+          { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6 },
+          isActive && { backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.yellow, ...pixelShadow },
+        ]}
+      >
+        <Icon size={24} color={isActive ? WK.yellow : WK.dim} />
+      </View>
+    </Pressable>
+  );
+}
 
-        return (
-          <Pressable
-            key={name}
-            onPress={() => {
-              hapticTap();
-              if (!route) return;
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!isActive && !event.defaultPrevented) {
-                navigation.navigate(route.name, route.params);
-              }
-            }}
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: 44,
-            }}
-          >
-            {/* Active pill */}
-            <View
-              style={[
-                {
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                },
-                isActive && {
-                  backgroundColor: WK.tealCard,
-                  borderWidth: 2,
-                  borderColor: WK.yellow,
-                  ...pixelShadow,
-                },
-              ]}
-            >
-              <Icon size={24} color={isActive ? WK.yellow : WK.dim} />
-            </View>
-          </Pressable>
-        );
-      })}
+function CustomTabBar({ state, navigation, onNextWeek }: BottomTabBarProps & { onNextWeek: () => void }) {
+  const insets = useSafeAreaInsets();
+  const LEFT_TABS  = NAV_TABS.slice(0, 2);  // HUB, BUILD
+  const RIGHT_TABS = NAV_TABS.slice(2);     // FINANCE, MARKET
+
+  return (
+    <View style={{
+      flexDirection: 'row',
+      backgroundColor: WK.tealDark,
+      borderTopWidth: 3,
+      borderTopColor: WK.border,
+      height: 60 + insets.bottom,
+      paddingBottom: insets.bottom,
+    }}>
+      {/* Left nav: HOME, HUB */}
+      {LEFT_TABS.map((tab) => (
+        <NavTabButton key={tab.name} {...tab} state={state} navigation={navigation} />
+      ))}
+
+      {/* Centre action: NEXT WK */}
+      <Pressable
+        onPress={() => { hapticPress(); onNextWeek(); }}
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: WK.yellow,
+          borderLeftWidth: 3,
+          borderRightWidth: 3,
+          borderLeftColor: WK.border,
+          borderRightColor: WK.border,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 0,
+        }}
+      >
+        <PixelText size={12} color={WK.border}>{'>>'}</PixelText>
+      </Pressable>
+
+      {/* Right nav: BUILD, FINANCE, MARKET */}
+      {RIGHT_TABS.map((tab) => (
+        <NavTabButton key={tab.name} {...tab} state={state} navigation={navigation} />
+      ))}
     </View>
   );
 }
@@ -268,7 +279,7 @@ export default function TabLayout() {
       <GlobalHeader />
 
       <Tabs
-        tabBar={(props) => <CustomTabBar {...props} />}
+        tabBar={(props) => <CustomTabBar {...props} onNextWeek={handleAdvanceButton} />}
         screenOptions={{ headerShown: false }}
       >
         {/* Primary tabs */}
@@ -284,26 +295,6 @@ export default function TabLayout() {
         <Tabs.Screen name="coaches" options={{ href: null }} />
         <Tabs.Screen name="inbox"   options={{ href: null }} />
       </Tabs>
-
-      {/* Floating NEXT WK button — sits above tab bar, bottom-right */}
-      <View
-        style={{ position: 'absolute', bottom: 80, right: 16, zIndex: 100 }}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          onPress={() => { hapticPress(); handleAdvanceButton(); }}
-          style={{
-            backgroundColor: WK.yellow,
-            borderWidth: 3,
-            borderColor: WK.border,
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-            ...pixelShadow,
-          }}
-        >
-          <PixelText size={10} color={WK.border}>{`>> NEXT WK`}</PixelText>
-        </Pressable>
-      </View>
 
       {/* Weekly tick processing overlay */}
       <WeeklyTickOverlay />
@@ -334,26 +325,26 @@ export default function TabLayout() {
               </PixelText>
 
               {remainingCount > 1 && (
-                <PixelText size={6} dim style={{ marginBottom: 8 }}>
+                <BodyText size={12} dim style={{ marginBottom: 8 }}>
                   {remainingCount} unresolved conflicts
-                </PixelText>
+                </BodyText>
               )}
 
               {playerA && playerB ? (
                 <>
-                  <PixelText size={7} style={{ marginBottom: 6 }}>{playerA.name}</PixelText>
-                  <PixelText size={6} dim style={{ marginBottom: 6 }}>vs</PixelText>
-                  <PixelText size={7} style={{ marginBottom: 12 }}>{playerB.name}</PixelText>
+                  <BodyText size={14} style={{ marginBottom: 4 }}>{playerA.name}</BodyText>
+                  <BodyText size={12} dim style={{ marginBottom: 4 }}>vs</BodyText>
+                  <BodyText size={14} style={{ marginBottom: 12 }}>{playerB.name}</BodyText>
                 </>
               ) : (
-                <PixelText size={7} dim style={{ marginBottom: 12 }}>
+                <BodyText size={13} dim style={{ marginBottom: 12 }}>
                   One or both players no longer in squad.
-                </PixelText>
+                </BodyText>
               )}
 
-              <PixelText size={6} dim style={{ marginBottom: 20, lineHeight: 12 }}>
+              <BodyText size={13} dim style={{ marginBottom: 20, lineHeight: 20 }}>
                 Their relationship has broken down completely. Release one player to resolve the conflict and advance the week.
-              </PixelText>
+              </BodyText>
 
               <View style={{ gap: 10, marginBottom: 10 }}>
                 <Button

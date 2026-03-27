@@ -1,18 +1,18 @@
 import { useAuthStore } from '@/stores/authStore';
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { PlayerArchetype } from '@/types/archetype';
 
 function resolveBaseUrl(): string {
-  if (Platform.OS === 'web') {
-    return process.env.EXPO_PUBLIC_API_BASE_URL_WEB ?? 'https://api.wunderkind.app';
-  }
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (envUrl) return envUrl;
+
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
     return `http://${host}:8080`;
   }
-  return 'https://api.wunderkind.app';
+
+  return 'https://api.buildmyclub.co.uk';
 }
 
 const BASE_URL = resolveBaseUrl();

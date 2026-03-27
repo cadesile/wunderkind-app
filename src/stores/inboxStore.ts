@@ -4,7 +4,7 @@ import { BehavioralIncident } from '@/types/game';
 import { AgentOffer } from '@/types/narrative';
 import { zustandStorage } from '@/utils/storage';
 
-export type InboxMessageType = 'guardian' | 'agent' | 'sponsor' | 'investor' | 'system';
+export type InboxMessageType = 'guardian' | 'agent' | 'sponsor' | 'investor' | 'system' | 'scout' | 'development';
 
 export interface InboxMessage {
   id: string;

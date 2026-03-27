@@ -10,7 +10,7 @@ import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -31,12 +31,12 @@ function FinanceRow({ label, value, accent }: { label: string; value: string; ac
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 8,
+      paddingVertical: 10,
       borderBottomWidth: 2,
       borderBottomColor: WK.border,
     }}>
-      <PixelText size={7} dim>{label}</PixelText>
-      <PixelText size={8} color={accent ?? WK.text}>{value}</PixelText>
+      <BodyText size={13} dim>{label}</BodyText>
+      <PixelText size={9} color={accent ?? WK.text}>{value}</PixelText>
     </View>
   );
 }
@@ -95,7 +95,7 @@ function BalancePane() {
         padding: 16,
         ...pixelShadow,
       }}>
-        <PixelText size={7} dim style={{ marginBottom: 6 }}>CURRENT BALANCE</PixelText>
+        <BodyText size={13} dim style={{ marginBottom: 6 }}>CURRENT BALANCE</BodyText>
         <PixelText size={22} color={balance >= 0 ? WK.yellow : WK.red}>
           {formatPounds(balance)}
         </PixelText>
@@ -167,7 +167,7 @@ function BalancePane() {
         padding: 16,
         ...pixelShadow,
       }}>
-        <PixelText size={7} dim style={{ marginBottom: 6 }}>TOTAL CAREER EARNINGS</PixelText>
+        <BodyText size={13} dim style={{ marginBottom: 6 }}>TOTAL CAREER EARNINGS</BodyText>
         <PixelText size={18} color={WK.tealLight}>
           £{academy.totalCareerEarnings.toLocaleString()}
         </PixelText>
@@ -246,23 +246,23 @@ function InvestorsPane() {
             {/* Ownership bar */}
             <View style={{ marginTop: 14 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <PixelText size={6} dim>ACADEMY OWNERSHIP</PixelText>
-                <PixelText size={6} color={WK.green}>{100 - assignedInvestor.equityTaken}%</PixelText>
+                <BodyText size={12} dim>ACADEMY OWNERSHIP</BodyText>
+                <BodyText size={12} color={WK.green}>{100 - assignedInvestor.equityTaken}%</BodyText>
               </View>
               <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, flexDirection: 'row' }}>
                 <View style={{ height: '100%', width: `${100 - assignedInvestor.equityTaken}%`, backgroundColor: WK.green }} />
                 <View style={{ height: '100%', flex: 1, backgroundColor: WK.orange }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-                <PixelText size={6} dim>ACADEMY</PixelText>
-                <PixelText size={6} color={WK.orange}>INVESTOR {assignedInvestor.equityTaken}%</PixelText>
+                <BodyText size={11} dim>ACADEMY</BodyText>
+                <BodyText size={11} color={WK.orange}>INVESTOR {assignedInvestor.equityTaken}%</BodyText>
               </View>
             </View>
 
             <View style={{ marginTop: 12 }}>
-              <PixelText size={6} dim>
+              <BodyText size={12} dim>
                 INVESTOR RECEIVES {assignedInvestor.equityTaken}% OF ALL PLAYER SALES
-              </PixelText>
+              </BodyText>
             </View>
 
             {/* Buyout CTA */}
@@ -275,9 +275,9 @@ function InvestorsPane() {
                 onPress={() => setShowBuyout(true)}
               />
               {!canAfford && (
-                <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+                <BodyText size={13} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
                   INSUFFICIENT FUNDS
-                </PixelText>
+                </BodyText>
               )}
             </View>
           </View>
@@ -317,9 +317,9 @@ function InvestorsPane() {
                 />
 
                 <View style={{ marginTop: 8, marginBottom: 16, borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 12 }}>
-                  <PixelText size={6} dim style={{ lineHeight: 14 }}>
+                  <BodyText size={13} dim style={{ lineHeight: 20 }}>
                     YOU WILL OWN 100% OF YOUR ACADEMY. THE INVESTOR WILL NO LONGER RECEIVE A CUT OF PLAYER SALES.
-                  </PixelText>
+                  </BodyText>
                 </View>
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -400,13 +400,13 @@ function SponsorsPane() {
             {/* Contract term bar (static — no startWeek tracked) */}
             <View style={{ marginTop: 10 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <PixelText size={6} dim>CONTRACT TERM</PixelText>
-                <PixelText size={6} dim>{sponsor.contractWeeks} WKS</PixelText>
+                <BodyText size={12} dim>CONTRACT TERM</BodyText>
+                <BodyText size={12} dim>{sponsor.contractWeeks} WKS</BodyText>
               </View>
-              <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+              <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
                 <View style={{ height: '100%', width: '100%', backgroundColor: WK.tealLight }} />
               </View>
-              <PixelText size={6} dim style={{ marginTop: 3 }}>ACTIVE CONTRACT</PixelText>
+              <BodyText size={11} dim style={{ marginTop: 4 }}>ACTIVE CONTRACT</BodyText>
             </View>
           </View>
         ))
@@ -434,10 +434,10 @@ function LoanCard({ loan }: { loan: Loan }) {
       <FinanceRow label="WEEKLY REPAYMENT" value={`-£${loan.weeklyRepayment.toLocaleString()}`} accent={WK.orange} />
       <FinanceRow label="WEEKS REMAINING" value={String(loan.weeksRemaining)} />
       <View style={{ marginTop: 8 }}>
-        <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+        <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
           <View style={{ height: '100%', width: `${pct}%`, backgroundColor: WK.tealLight }} />
         </View>
-        <PixelText size={6} dim style={{ marginTop: 3 }}>{pct}% REPAID</PixelText>
+        <BodyText size={12} dim style={{ marginTop: 4 }}>{pct}% REPAID</BodyText>
       </View>
     </View>
   );
@@ -512,14 +512,14 @@ function LoansPane() {
               ...pixelShadow,
             }}>
               <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 16 }}>Take a Loan</PixelText>
-              <PixelText size={7} dim style={{ marginBottom: 6 }}>
+              <BodyText size={13} dim style={{ marginBottom: 6 }}>
                 CURRENT LIMIT: £{loanLimit.toLocaleString()}
-              </PixelText>
-              <PixelText size={6} dim style={{ marginBottom: 14 }}>
+              </BodyText>
+              <BodyText size={13} dim style={{ marginBottom: 14 }}>
                 INTEREST RATE: 4.6% OVER 52 WEEKS
-              </PixelText>
+              </BodyText>
 
-              <PixelText size={7} dim style={{ marginBottom: 6 }}>AMOUNT (£)</PixelText>
+              <BodyText size={13} dim style={{ marginBottom: 6 }}>AMOUNT (£)</BodyText>
               <TextInput
                 style={{
                   backgroundColor: WK.tealDark,
@@ -540,9 +540,9 @@ function LoansPane() {
               />
 
               {loanError && (
-                <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
+                <BodyText size={13} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
                   {loanError}
-                </PixelText>
+                </BodyText>
               )}
               <View style={{ gap: 8 }}>
                 <Button label="CONFIRM LOAN" variant="yellow" fullWidth onPress={handleTakeLoan} />
@@ -620,35 +620,36 @@ function LedgerPane() {
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 6,
-        paddingHorizontal: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 10,
         backgroundColor: rowBg,
         borderBottomWidth: 1,
         borderBottomColor: WK.border,
-        gap: 4,
+        gap: 10,
       }}>
-        <View style={{ width: 32, alignItems: 'flex-end' }}>
-          <PixelText size={5} color={WK.dim}>{item.weekNumber}</PixelText>
-        </View>
+        {/* Category badge */}
         <View style={{
-          width: 44,
-          paddingVertical: 2,
-          paddingHorizontal: 2,
+          width: 46,
+          height: 24,
           backgroundColor: `${badgeColor}22`,
           borderWidth: 1,
           borderColor: badgeColor,
           alignItems: 'center',
+          justifyContent: 'center',
         }}>
-          <PixelText size={5} color={badgeColor}>{catConf?.label ?? '???'}</PixelText>
+          <PixelText size={8} color={badgeColor}>{catConf?.label ?? '???'}</PixelText>
         </View>
+
+        {/* Description + week number */}
         <View style={{ flex: 1 }}>
-          <PixelText size={5} color={WK.dim} numberOfLines={1}>{item.description}</PixelText>
+          <BodyText size={12} color={WK.text} numberOfLines={1}>{item.description}</BodyText>
+          <BodyText size={11} dim>WK {item.weekNumber}</BodyText>
         </View>
-        <View style={{ width: 80, alignItems: 'flex-end' }}>
-          <PixelText size={6} color={isPositive ? WK.green : WK.red}>
-            {isPositive ? '+' : '-'}£{Math.abs(item.amount).toLocaleString()}
-          </PixelText>
-        </View>
+
+        {/* Amount */}
+        <PixelText size={9} color={isPositive ? WK.green : WK.red}>
+          {isPositive ? '+' : '-'}£{Math.abs(item.amount).toLocaleString()}
+        </PixelText>
       </View>
     );
   }
@@ -693,13 +694,13 @@ function LedgerPane() {
               flexDirection: 'row',
               alignItems: 'center',
               paddingHorizontal: 10,
-              paddingVertical: 6,
+              paddingVertical: 8,
               backgroundColor: WK.tealMid,
               borderWidth: 2,
               borderColor: dropdownOpen ? WK.yellow : WK.border,
             }}
           >
-            <PixelText size={6} color={dropdownOpen ? WK.yellow : WK.dim}>
+            <PixelText size={8} color={dropdownOpen ? WK.yellow : WK.dim}>
               {selectedCatLabel} ▾
             </PixelText>
           </Pressable>
@@ -725,14 +726,14 @@ function LedgerPane() {
                   key={value}
                   onPress={() => { setCatFilter(value); setDropdownOpen(false); }}
                   style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
                     backgroundColor: active ? WK.tealMid : 'transparent',
                     borderBottomWidth: 1,
                     borderBottomColor: WK.border,
                   }}
                 >
-                  <PixelText size={6} color={active ? WK.yellow : WK.dim}>{label}</PixelText>
+                  <BodyText size={13} color={active ? WK.yellow : WK.dim}>{label}</BodyText>
                 </Pressable>
               );
             })}
@@ -750,45 +751,21 @@ function LedgerPane() {
         paddingHorizontal: 12,
         paddingVertical: 6,
       }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-          <PixelText size={6} dim>INCOME</PixelText>
-          <PixelText size={6} color={WK.green}>+£{totalIncome.toLocaleString()}</PixelText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
+          <BodyText size={13} dim>INCOME</BodyText>
+          <PixelText size={9} color={WK.green}>+£{totalIncome.toLocaleString()}</PixelText>
         </View>
         <View style={{ height: 1, backgroundColor: WK.border }} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-          <PixelText size={6} dim>EXPENSES</PixelText>
-          <PixelText size={6} color={WK.red}>-£{totalExpenses.toLocaleString()}</PixelText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
+          <BodyText size={13} dim>EXPENSES</BodyText>
+          <PixelText size={9} color={WK.red}>-£{totalExpenses.toLocaleString()}</PixelText>
         </View>
         <View style={{ height: 1, backgroundColor: WK.tealMid }} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-          <PixelText size={6}>NET ({RANGE_OPTIONS.find((r) => r.weeks === rangeWeeks)?.label})</PixelText>
-          <PixelText size={7} color={netTotal >= 0 ? WK.green : WK.red}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
+          <BodyText size={13}>NET ({RANGE_OPTIONS.find((r) => r.weeks === rangeWeeks)?.label})</BodyText>
+          <PixelText size={9} color={netTotal >= 0 ? WK.green : WK.red}>
             {netTotal >= 0 ? '+' : '-'}£{Math.abs(netTotal).toLocaleString()}
           </PixelText>
-        </View>
-      </View>
-
-      {/* ── Table header ──────────────────────────────────────────────── */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 5,
-        borderBottomWidth: 2,
-        borderBottomColor: WK.tealMid,
-        gap: 4,
-      }}>
-        <View style={{ width: 32, alignItems: 'flex-end' }}>
-          <PixelText size={5} color={WK.dim}>WK</PixelText>
-        </View>
-        <View style={{ width: 44, alignItems: 'center' }}>
-          <PixelText size={5} color={WK.dim}>CAT</PixelText>
-        </View>
-        <View style={{ flex: 1 }}>
-          <PixelText size={5} color={WK.dim}>DESCRIPTION</PixelText>
-        </View>
-        <View style={{ width: 80, alignItems: 'flex-end' }}>
-          <PixelText size={5} color={WK.dim}>AMOUNT</PixelText>
         </View>
       </View>
 

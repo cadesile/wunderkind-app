@@ -25,7 +25,10 @@
       "Bash(unzip -o /Users/courtneyadesile/Downloads/flags-color-world-font.zip -d flags-font)",
       "Bash(grep:*)",
       "Bash(ls:*)",
-      "Bash(lando php:*)"
+      "Bash(lando php:*)",
+      "Bash(python3:*)",
+      "Bash(curl:*)",
+      "Bash(npx eas:*)"
     ]
   }
 }

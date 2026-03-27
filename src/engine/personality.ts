@@ -45,14 +45,23 @@ function naturalDrift(): number {
 /**
  * Calculates weekly trait shifts for a player.
  * Returns partial PersonalityMatrix with deltas (not absolute values).
+ *
+ * @param regressionUpperThreshold - traits above this drift down (default 14)
+ * @param regressionLowerThreshold - traits below this drift up (default 7)
  */
-export function calculateTraitShifts(player: Player): Partial<PersonalityMatrix> {
+export function calculateTraitShifts(
+  player: Player,
+  regressionUpperThreshold: number = 14,
+  regressionLowerThreshold: number = 7,
+): Partial<PersonalityMatrix> {
   const shifts: Partial<PersonalityMatrix> = {};
 
   TRAIT_NAMES.forEach((trait) => {
     const current = player.personality[trait];
-    // Regression-to-mean on 1–20 scale: >14 drift down, <7 drift up
-    const regressionForce = current > 14 ? -1 : current < 7 ? 1 : 0;
+    const regressionForce =
+      current > regressionUpperThreshold ? -1 :
+      current < regressionLowerThreshold ? 1 :
+      0;
     shifts[trait] = regressionForce + naturalDrift();
   });
 

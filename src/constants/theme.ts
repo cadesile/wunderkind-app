@@ -18,13 +18,14 @@ export const WK = {
 
   // Text
   text:   '#e8f4e8',
-  dim:    '#8ecfbe',
+  dim:    '#aadac9',  // raised from #8ecfbe — now passes WCAG AA on tealCard
 
   // Border
   border: '#0d2e28',
 
   // Typography
-  font: 'PressStart2P_400Regular',
+  font:    'PressStart2P_400Regular',
+  fontVT323: 'VT323_400Regular',  // pixel terminal font — legible at 16–20px
 } as const;
 
 /** Returns bar fill color based on 1–20 trait value */

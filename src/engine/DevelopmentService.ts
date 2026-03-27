@@ -275,7 +275,7 @@ export function computePlayerDevelopment(
     const lines = top.map((h) => `${h.name}: ${h.attr.toUpperCase()} now ${h.newVal}`).join('\n');
     addMessage({
       id: `dev-report-wk${weekNumber}`,
-      type: 'system',
+      type: 'development',
       week: weekNumber,
       subject: 'Development Report',
       body: `Squad development update:\n${lines}`,
@@ -293,7 +293,7 @@ export function computePlayerDevelopment(
     const { attribute, gain } = update.spike;
     addMessage({
       id: `spike-${playerId}-wk${weekNumber}`,
-      type: 'system',
+      type: 'development',
       week: weekNumber,
       subject: 'Breakthrough Development',
       body: `${SPIKE_FLAVOUR[attribute]}\n${player.name} — ${attribute.toUpperCase()} +${gain}`,

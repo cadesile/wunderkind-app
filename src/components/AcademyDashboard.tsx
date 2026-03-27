@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -21,7 +20,7 @@ import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -77,77 +76,50 @@ function StatRow({ label, value, valueColor }: {
       borderBottomWidth: 2,
       borderBottomColor: WK.border,
     }}>
-      <PixelText size={6} dim upper>{label}</PixelText>
-      <PixelText size={7} color={valueColor ?? WK.tealLight}>{value}</PixelText>
+      <BodyText size={12} dim>{label}</BodyText>
+      <PixelText size={8} color={valueColor ?? WK.tealLight}>{value}</PixelText>
     </View>
   );
 }
 
-// ─── Roster pie chart ─────────────────────────────────────────────────────────
+// ─── Roster stacked bar ───────────────────────────────────────────────────────
 
-function RosterPieChart({ playerCount, coachCount }: { playerCount: number; coachCount: number }) {
+function RosterStackedBar({ playerCount, coachCount }: { playerCount: number; coachCount: number }) {
   const total = playerCount + coachCount;
   if (total === 0) return null;
 
-  const SIZE = 110;
-  const cx = SIZE / 2;
-  const cy = SIZE / 2;
-  const r  = SIZE / 2 - 6;
-
-  function polarToCartesian(deg: number) {
-    const rad = (deg - 90) * (Math.PI / 180);
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  }
-
-  function slicePath(startDeg: number, endDeg: number): string {
-    // Full circle edge case
-    if (Math.abs(endDeg - startDeg) >= 359.99) {
-      return `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`;
-    }
-    const s = polarToCartesian(startDeg);
-    const e = polarToCartesian(endDeg);
-    const large = endDeg - startDeg > 180 ? 1 : 0;
-    return `M ${cx} ${cy} L ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} Z`;
-  }
-
-  const playerDeg = (playerCount / total) * 360;
-
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-      {/* Pie */}
-      <Svg width={SIZE} height={SIZE}>
-        <Path d={slicePath(0, playerDeg)} fill={WK.tealLight} />
-        <Path d={slicePath(playerDeg, 360)} fill={WK.yellow} />
-        <Circle cx={cx} cy={cy} r={r} fill="none" stroke={WK.border} strokeWidth={3} />
-        {/* Centre hole for donut feel */}
-        <Circle cx={cx} cy={cy} r={r * 0.35} fill={WK.tealCard} stroke={WK.border} strokeWidth={2} />
-      </Svg>
-
-      {/* Legend */}
-      <View style={{ gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 10, height: 10, backgroundColor: WK.tealLight, borderWidth: 2, borderColor: WK.border }} />
-          <View>
-            <PixelText size={6} dim>PLAYERS</PixelText>
-            <PixelText size={10} color={WK.tealLight}>{playerCount}</PixelText>
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 10, height: 10, backgroundColor: WK.yellow, borderWidth: 2, borderColor: WK.border }} />
-          <View>
-            <PixelText size={6} dim>COACHES</PixelText>
-            <PixelText size={10} color={WK.yellow}>{coachCount}</PixelText>
-          </View>
-        </View>
-        {coachCount > 0 && (
-          <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 8 }}>
-            <PixelText size={5} dim>RATIO</PixelText>
-            <PixelText size={7} color={WK.dim}>
-              {Math.round(playerCount / coachCount)}:1
-            </PixelText>
-          </View>
-        )}
+    <View>
+      {/* Stacked bar — flex segments stay proportional without percentage maths */}
+      <View style={{
+        flexDirection: 'row',
+        height: 20,
+        borderWidth: 2,
+        borderColor: WK.border,
+        overflow: 'hidden',
+        marginBottom: 10,
+      }}>
+        <View style={{ flex: playerCount, backgroundColor: WK.tealLight }} />
+        {coachCount > 0 && <View style={{ flex: coachCount, backgroundColor: WK.yellow }} />}
       </View>
+
+      {/* Count labels */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <View style={{ width: 8, height: 8, backgroundColor: WK.tealLight, borderWidth: 1, borderColor: WK.border }} />
+          <BodyText size={11} dim>{playerCount} PLAYERS</BodyText>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <View style={{ width: 8, height: 8, backgroundColor: WK.yellow, borderWidth: 1, borderColor: WK.border }} />
+          <BodyText size={11} dim>{coachCount} COACHES</BodyText>
+        </View>
+      </View>
+
+      {coachCount > 0 && (
+        <BodyText size={11} dim style={{ marginTop: 8, textAlign: 'center' }}>
+          {Math.round(playerCount / coachCount)}:1 RATIO
+        </BodyText>
+      )}
     </View>
   );
 }
@@ -163,7 +135,6 @@ export function AcademyDashboard() {
     nextTier,
     tierProgressPct,
     crownJewel,
-    squadTotalPotential,
     cashBalance,
     weeklyNetCashflow,
   } = useAcademyMetrics();
@@ -180,6 +151,13 @@ export function AcademyDashboard() {
 
   // Most-recent 3 messages (store is newest-first)
   const recentMessages = messages.slice(0, 3);
+
+  // ── Squad potential breakdown ────────────────────────────────────────────────
+  const activePlayers = players.filter((p) => p.isActive);
+  const avgPotential = activePlayers.length > 0
+    ? activePlayers.reduce((sum, p) => sum + p.potential, 0) / activePlayers.length
+    : 0;
+  const highCeilingCount = activePlayers.filter((p) => p.potential >= 15).length;
 
   // ── Medical report ───────────────────────────────────────────────────────────
   const injuredPlayers = players.filter((p) => p.injury && p.injury.weeksRemaining > 0);
@@ -216,7 +194,7 @@ export function AcademyDashboard() {
   const nextLabel = nextTier ?? 'MAX';
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 10, paddingBottom: 24 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 10, paddingBottom: 20 }}>
       <PitchBackground />
 
       {/* ── Card 1: Valuation Hero ────────────────────────────────────────── */}
@@ -227,9 +205,9 @@ export function AcademyDashboard() {
           {formatCurrencyCompact(totalValuation)}
         </PixelText>
 
-        <PixelText size={6} color={WK.green} style={{ marginTop: 4 }}>
+        <BodyText size={12} color={WK.green} style={{ marginTop: 4 }}>
           +{reputationBonusPct.toFixed(1)}% REPUTATION BONUS
-        </PixelText>
+        </BodyText>
 
         {/* Tier progress bar */}
         <View style={{ marginTop: 14 }}>
@@ -249,9 +227,9 @@ export function AcademyDashboard() {
               backgroundColor: WK.yellow,
             }} />
           </View>
-          <PixelText size={5} dim style={{ marginTop: 4, textAlign: 'right' }}>
+          <BodyText size={11} dim style={{ marginTop: 4, textAlign: 'right' }}>
             {tierProgressPct.toFixed(0)}% through {currentTier}
-          </PixelText>
+          </BodyText>
         </View>
       </SectionCard>
 
@@ -271,7 +249,7 @@ export function AcademyDashboard() {
           padding: 12,
           ...pixelShadow,
         }}>
-          <PixelText size={6} dim upper style={{ marginBottom: 6 }}>Cash</PixelText>
+          <BodyText size={12} dim style={{ marginBottom: 6 }}>CASH</BodyText>
           <PixelText
             size={10}
             color={cashPounds >= 0 ? WK.tealLight : WK.red}
@@ -279,9 +257,9 @@ export function AcademyDashboard() {
           >
             {cashPounds < 0 ? '-' : ''}£{Math.abs(cashPounds).toLocaleString()}
           </PixelText>
-          <PixelText size={5} color={tickDeltaColor} style={{ marginTop: 5 }}>
+          <BodyText size={11} color={tickDeltaColor} style={{ marginTop: 5 }}>
             {tickDeltaSign}£{Math.abs(tickDeltaPounds).toLocaleString()} NEXT TICK
-          </PixelText>
+          </BodyText>
         </View>
 
         {/* Career sales earnings */}
@@ -293,11 +271,11 @@ export function AcademyDashboard() {
           padding: 12,
           ...pixelShadow,
         }}>
-          <PixelText size={6} dim upper style={{ marginBottom: 6 }}>Sales</PixelText>
+          <BodyText size={12} dim style={{ marginBottom: 6 }}>SALES</BodyText>
           <PixelText size={10} color={WK.green} numberOfLines={1}>
             £{careerSalesPounds.toLocaleString()}
           </PixelText>
-          <PixelText size={5} dim style={{ marginTop: 5 }}>CAREER TOTAL</PixelText>
+          <BodyText size={11} dim style={{ marginTop: 5 }}>CAREER TOTAL</BodyText>
         </View>
       </View>
 
@@ -318,10 +296,10 @@ export function AcademyDashboard() {
           },
           pulseStyle,
         ]}>
-          <View style={{ width: 6, height: 6, backgroundColor: WK.red }} />
-          <PixelText size={6} color={WK.red}>
+          <View style={{ width: 6, height: 6, backgroundColor: WK.red, flexShrink: 0 }} />
+          <BodyText size={13} color={WK.red}>
             BALANCE WILL BE NEGATIVE AFTER NEXT TICK
-          </PixelText>
+          </BodyText>
         </Animated.View>
       )}
 
@@ -341,13 +319,13 @@ export function AcademyDashboard() {
                 age={crownJewel.age}
               />
               <View style={{ flex: 1 }}>
-                <PixelText size={8} upper numberOfLines={1}>{crownJewel.name}</PixelText>
-                <PixelText size={6} color={WK.tealLight} style={{ marginTop: 3 }}>
+                <BodyText size={15} upper numberOfLines={1}>{crownJewel.name}</BodyText>
+                <BodyText size={12} color={WK.tealLight} style={{ marginTop: 3 }}>
                   {crownJewel.position} · AGE {crownJewel.age}
-                </PixelText>
+                </BodyText>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 }}>
-                  <FlagText nationality={crownJewel.nationality} size={16} />
-                  <PixelText size={6} dim>{crownJewel.nationality}</PixelText>
+                  <FlagText nationality={crownJewel.nationality} size={14} />
+                  <BodyText size={12} dim>{crownJewel.nationality}</BodyText>
                 </View>
               </View>
               <Badge label={`OVR ${crownJewel.overallRating}`} color="yellow" />
@@ -371,9 +349,9 @@ export function AcademyDashboard() {
                 }}>
                   <PixelText size={6} color={WK.border}>{crownJewelArchetype.name.toUpperCase()}</PixelText>
                 </View>
-                <PixelText size={6} dim style={{ lineHeight: 12 }}>
+                <BodyText size={12} dim style={{ lineHeight: 18 }}>
                   {crownJewelArchetype.description}
-                </PixelText>
+                </BodyText>
               </View>
             )}
           </SectionCard>
@@ -402,9 +380,9 @@ export function AcademyDashboard() {
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ width: 8, height: 8, backgroundColor: WK.red }} />
-                  <PixelText size={6} dim upper>Serious</PixelText>
+                  <BodyText size={12} dim>SERIOUS</BodyText>
                 </View>
-                <PixelText size={7} color={WK.red}>{seriousCount} player{seriousCount !== 1 ? 's' : ''}</PixelText>
+                <BodyText size={12} color={WK.red}>{seriousCount} player{seriousCount !== 1 ? 's' : ''}</BodyText>
               </View>
             )}
             {moderateCount > 0 && (
@@ -414,9 +392,9 @@ export function AcademyDashboard() {
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ width: 8, height: 8, backgroundColor: WK.orange }} />
-                  <PixelText size={6} dim upper>Moderate</PixelText>
+                  <BodyText size={12} dim>MODERATE</BodyText>
                 </View>
-                <PixelText size={7} color={WK.orange}>{moderateCount} player{moderateCount !== 1 ? 's' : ''}</PixelText>
+                <BodyText size={12} color={WK.orange}>{moderateCount} player{moderateCount !== 1 ? 's' : ''}</BodyText>
               </View>
             )}
             {minorCount > 0 && (
@@ -426,9 +404,9 @@ export function AcademyDashboard() {
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ width: 8, height: 8, backgroundColor: WK.yellow }} />
-                  <PixelText size={6} dim upper>Minor</PixelText>
+                  <BodyText size={12} dim>MINOR</BodyText>
                 </View>
-                <PixelText size={7} color={WK.yellow}>{minorCount} player{minorCount !== 1 ? 's' : ''}</PixelText>
+                <BodyText size={12} color={WK.yellow}>{minorCount} player{minorCount !== 1 ? 's' : ''}</BodyText>
               </View>
             )}
           </>
@@ -445,13 +423,13 @@ export function AcademyDashboard() {
             {/* Header row */}
             <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
               <View style={{ flex: 1 }}>
-                <PixelText size={5} dim upper>Facility</PixelText>
+                <BodyText size={11} dim>FACILITY</BodyText>
               </View>
-              <View style={{ width: 40, alignItems: 'center' }}>
-                <PixelText size={5} dim upper>LVL</PixelText>
+              <View style={{ width: 44, alignItems: 'center' }}>
+                <BodyText size={11} dim>LVL</BodyText>
               </View>
               <View style={{ width: 56, alignItems: 'flex-end' }}>
-                <PixelText size={5} dim upper>Cond.</PixelText>
+                <BodyText size={11} dim>COND.</BodyText>
               </View>
             </View>
             {builtFacilities.map((def) => {
@@ -463,17 +441,17 @@ export function AcademyDashboard() {
                   key={def.type}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
-                    paddingVertical: 7, borderBottomWidth: 2, borderBottomColor: WK.border,
+                    paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border,
                   }}
                 >
                   <View style={{ flex: 1 }}>
-                    <PixelText size={6} numberOfLines={1}>{def.label}</PixelText>
+                    <BodyText size={13} numberOfLines={1}>{def.label}</BodyText>
                   </View>
-                  <View style={{ width: 40, alignItems: 'center' }}>
-                    <PixelText size={6} color={WK.yellow}>{lvl}</PixelText>
+                  <View style={{ width: 44, alignItems: 'center' }}>
+                    <PixelText size={8} color={WK.yellow}>{lvl}</PixelText>
                   </View>
                   <View style={{ width: 56, alignItems: 'flex-end' }}>
-                    <PixelText size={6} color={condColor}>{cond}%</PixelText>
+                    <PixelText size={8} color={condColor}>{cond}%</PixelText>
                   </View>
                 </View>
               );
@@ -484,28 +462,53 @@ export function AcademyDashboard() {
 
       {/* ── Cards 6 & 7: Roster balance + Squad potential (side by side) ─── */}
       <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
+
+        {/* Roster balance — stacked horizontal bar */}
         <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
           <PixelText size={7} dim upper style={{ marginBottom: 12 }}>Roster Balance</PixelText>
-          <RosterPieChart playerCount={players.filter(p => p.isActive).length} coachCount={coaches.length} />
+          <RosterStackedBar
+            playerCount={activePlayers.length}
+            coachCount={coaches.length}
+          />
         </View>
+
+        {/* Squad stats */}
         <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
-        <StatRow
-          label="Squad Potential"
-          value={`${squadTotalPotential} ★ total`}
-          valueColor={WK.yellow}
-        />
-        <StatRow
-          label="Reputation"
-          value={`${academy.reputation.toFixed(1)} / 100`}
-          valueColor={WK.tealLight}
-        />
-        <View style={{ paddingTop: 2 }}>
+          {/* Squad potential widget */}
+          <View style={{ paddingBottom: 8, marginBottom: 2, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+            <BodyText size={12} dim style={{ marginBottom: 6 }}>SQUAD POTENTIAL</BodyText>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+              <PixelText size={11} color={WK.yellow}>{avgPotential.toFixed(1)}</PixelText>
+              <BodyText size={11} dim>/ 20 AVG</BodyText>
+            </View>
+            <View style={{
+              height: 6,
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              borderWidth: 1,
+              borderColor: WK.border,
+              marginBottom: 6,
+            }}>
+              <View style={{
+                height: '100%',
+                width: `${(avgPotential / 20) * 100}%`,
+                backgroundColor: WK.yellow,
+              }} />
+            </View>
+            <BodyText size={11} color={highCeilingCount > 0 ? WK.tealLight : WK.dim}>
+              {highCeilingCount} HIGH CEILING
+            </BodyText>
+          </View>
+
+          <StatRow
+            label="Reputation"
+            value={`${academy.reputation.toFixed(1)} / 100`}
+            valueColor={WK.tealLight}
+          />
           <StatRow
             label="Tier"
             value={currentTier.toUpperCase()}
             valueColor={WK.orange}
           />
-        </View>
         </View>
       </View>
 
@@ -518,7 +521,7 @@ export function AcademyDashboard() {
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
             hitSlop={8}
           >
-            <PixelText size={6} color={WK.tealLight}>VIEW ALL</PixelText>
+            <BodyText size={12} color={WK.tealLight}>VIEW ALL</BodyText>
             <ChevronRight size={12} color={WK.tealLight} />
           </Pressable>
         </View>
@@ -547,8 +550,8 @@ export function AcademyDashboard() {
                 borderColor: WK.yellow,
               }} />
               <View style={{ flex: 1 }}>
-                <PixelText size={6} numberOfLines={1}>{msg.subject}</PixelText>
-                <PixelText size={5} dim style={{ marginTop: 2 }}>WK {msg.week}</PixelText>
+                <BodyText size={13} numberOfLines={1}>{msg.subject}</BodyText>
+                <BodyText size={11} dim style={{ marginTop: 2 }}>WK {msg.week}</BodyText>
               </View>
               {(msg.requiresResponse && !msg.response) && (
                 <Badge label="ACTION" color="yellow" />

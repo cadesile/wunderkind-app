@@ -242,7 +242,7 @@ export function OnboardingScreen({ onRegister }: Props) {
       };
       await onRegister(academyName.trim(), selectedCountry, profile);
     } catch (err) {
-      setError('Could not create academy. Please check your connection and try again.');
+      setError('COULD NOT CONNECT TO SERVER.\nCHECK YOUR CONNECTION AND TRY AGAIN.');
       console.error('[Onboarding] registerAcademy failed:', err);
     } finally {
       setLoading(false);
@@ -534,7 +534,7 @@ export function OnboardingScreen({ onRegister }: Props) {
                   placeholder="E.G. NORTH STAR FC"
                   placeholderTextColor={WK.dim}
                   value={academyName}
-                  onChangeText={setAcademyName}
+                  onChangeText={(text) => { setAcademyName(text); setError(null); }}
                   maxLength={40}
                   editable={!loading}
                   returnKeyType="done"

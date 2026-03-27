@@ -8,6 +8,7 @@ import { useFacilityStore } from '@/stores/facilityStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { register, login } from '@/api/endpoints/auth';
 import { checkAcademy } from '@/api/endpoints/academy';
+import { fetchStarterConfig } from '@/api/endpoints/starterConfig';
 import { ApiError, ApiPlayerDetail, ApiStaffMember } from '@/types/api';
 import { marketApi } from '@/api/endpoints/market';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
@@ -336,6 +337,9 @@ export function useAuthFlow(): AuthFlowResult {
   }, []);
 
   async function registerAcademy(academyName: string, country: AcademyCountryCode, managerProfile: ManagerProfile): Promise<void> {
+    // Fetch starter config — required, no fallback. Throws if unavailable.
+    const starterConfig = await fetchStarterConfig();
+
     const userEmail = generateDeviceEmail();
     const userPassword = generateDevicePassword();
 
@@ -396,14 +400,16 @@ export function useAuthFlow(): AuthFlowResult {
       console.warn('[useAuthFlow] Academy init failed — continuing offline:', err);
     }
 
-    const backendBalance = initResponse?.starterBundle
-      ? (initResponse.starterBundle as Record<string, unknown>).startingBalance
-      : undefined;
-    // balance is stored in pence; backend sends pence, fallback is £50,000 = 5,000,000p
-    const startingBalance = typeof backendBalance === 'number' ? backendBalance : 5_000_000;
-    // Starter bundle spec: 1 small sponsor, 0 investors at creation.
-    const smallSponsors = marketData.sponsors.filter((s) => s.companySize === 'SMALL');
-    const sponsorIds = smallSponsors.slice(0, 1).map((s) => s.id);
+    // Use config values everywhere previously hardcoded
+    const startingBalance = starterConfig.startingBalance;
+    const STARTER_PLAYER_COUNT = starterConfig.starterPlayerCount;
+    const STARTER_COACH_COUNT = starterConfig.starterCoachCount;
+    const STARTER_SCOUT_COUNT = starterConfig.starterScoutCount;
+
+    const matchingSponsors = marketData.sponsors.filter(
+      (s) => s.companySize === starterConfig.starterSponsorTier,
+    );
+    const sponsorIds = matchingSponsors.slice(0, 1).map((s) => s.id);
     const investorId = null;
 
     // 4. Academy setup
@@ -419,7 +425,6 @@ export function useAuthFlow(): AuthFlowResult {
     //   Tier 2 — pick directly from marketData pool (backend assigned but squad endpoint empty)
     const weekNumber = 1;
     const gameDate = getGameDate(weekNumber);
-    const STARTER_PLAYER_COUNT = 5;
     const homeNationality = ACADEMY_CODE_TO_NATIONALITY[country];
 
     let players: Player[] = [];
@@ -467,11 +472,21 @@ export function useAuthFlow(): AuthFlowResult {
         .slice(0, STARTER_PLAYER_COUNT)
         .map((mp) => marketPlayerToPlayer(mp, weekNumber, gameDate));
     }
-    if (assignedCoaches.length === 0 && marketData.coaches.length > 0) {
-      assignedCoaches = [marketCoachToCoach(pickRandom(marketData.coaches), weekNumber)];
+    if (assignedCoaches.length < STARTER_COACH_COUNT && marketData.coaches.length > 0) {
+      const needed = STARTER_COACH_COUNT - assignedCoaches.length;
+      const shuffled = [...marketData.coaches].sort(() => Math.random() - 0.5);
+      assignedCoaches = [
+        ...assignedCoaches,
+        ...shuffled.slice(0, needed).map((c) => marketCoachToCoach(c, weekNumber)),
+      ];
     }
-    if (assignedScouts.length === 0 && marketData.scouts.length > 0) {
-      assignedScouts = [marketScoutToScout(pickRandom(marketData.scouts), weekNumber, gameDate)];
+    if (assignedScouts.length < STARTER_SCOUT_COUNT && marketData.scouts.length > 0) {
+      const needed = STARTER_SCOUT_COUNT - assignedScouts.length;
+      const shuffled = [...marketData.scouts].sort(() => Math.random() - 0.5);
+      assignedScouts = [
+        ...assignedScouts,
+        ...shuffled.slice(0, needed).map((s) => marketScoutToScout(s, weekNumber, gameDate)),
+      ];
     }
 
     // No local player generation fallback — players must come from the backend.

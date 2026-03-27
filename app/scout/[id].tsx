@@ -82,9 +82,9 @@ export default function ScoutDetailScreen() {
         gap: 10,
       }}>
         <Pressable onPress={() => router.back()} hitSlop={8}>
-          <ChevronLeft size={18} color={WK.text} />
+          <ChevronLeft size={20} color={WK.text} />
         </Pressable>
-        <PixelText size={9} upper style={{ flex: 1 }} numberOfLines={1}>{scout.name}</PixelText>
+        <PixelText size={11} upper style={{ flex: 1 }} numberOfLines={1}>{scout.name}</PixelText>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
@@ -103,15 +103,15 @@ export default function ScoutDetailScreen() {
             <Avatar appearance={scout.appearance} role="SCOUT" size={64} />
           )}
           <View style={{ flex: 1 }}>
-            <PixelText size={10} upper numberOfLines={2}>{scout.name}</PixelText>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <PixelText size={12} upper numberOfLines={2}>{scout.name}</PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
               <Badge
                 label={RANGE_LABEL[scout.scoutingRange] ?? scout.scoutingRange.toUpperCase()}
                 color={scout.scoutingRange === 'local' ? 'dim' : scout.scoutingRange === 'national' ? 'yellow' : 'green'}
               />
               <FlagText nationality={scout.nationality} size={16} />
             </View>
-            <PixelText size={6} dim style={{ marginTop: 4 }}>{scout.nationality}</PixelText>
+            <PixelText size={13} variant="vt323" dim style={{ marginTop: 6 }}>{scout.nationality}</PixelText>
           </View>
         </View>
 
@@ -123,25 +123,25 @@ export default function ScoutDetailScreen() {
           padding: 14,
           ...pixelShadow,
         }}>
-          <PixelText size={8} upper style={{ marginBottom: 12 }}>Scout Profile</PixelText>
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>SUCCESS RATE</PixelText>
-              <PixelText size={6} color={WK.yellow}>{scout.successRate}%</PixelText>
+          <PixelText size={9} upper style={{ marginBottom: 14 }}>Scout Profile</PixelText>
+          <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>SUCCESS RATE</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.yellow}>{scout.successRate}%</PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>WEEKLY SALARY</PixelText>
-              <PixelText size={6} color={WK.tealLight}>{formatCurrencyWhole(scout.salary)}/wk</PixelText>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>WEEKLY SALARY</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.tealLight}>{formatCurrencyWhole(scout.salary)}/wk</PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>MORALE</PixelText>
-              <PixelText size={6} color={morale >= 60 ? WK.green : morale >= 40 ? WK.yellow : WK.red}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>MORALE</PixelText>
+              <PixelText size={18} variant="vt323" color={morale >= 60 ? WK.green : morale >= 40 ? WK.yellow : WK.red}>
                 {moraleLabel(morale)}
               </PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
-              <PixelText size={6} dim>STATUS</PixelText>
-              <PixelText size={6} color={isOnMission ? WK.orange : WK.green}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+              <PixelText size={14} variant="vt323" dim>STATUS</PixelText>
+              <PixelText size={18} variant="vt323" color={isOnMission ? WK.orange : WK.green}>
                 {isOnMission ? 'ON MISSION' : 'AVAILABLE'}
               </PixelText>
             </View>
@@ -157,25 +157,25 @@ export default function ScoutDetailScreen() {
             padding: 14,
             ...pixelShadow,
           }}>
-            <PixelText size={8} upper style={{ marginBottom: 12 }}>Active Mission</PixelText>
-            <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                <PixelText size={6} dim>POSITION</PixelText>
-                <PixelText size={6} color={WK.text}>{scout.activeMission.position}</PixelText>
+            <PixelText size={9} upper style={{ marginBottom: 14 }}>Active Mission</PixelText>
+            <View style={{ gap: 4 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={14} variant="vt323" dim>POSITION</PixelText>
+                <PixelText size={18} variant="vt323" color={WK.text}>{scout.activeMission.position}</PixelText>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                <PixelText size={6} dim>REGION</PixelText>
-                <PixelText size={6} color={WK.text}>{scout.activeMission.targetNationality ?? 'Domestic'}</PixelText>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={14} variant="vt323" dim>REGION</PixelText>
+                <PixelText size={18} variant="vt323" color={WK.text}>{scout.activeMission.targetNationality ?? 'Domestic'}</PixelText>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                <PixelText size={6} dim>PROGRESS</PixelText>
-                <PixelText size={6} color={WK.yellow}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                <PixelText size={14} variant="vt323" dim>PROGRESS</PixelText>
+                <PixelText size={18} variant="vt323" color={WK.yellow}>
                   Week {scout.activeMission.weeksElapsed} of {scout.activeMission.weeksTotal}
                 </PixelText>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
-                <PixelText size={6} dim>GEMS FOUND</PixelText>
-                <PixelText size={6} color={scout.activeMission.gemsFound > 0 ? WK.green : WK.dim}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+                <PixelText size={14} variant="vt323" dim>GEMS FOUND</PixelText>
+                <PixelText size={18} variant="vt323" color={scout.activeMission.gemsFound > 0 ? WK.green : WK.dim}>
                   {scout.activeMission.gemsFound}
                 </PixelText>
               </View>

@@ -5,8 +5,28 @@ import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useGuardianStore } from '@/stores/guardianStore';
 import { Guardian } from '@/types/guardian';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
+
+const TRAIT_LABELS: Record<string, string> = {
+  determination: 'DETERMINED',
+  professionalism: 'PROFESSIONAL',
+  ambition: 'AMBITIOUS',
+  loyalty: 'LOYAL',
+  adaptability: 'ADAPTABLE',
+  pressure: 'COMPOSED',
+  temperament: 'LEVEL-HEADED',
+  consistency: 'CONSISTENT',
+};
+
+function getTopTraits(player: Player, count = 3): string[] {
+  const p = player.personality;
+  if (!p) return [];
+  return (Object.entries(p) as [string, number][])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, count)
+    .map(([key]) => TRAIT_LABELS[key] ?? key.toUpperCase());
+}
 
 interface ScoutReportCardProps {
   player: Player;
@@ -67,13 +87,12 @@ export function ScoutReportCard({ player }: ScoutReportCardProps) {
         borderBottomColor: WK.border,
       }}>
         <PixelText size={7} color={WK.yellow}>SCOUT'S REPORT</PixelText>
-        <PixelText size={6} dim>— Scouting Dept.</PixelText>
       </View>
 
       <View style={{ padding: 14 }}>
         {archetype ? (
           <>
-            {/* Archetype name */}
+            {/* Archetype name + trait pills */}
             <View style={{ marginBottom: 10 }}>
               <PixelText size={6} dim style={{ marginBottom: 6 }}>PERSONALITY TYPE</PixelText>
               <View style={{
@@ -83,20 +102,40 @@ export function ScoutReportCard({ player }: ScoutReportCardProps) {
                 alignSelf: 'flex-start',
                 borderWidth: 2,
                 borderColor: WK.border,
+                marginBottom: 8,
               }}>
                 <PixelText size={8} color={WK.border}>{archetype.name.toUpperCase()}</PixelText>
               </View>
+
+              {getTopTraits(player).length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {getTopTraits(player).map((label) => (
+                    <View key={label} style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      backgroundColor: WK.tealCard,
+                      borderWidth: 1,
+                      borderColor: WK.dim,
+                    }}>
+                      <BodyText size={10} color={WK.dim}>{label}</BodyText>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
-            {/* Description */}
+            {/* Description with left accent border */}
             <View style={{
-              backgroundColor: 'rgba(0,0,0,0.25)',
-              borderWidth: 2,
-              borderColor: WK.border,
-              padding: 10,
+              borderLeftWidth: 3,
+              borderLeftColor: WK.yellow,
+              paddingLeft: 12,
+              marginBottom: 10,
             }}>
-              <PixelText size={7} style={{ lineHeight: 16 }}>{archetype.description}</PixelText>
+              <BodyText size={13} style={{ lineHeight: 20 }}>{archetype.description}</BodyText>
             </View>
+
+            {/* Footer attribution */}
+            <PixelText size={6} dim style={{ textAlign: 'right' }}>— Scouting Dept.</PixelText>
           </>
         ) : (
           <>
@@ -113,15 +152,16 @@ export function ScoutReportCard({ player }: ScoutReportCardProps) {
               </View>
             </View>
             <View style={{
-              backgroundColor: 'rgba(0,0,0,0.25)',
-              borderWidth: 2,
-              borderColor: WK.border,
-              padding: 10,
+              borderLeftWidth: 3,
+              borderLeftColor: WK.border,
+              paddingLeft: 12,
+              marginBottom: 10,
             }}>
-              <PixelText size={7} dim style={{ lineHeight: 16 }}>
+              <BodyText size={13} color={WK.dim} style={{ lineHeight: 20 }}>
                 No personality profile available. Continue training to develop a clearer picture of this player's character.
-              </PixelText>
+              </BodyText>
             </View>
+            <PixelText size={6} dim style={{ textAlign: 'right' }}>— Scouting Dept.</PixelText>
           </>
         )}
       </View>
@@ -138,23 +178,21 @@ export function ScoutReportCard({ player }: ScoutReportCardProps) {
           {/* Guardian names */}
           {guardians.map((g, i) => (
             <View key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <PixelText size={6} color={WK.dim}>👤</PixelText>
-              <PixelText size={6} dim>{getGuardianLabel(g, guardians, i)}</PixelText>
-              <PixelText size={6}>· {g.firstName} {g.lastName}</PixelText>
+              <BodyText size={11} color={WK.dim}>{getGuardianLabel(g, guardians, i)}</BodyText>
+              <BodyText size={11}>· {g.firstName} {g.lastName}</BodyText>
             </View>
           ))}
 
           {/* Scout note */}
           <View style={{
             marginTop: 8,
-            backgroundColor: 'rgba(0,0,0,0.25)',
-            borderWidth: 2,
-            borderColor: WK.border,
-            padding: 10,
+            borderLeftWidth: 3,
+            borderLeftColor: WK.dim,
+            paddingLeft: 12,
           }}>
-            <PixelText size={6} dim style={{ lineHeight: 16 }}>
+            <BodyText size={12} color={WK.dim} style={{ lineHeight: 20 }}>
               {player.scoutingReport.guardianNote}
-            </PixelText>
+            </BodyText>
           </View>
         </View>
       )}

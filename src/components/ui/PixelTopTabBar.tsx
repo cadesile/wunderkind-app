@@ -29,14 +29,14 @@ export function PixelTopTabBar({ tabs, active, onChange }: Props) {
             onPress={() => { hapticTap(); onChange(tab); }}
             style={{
               flex: 1,
-              paddingVertical: 10,
+              paddingVertical: 12,
               alignItems: 'center',
               borderBottomWidth: isActive ? 3 : 0,
               borderBottomColor: WK.yellow,
             }}
           >
             <PixelText
-              size={7}
+              size={9}
               color={isActive ? WK.yellow : WK.dim}
             >
               {tab}

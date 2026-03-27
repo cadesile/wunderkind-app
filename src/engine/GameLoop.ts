@@ -1,5 +1,11 @@
 import { calculateTraitShifts, generateIncidents } from './personality';
 import { calculateWeeklyFinances } from './finance';
+import {
+  calculateWeeklyXP,
+  calculateInjuryProbability,
+  calculateReputationDelta,
+  calculateInjuryDuration,
+} from './FormulaEngine';
 import { simulationService } from './SimulationService';
 import { generateAgentOffer } from './agentOffers';
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
@@ -10,6 +16,7 @@ import { processGuardianTick } from './GuardianEngine';
 import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
@@ -24,35 +31,21 @@ import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
 import { calculateAcademyValuation } from '@/hooks/useAcademyMetrics';
 
-const BASE_XP = 10;
-const BASE_INJURY_PROB = 0.05; // 5% per player per week
+type InjuryTier = {
+  severity: 'minor' | 'moderate' | 'serious';
+  minWeeks: number;
+  maxWeeks: number;
+  weight: number;
+};
 
-const INJURY_TIERS = [
-  { severity: 'minor'    as const, minWeeks: 2, maxWeeks: 3,  weight: 60 },
-  { severity: 'moderate' as const, minWeeks: 4, maxWeeks: 6,  weight: 30 },
-  { severity: 'serious'  as const, minWeeks: 8, maxWeeks: 12, weight: 10 },
-] as const;
-
-function pickInjurySeverity(): typeof INJURY_TIERS[number] {
-  const totalWeight = INJURY_TIERS.reduce((s, t) => s + t.weight, 0);
+function pickInjurySeverity(tiers: InjuryTier[]): InjuryTier {
+  const totalWeight = tiers.reduce((s, t) => s + t.weight, 0);
   let rand = Math.random() * totalWeight;
-  for (const tier of INJURY_TIERS) {
+  for (const tier of tiers) {
     rand -= tier.weight;
     if (rand <= 0) return tier;
   }
-  return INJURY_TIERS[0];
-}
-
-function computeInjuryDuration(
-  tier: typeof INJURY_TIERS[number],
-  physioEffective: number,
-  hydroEffective: number,
-): number {
-  const base = tier.minWeeks + Math.floor(Math.random() * (tier.maxWeeks - tier.minWeeks + 1));
-  // Physio Clinic reduces duration; Hydro Pool provides multiplicative additional reduction
-  const reduction = (1 - physioEffective * 0.08) * (1 - hydroEffective * 0.10);
-  const reduced = Math.round(base * Math.max(reduction, 0.2));
-  return Math.max(reduced, 1);
+  return tiers[0];
 }
 
 /**
@@ -65,6 +58,14 @@ function computeInjuryDuration(
  * Mutates Zustand stores; returns a WeeklyTick for sync queuing.
  */
 export function processWeeklyTick(): WeeklyTick {
+  const config = useGameConfigStore.getState().config;
+
+  const INJURY_TIERS: InjuryTier[] = [
+    { severity: 'minor',    minWeeks: 2, maxWeeks: 3,  weight: config.injuryMinorWeight },
+    { severity: 'moderate', minWeeks: 4, maxWeeks: 6,  weight: config.injuryModerateWeight },
+    { severity: 'serious',  minWeeks: 8, maxWeeks: 12, weight: config.injurySeriousWeight },
+  ];
+
   const { players, applyWeeklyPlayerUpdates, setPlayerInjury, tickInjuries } = useSquadStore.getState();
   const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
   const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
@@ -90,19 +91,20 @@ export function processWeeklyTick(): WeeklyTick {
   const totalCoachPerformance = coaches.reduce(
     (sum, c) => sum + computeCoachPerformanceScore(c), 0,
   ) * tacticalBoost;
-  const weeklyXP =
-    BASE_XP *
-    (1 + eff('technicalZone') * 0.05) *
-    (1 + totalCoachPerformance / 100);
+  const weeklyXP = calculateWeeklyXP(eff('technicalZone'), totalCoachPerformance, config.baseXP);
 
   // ── 2. Injury Probability ─────────────────────────────────────────────────────
-  const injuryProb = Math.max(0, BASE_INJURY_PROB * (1 - eff('physioClinic') * 0.08));
+  const injuryProb = calculateInjuryProbability(eff('physioClinic'), config.baseInjuryProbability);
 
   // ── 3. Personality shifts ─────────────────────────────────────────────────────
   const traitShifts: Record<string, Partial<PersonalityMatrix>> = {};
 
   players.forEach((player) => {
-    traitShifts[player.id] = calculateTraitShifts(player);
+    traitShifts[player.id] = calculateTraitShifts(
+      player,
+      config.regressionUpperThreshold,
+      config.regressionLowerThreshold,
+    );
   });
 
   // Trait shifts are applied later alongside development updates (single set() call).
@@ -127,8 +129,8 @@ export function processWeeklyTick(): WeeklyTick {
   type NewInjury = { playerId: string; severity: 'minor' | 'moderate' | 'serious'; weeksRemaining: number };
   const newInjuries: NewInjury[] = [];
   injuredPlayerIds.forEach((id) => {
-    const tier = pickInjurySeverity();
-    const weeksRemaining = computeInjuryDuration(tier, eff('physioClinic'), eff('hydroPool'));
+    const tier = pickInjurySeverity(INJURY_TIERS);
+    const weeksRemaining = calculateInjuryDuration(tier, eff('physioClinic'), eff('hydroPool'));
     setPlayerInjury(id, { severity: tier.severity, weeksRemaining, injuredWeek: weekNumber });
     newInjuries.push({ playerId: id, severity: tier.severity, weeksRemaining });
   });
@@ -680,7 +682,11 @@ export function processWeeklyTick(): WeeklyTick {
   // Passive base is a meaningful weekly driver, especially early game.
   // Scouting Center adds to this on top.
   const rep = academy.reputation;
-  const passiveRepDelta = 0.15 + eff('scoutingCenter') * 0.15;
+  const passiveRepDelta = calculateReputationDelta(
+    eff('scoutingCenter'),
+    config.reputationDeltaBase,
+    config.reputationDeltaFacilityMultiplier,
+  );
 
   // Tier maintenance drain — each tier requires progressively more active investment
   // to advance. This creates roughly 2× longer progression per tier:

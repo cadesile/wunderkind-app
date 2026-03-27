@@ -4,28 +4,30 @@ import { useAuthStore } from '@/stores/authStore';
 import { ApiError, LoginResponse } from '@/types/api';
 
 /**
- * Resolves the API base URL:
+ * Resolves the API base URL (priority order):
  *
- * Web  → EXPO_PUBLIC_API_BASE_URL_WEB env var (set in .env; hits Lando directly)
- * Native dev → derives host from Metro's hostUri (always correct in Expo Go)
- *              e.g. hostUri "192.168.5.32:8081" → "http://192.168.5.32:8080"
- *              Requires: npm run proxy  (bridges :8080 → 127.0.0.1:52159)
- * Fallback → production URL
+ * 1. EXPO_PUBLIC_API_BASE_URL env var — set by eas.json build profiles for all
+ *    EAS builds (dev/staging/production). Also set in .env for local web dev
+ *    (pointing at Lando). Leave unset in .env for native Expo Go dev.
+ *
+ * 2. Native Expo Go dev — Metro sets hostUri at runtime to the bundler's LAN
+ *    address, e.g. "192.168.1.10:8081" → "http://192.168.1.10:8080".
+ *    Requires: npm run proxy  (bridges :8080 → 127.0.0.1:52100)
+ *
+ * 3. Fallback → production URL
  */
 function resolveBaseUrl(): string {
-  if (Platform.OS === 'web') {
-    return process.env.EXPO_PUBLIC_API_BASE_URL_WEB ?? 'https://api.wunderkind.app';
-  }
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (envUrl) return envUrl;
 
-  // Expo Go sets hostUri to the Metro bundler address at runtime — always the
-  // correct LAN IP of the dev machine, no .env config needed.
+  // Native Expo Go dev — derive the correct LAN IP from Metro's hostUri
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
     return `http://${host}:8080`;
   }
 
-  return 'https://api.wunderkind.app';
+  return 'https://api.buildmyclub.co.uk';
 }
 
 const BASE_URL = resolveBaseUrl();

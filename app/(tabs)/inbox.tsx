@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { View, FlatList, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Trash2 } from 'lucide-react-native';
+import { Trash2, Users, ArrowLeftRight, Building, TrendingUp, Bell, BookOpen, Gem, Award } from 'lucide-react-native';
 import { useInboxStore, InboxMessage, InboxMessageType } from '@/stores/inboxStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useSquadStore } from '@/stores/squadStore';
+import { useGuardianStore } from '@/stores/guardianStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -17,7 +18,8 @@ import { handleGuardianResponse } from '@/engine/ReactionHandler';
 import { handleAcceptAgentOffer, handleRejectAgentOffer } from '@/utils/agentOfferHandlers';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
 import { Avatar } from '@/components/ui/Avatar';
 import { FlagText } from '@/components/ui/FlagText';
 import { Badge } from '@/components/ui/Badge';
@@ -32,62 +34,39 @@ import { moraleLabel } from '@/utils/morale';
 // ─── Agent offer card (list item) ────────────────────────────────────────────
 
 function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer: (o: AgentOffer) => void }) {
-  const currentWeek   = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const investorId    = useAcademyStore((s) => s.academy.investorId);
-  const investor      = useMarketStore((s) => s.investors.find((inv) => inv.id === investorId));
-  const player        = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
-  const weeksLeft     = offer.expiresWeek - currentWeek;
-
-  const investorEquityPct = investor?.equityTaken ?? 0;
-  const investorCutPence  = investorEquityPct > 0
-    ? Math.round(offer.netProceeds * (investorEquityPct / 100))
-    : 0;
-  const trueNetPence = offer.netProceeds - investorCutPence;
+  const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const weeksLeft   = offer.expiresWeek - currentWeek;
 
   return (
     <Pressable onPress={() => { hapticTap(); onViewOffer(offer); }}>
       <View style={{
         backgroundColor: WK.tealCard,
-        borderWidth: 4,
-        borderColor: WK.yellow,
-        padding: 12,
+        borderWidth: 3,
+        borderColor: WK.border,
+        borderLeftWidth: 5,
+        borderLeftColor: WK.yellow,
         marginBottom: 10,
+        flexDirection: 'row',
         ...pixelShadow,
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <Badge label="TRANSFER OFFER" color="yellow" />
-          <PixelText size={6} dim>WK {offer.week}</PixelText>
+        {/* Icon column */}
+        <View style={{ width: 44, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 14 }}>
+          <ArrowLeftRight size={18} color={WK.yellow} />
         </View>
 
-        <PixelText size={8} upper numberOfLines={2} style={{ marginBottom: 4 }}>
-          {offer.playerName} → {offer.destinationClub}
-        </PixelText>
-        <PixelText size={6} dim style={{ marginBottom: 10 }}>
-          {player?.position ?? '?'} · {offer.agentName} ({offer.agentCommissionRate}% comm.)
-        </PixelText>
-
-        <View style={{ gap: 4, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <PixelText size={6} dim>GROSS FEE</PixelText>
-            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
+        {/* Content column */}
+        <View style={{ flex: 1, paddingTop: 12, paddingBottom: 12, paddingRight: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+            <PixelText size={8} upper style={{ flex: 1, marginRight: 8 }} numberOfLines={2}>
+              {offer.playerName} → {offer.destinationClub}
+            </PixelText>
+            <Badge label="NEW" color="yellow" />
           </View>
-          {investorCutPence > 0 && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <PixelText size={6} dim>INVESTOR ({investorEquityPct}%)</PixelText>
-              <PixelText size={6} color={WK.red}>-{formatCurrencyCompact(investorCutPence)}</PixelText>
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <PixelText size={6} dim>NET PROCEEDS</PixelText>
-            <PixelText size={6} color={WK.green}>{formatCurrencyCompact(trueNetPence)}</PixelText>
-          </View>
+          <PixelText variant="body" size={13} dim numberOfLines={1}>
+            Expires in {weeksLeft} {weeksLeft === 1 ? 'week' : 'weeks'}
+          </PixelText>
+          <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>WK {offer.week}</PixelText>
         </View>
-
-        <PixelText size={6} dim style={{ marginBottom: 12 }}>
-          EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
-        </PixelText>
-
-        <Button label="VIEW OFFER →" variant="yellow" fullWidth onPress={() => { hapticTap(); onViewOffer(offer); }} />
       </View>
     </Pressable>
   );
@@ -159,20 +138,20 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
           padding: 14,
           ...pixelShadow,
         }}>
-          <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 8 }}>PLAYER</PixelText>
+          <PixelText size={14} variant="vt323" color={WK.tealLight} style={{ marginBottom: 8 }}>PLAYER</PixelText>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <PixelText size={9} upper style={{ flex: 1 }}>{player.name}</PixelText>
             <View style={{ borderWidth: 2, borderColor: WK.yellow, paddingHorizontal: 6, paddingVertical: 3 }}>
-              <PixelText size={7} color={WK.yellow}>{player.position}</PixelText>
+              <PixelText size={14} variant="vt323" color={WK.yellow}>{player.position}</PixelText>
             </View>
           </View>
 
           {age !== null && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-              <PixelText size={6} dim>AGE {age} · </PixelText>
+              <PixelText size={13} variant="vt323" dim>AGE {age} · </PixelText>
               <FlagText nationality={player.nationality} size={10} />
-              <PixelText size={6} dim>{player.nationality}</PixelText>
+              <PixelText size={13} variant="vt323" dim>{player.nationality}</PixelText>
             </View>
           )}
 
@@ -190,7 +169,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
 
           {/* Morale */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <PixelText size={6} dim>{moraleLabel(player.morale ?? 70)}</PixelText>
+            <PixelText size={13} variant="vt323" dim>{moraleLabel(player.morale ?? 70)}</PixelText>
           </View>
         </View>
       )}
@@ -211,32 +190,32 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
         <PixelText size={8} upper style={{ marginBottom: 4 }}>
           {offer.playerName} → {offer.destinationClub}
         </PixelText>
-        <PixelText size={6} dim style={{ marginBottom: 12 }}>
+        <PixelText size={13} variant="vt323" dim style={{ marginBottom: 12 }}>
           {offer.agentName} · {offer.agentCommissionRate}% COMMISSION
         </PixelText>
 
-        <View style={{ gap: 6, marginBottom: 10 }}>
+        <View style={{ gap: 4, marginBottom: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-            <PixelText size={6} dim>GROSS FEE</PixelText>
-            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
+            <PixelText size={14} variant="vt323" dim>GROSS FEE</PixelText>
+            <PixelText size={18} variant="vt323" color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-            <PixelText size={6} dim>AGENT ({offer.agentCommissionRate}%)</PixelText>
-            <PixelText size={6} color={WK.red}>-{formatCurrencyCompact(agentCutPence)}</PixelText>
+            <PixelText size={14} variant="vt323" dim>AGENT ({offer.agentCommissionRate}%)</PixelText>
+            <PixelText size={18} variant="vt323" color={WK.red}>-{formatCurrencyCompact(agentCutPence)}</PixelText>
           </View>
           {investorCutPence > 0 && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>INVESTOR ({investorEquityPct}% EQUITY)</PixelText>
-              <PixelText size={6} color={WK.red}>-{formatCurrencyCompact(investorCutPence)}</PixelText>
+              <PixelText size={14} variant="vt323" dim>INVESTOR ({investorEquityPct}% EQUITY)</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.red}>-{formatCurrencyCompact(investorCutPence)}</PixelText>
             </View>
           )}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
-            <PixelText size={6} color={WK.green}>NET PROCEEDS</PixelText>
-            <PixelText size={7} color={WK.green}>{formatCurrencyCompact(trueNetPence)}</PixelText>
+            <PixelText size={14} variant="vt323" color={WK.green}>NET PROCEEDS</PixelText>
+            <PixelText size={18} variant="vt323" color={WK.green}>{formatCurrencyCompact(trueNetPence)}</PixelText>
           </View>
         </View>
 
-        <PixelText size={6} dim>
+        <PixelText size={14} variant="vt323" dim>
           EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
         </PixelText>
       </View>
@@ -250,21 +229,23 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
           padding: 14,
           ...pixelShadow,
         }}>
-          <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 10 }}>COACH OPINION</PixelText>
+          <PixelText size={9} upper style={{ marginBottom: 10 }}>Coach Opinion</PixelText>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <PixelText size={6} dim>HEAD COACH</PixelText>
-            <PixelText size={6} color={WK.text}>{headCoach.name}</PixelText>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <PixelText size={6} dim>EST. MARKET VALUE</PixelText>
-            <PixelText size={6} color={WK.text}>{formatCurrencyCompact(coachOpinion.perceivedValue)}</PixelText>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-            <PixelText size={6} dim>OFFER vs VALUATION</PixelText>
-            <PixelText size={6} color={coachOpinion.deltaPercent < -10 ? WK.green : coachOpinion.deltaPercent > 10 ? WK.red : WK.text}>
-              {coachOpinion.deltaPercent > 0 ? '+' : ''}{coachOpinion.deltaPercent.toFixed(0)}%
-            </PixelText>
+          <View style={{ gap: 4, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>HEAD COACH</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.text}>{headCoach.name}</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>EST. MARKET VALUE</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.text}>{formatCurrencyCompact(coachOpinion.perceivedValue)}</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+              <PixelText size={14} variant="vt323" dim>OFFER vs VALUATION</PixelText>
+              <PixelText size={18} variant="vt323" color={coachOpinion.deltaPercent < -10 ? WK.green : coachOpinion.deltaPercent > 10 ? WK.red : WK.text}>
+                {coachOpinion.deltaPercent > 0 ? '+' : ''}{coachOpinion.deltaPercent.toFixed(0)}%
+              </PixelText>
+            </View>
           </View>
 
           <View style={{
@@ -272,7 +253,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
             borderColor: verdictColorMap[coachOpinion.verdictColor] ?? WK.border,
             padding: 10,
           }}>
-            <PixelText size={7} color={verdictColorMap[coachOpinion.verdictColor] ?? WK.text}>
+            <PixelText variant="body" size={14} color={verdictColorMap[coachOpinion.verdictColor] ?? WK.text}>
               "{coachOpinion.coachNote}"
             </PixelText>
           </View>
@@ -292,14 +273,24 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
   );
 }
 
-// ─── Type badge config ─────────────────────────────────────────────────────────
+// ─── Type config ───────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<InboxMessageType, { label: string; color: 'yellow' | 'red' | 'green' | 'dim' }> = {
-  guardian: { label: 'GUARDIAN', color: 'yellow' },
-  agent:    { label: 'A', color: 'dim' },
-  sponsor:  { label: '$', color: 'green' },
-  investor: { label: '£', color: 'yellow' },
-  system:   { label: '!', color: 'red' },
+type IconComponent = React.ComponentType<{ size: number; color: string }>;
+
+const TYPE_CONFIG: Record<InboxMessageType, {
+  label: string;
+  color: 'yellow' | 'red' | 'green' | 'dim';
+  icon: IconComponent;
+  stripeColor: string;
+  iconColor: string;
+}> = {
+  guardian: { label: 'GUARDIAN', color: 'yellow',  icon: Users,          stripeColor: WK.yellow,    iconColor: WK.yellow    },
+  agent:    { label: 'TRANSFER', color: 'yellow',  icon: ArrowLeftRight, stripeColor: WK.yellow,    iconColor: WK.yellow    },
+  sponsor:  { label: 'SPONSOR',  color: 'green',   icon: Building,       stripeColor: WK.green,     iconColor: WK.green     },
+  investor: { label: 'INVESTOR', color: 'yellow',  icon: TrendingUp,     stripeColor: WK.yellow,    iconColor: WK.yellow    },
+  system:   { label: 'SYSTEM',   color: 'red',     icon: Bell,           stripeColor: WK.red,       iconColor: WK.red       },
+  scout:       { label: 'SCOUT',       color: 'yellow', icon: Gem,   stripeColor: WK.tealLight, iconColor: WK.tealLight },
+  development: { label: 'DEVELOPMENT', color: 'green',  icon: Award, stripeColor: WK.green,     iconColor: WK.green     },
 };
 
 // ─── Unified list item ─────────────────────────────────────────────────────────
@@ -385,6 +376,124 @@ function isGuardianMeta(meta: unknown): meta is GuardianMeta {
   return typeof meta === 'object' && meta !== null;
 }
 
+// ─── Guardian player card ──────────────────────────────────────────────────────
+
+function GuardianPlayerCard({ playerId }: { playerId: string }) {
+  const player = useSquadStore((s) => s.players.find((p) => p.id === playerId));
+  if (!player) return null;
+
+  const stars = Math.round((player.overallRating / 100) * 5);
+  const starStr = '★'.repeat(stars) + '☆'.repeat(5 - stars);
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.border,
+      padding: 14,
+      flexDirection: 'row',
+      gap: 14,
+      marginTop: 10,
+      ...pixelShadow,
+    }}>
+      {player.appearance && (
+        <Avatar appearance={player.appearance} role="PLAYER" size={60} morale={player.morale ?? 70} age={player.age} />
+      )}
+      <View style={{ flex: 1, justifyContent: 'center', gap: 6 }}>
+        <PixelText size={10} upper numberOfLines={1}>{player.name}</PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Badge label={player.position} color="dim" />
+          <FlagText nationality={player.nationality} size={14} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <PixelText size={13} variant="vt323" color={WK.yellow}>{starStr}</PixelText>
+          <PixelText size={12} variant="vt323" dim>AGE {player.age}</PixelText>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Guardian overview card ────────────────────────────────────────────────────
+// Matches the guardian card layout on the player profile page exactly.
+
+function GuardianOverview({ guardianIds, worstGuardianId }: { guardianIds: string[]; worstGuardianId?: string }) {
+  const allGuardians = useGuardianStore((s) => s.guardians);
+  const guardians = allGuardians.filter((g) => guardianIds.includes(g.id));
+  const academyName = useAcademyStore((s) => s.academy.name ?? 'the academy');
+  if (guardians.length === 0) return null;
+
+  function guardianRoleLabel(g: typeof guardians[0], i: number): string {
+    const sameGender = guardians.filter((x) => x.gender === g.gender).length;
+    if (sameGender > 1) return `GUARDIAN ${i + 1}`;
+    return g.gender === 'female' ? 'MUM' : 'DAD';
+  }
+
+  function loyaltyChip(loyalty: number): { label: string; color: 'green' | 'yellow' | 'red' } {
+    if (loyalty >= 70) return { label: 'LOYAL', color: 'green' };
+    if (loyalty >= 40) return { label: 'NEUTRAL', color: 'yellow' };
+    return { label: 'HOSTILE', color: 'red' };
+  }
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.border,
+      marginTop: 10,
+      ...pixelShadow,
+    }}>
+      {/* Header row — matches player profile */}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10,
+        borderBottomWidth: 2, borderBottomColor: WK.border,
+      }}>
+        <PixelText size={8} color={WK.yellow}>GUARDIANS</PixelText>
+        <BodyText size={12} dim>
+          {guardians.length === 1 ? '1 GUARDIAN' : `${guardians.length} GUARDIANS`}
+        </BodyText>
+      </View>
+
+      {/* Per-guardian rows */}
+      {guardians.map((g, i) => {
+        const chip = loyaltyChip(g.loyaltyToAcademy);
+        const isKeyConcern = g.id === worstGuardianId && guardians.length > 1;
+        return (
+          <View key={g.id} style={{
+            paddingHorizontal: 14, paddingVertical: 12,
+            borderBottomWidth: i < guardians.length - 1 ? 2 : 0,
+            borderBottomColor: WK.border,
+          }}>
+            {/* Name row: role box + name + loyalty chip + key concern flag */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              <View style={{
+                paddingHorizontal: 6, paddingVertical: 3,
+                borderWidth: 2, borderColor: WK.border, backgroundColor: WK.tealDark,
+              }}>
+                <BodyText size={11} dim>{guardianRoleLabel(g, i)}</BodyText>
+              </View>
+              <PixelText size={8}>{g.firstName} {g.lastName}</PixelText>
+              <Badge label={chip.label} color={chip.color} />
+              {isKeyConcern && <Badge label="KEY CONCERN" color="red" />}
+            </View>
+
+            {/* Narrative body — same as player profile */}
+            <View style={{ gap: 6 }}>
+              <BodyText size={13} style={{ lineHeight: 20 }}>
+                {getLoyaltyNote(g.loyaltyToAcademy, academyName)}
+              </BodyText>
+              <BodyText size={12} dim style={{ lineHeight: 18 }}>
+                {getDemandNote(g.demandLevel)}
+              </BodyText>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Gem player card ───────────────────────────────────────────────────────────
 
 function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: string }) {
@@ -457,11 +566,11 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
       padding: 14,
       ...pixelShadow,
     }}>
-      <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 8 }}>GEM PROSPECT</PixelText>
+      <PixelText size={14} variant="vt323" color={WK.tealLight} style={{ marginBottom: 8 }}>GEM PROSPECT</PixelText>
 
       {/* Name + position */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <PixelText size={8} upper style={{ flex: 1 }}>
+        <PixelText size={10} upper style={{ flex: 1 }}>
           {player.firstName} {player.lastName}
         </PixelText>
         <View style={{
@@ -470,21 +579,21 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
           paddingHorizontal: 6,
           paddingVertical: 3,
         }}>
-          <PixelText size={7} color={WK.yellow}>{player.position}</PixelText>
+          <PixelText size={14} variant="vt323" color={WK.yellow}>{player.position}</PixelText>
         </View>
       </View>
 
       {/* Age / nationality */}
       {(age !== null || player.nationality) && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-          {age !== null && <PixelText size={6} dim>AGE {age} · </PixelText>}
-          <FlagText nationality={player.nationality} size={10} />
-          <PixelText size={6} dim>{player.nationality}</PixelText>
+          {age !== null && <PixelText size={13} variant="vt323" dim>AGE {age} · </PixelText>}
+          <FlagText nationality={player.nationality} size={12} />
+          <PixelText size={13} variant="vt323" dim>{player.nationality}</PixelText>
         </View>
       )}
 
       {/* Potential stars */}
-      <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8 }}>{stars}</PixelText>
+      <PixelText size={18} variant="vt323" color={WK.yellow} style={{ marginBottom: 8 }}>{stars}</PixelText>
 
       {/* OVR badge + ability bar */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -509,9 +618,9 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
       </View>
 
       {/* Asking price */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
-        <PixelText size={6} dim>ASKING PRICE</PixelText>
-        <PixelText size={6} color={WK.text}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <PixelText size={14} variant="vt323" dim>ASKING PRICE</PixelText>
+        <PixelText size={18} variant="vt323" color={WK.text}>
           {askingPrice === 0 ? 'FREE' : `£${askingPrice.toLocaleString()}`}
         </PixelText>
       </View>
@@ -528,12 +637,13 @@ function OfferRow({ label, value }: { label: string; value: string }) {
     <View style={{
       flexDirection: 'row',
       justifyContent: 'space-between',
+      alignItems: 'center',
       paddingVertical: 6,
       borderBottomWidth: 2,
       borderBottomColor: WK.border,
     }}>
-      <PixelText size={7} dim>{label}</PixelText>
-      <PixelText size={7} color={WK.yellow}>{value}</PixelText>
+      <PixelText size={14} variant="vt323" dim>{label}</PixelText>
+      <PixelText size={18} variant="vt323" color={WK.yellow}>{value}</PixelText>
     </View>
   );
 }
@@ -552,38 +662,46 @@ function InboxMessageRow({
   const isUnread = !message.isRead;
   const typeConf = TYPE_CONFIG[message.type] ?? TYPE_CONFIG.system;
   const canDelete = !(message.requiresResponse && !message.response);
+  const Icon = typeConf.icon;
 
   return (
     <Pressable onPress={() => { hapticTap(); onPress(message); }}>
       <View style={{
         backgroundColor: WK.tealCard,
         borderWidth: 3,
-        borderColor: isUnread ? WK.yellow : WK.border,
-        borderLeftWidth: isUnread ? 4 : 3,
-        borderLeftColor: isUnread ? WK.yellow : WK.border,
-        padding: 12,
+        borderColor: WK.border,
+        borderLeftWidth: 5,
+        borderLeftColor: typeConf.stripeColor,
         marginBottom: 10,
+        flexDirection: 'row',
         ...pixelShadow,
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6, gap: 6 }}>
-          <Badge label={typeConf.label} color={typeConf.color} />
-          <PixelText
-            size={8}
-            color={isUnread ? WK.text : WK.dim}
-            style={{ flex: 1, marginRight: 8 }}
-            numberOfLines={2}
-          >
-            {message.subject.toUpperCase()}
-          </PixelText>
-          {isUnread && <Badge label="NEW" color="yellow" />}
-          {canDelete && (
-            <Pressable onPress={(e) => { e.stopPropagation?.(); hapticWarning(); onDelete(message); }} hitSlop={8}>
-              <Trash2 size={14} color={WK.dim} />
-            </Pressable>
-          )}
+        {/* Icon column */}
+        <View style={{ width: 44, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 14 }}>
+          <Icon size={18} color={typeConf.iconColor} />
         </View>
-        <PixelText size={7} dim numberOfLines={2}>{message.body}</PixelText>
-        <PixelText size={7} dim style={{ marginTop: 6 }}>WK {message.week}</PixelText>
+
+        {/* Content column */}
+        <View style={{ flex: 1, paddingTop: 12, paddingBottom: 12, paddingRight: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+            <PixelText
+              size={8}
+              color={isUnread ? WK.text : WK.dim}
+              style={{ flex: 1, marginRight: 8 }}
+              numberOfLines={2}
+            >
+              {message.subject.toUpperCase()}
+            </PixelText>
+            {isUnread && <Badge label="NEW" color="yellow" />}
+            {canDelete && (
+              <Pressable onPress={(e) => { e.stopPropagation?.(); hapticWarning(); onDelete(message); }} hitSlop={12} style={{ marginLeft: 6 }}>
+                <Trash2 size={18} color={WK.red} />
+              </Pressable>
+            )}
+          </View>
+          <PixelText variant="body" size={13} dim numberOfLines={2}>{message.body}</PixelText>
+          <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>WK {message.week}</PixelText>
+        </View>
       </View>
     </Pressable>
   );
@@ -667,7 +785,7 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
       marginTop: 10,
       ...pixelShadow,
     }}>
-      <PixelText size={8} upper style={{ marginBottom: 12 }}>Management</PixelText>
+      <PixelText size={9} upper style={{ marginBottom: 12 }}>Management</PixelText>
       {players.map((p, idx) => {
         const cooldown = getCooldown(p.id);
         return (
@@ -679,19 +797,19 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
             >
               <Avatar appearance={p.appearance} role="PLAYER" size={56} morale={p.morale ?? 70} age={p.age} />
               <View style={{ flex: 1 }}>
-                <PixelText size={8} upper color={WK.yellow} numberOfLines={1}>{p.name}</PixelText>
+                <PixelText size={10} upper color={WK.yellow} numberOfLines={1}>{p.name}</PixelText>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                   <View style={{ borderWidth: 2, borderColor: WK.tealLight, paddingHorizontal: 5, paddingVertical: 2 }}>
-                    <PixelText size={6} color={WK.tealLight}>{p.position}</PixelText>
+                    <PixelText size={14} variant="vt323" color={WK.tealLight}>{p.position}</PixelText>
                   </View>
-                  <PixelText size={6} color={
+                  <PixelText size={14} variant="vt323" color={
                     (p.morale ?? 70) >= 60 ? WK.green : (p.morale ?? 70) >= 40 ? WK.yellow : WK.red
                   }>
                     {moraleLabel(p.morale ?? 70)}
                   </PixelText>
                 </View>
               </View>
-              <PixelText size={6} color={WK.yellow}>›</PixelText>
+              <PixelText size={20} variant="vt323" color={WK.yellow}>›</PixelText>
             </Pressable>
 
             {/* Feedback */}
@@ -704,7 +822,7 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
                 borderColor: feedback[p.id] === 'SUPPORTED' ? WK.green : WK.red,
                 alignSelf: 'flex-start',
               }}>
-                <PixelText size={6} color={feedback[p.id] === 'SUPPORTED' ? WK.green : WK.red}>
+                <PixelText size={14} variant="vt323" color={feedback[p.id] === 'SUPPORTED' ? WK.green : WK.red}>
                   ✓ {feedback[p.id]}
                 </PixelText>
               </View>
@@ -724,7 +842,7 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
                   opacity: cooldown.locked ? 0.45 : 1,
                 }}
               >
-                <PixelText size={7} color={cooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
+                <PixelText size={16} variant="vt323" color={cooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
               </Pressable>
               <Pressable
                 onPress={cooldown.locked ? undefined : () => handlePunish(p)}
@@ -738,11 +856,11 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
                   opacity: cooldown.locked ? 0.45 : 1,
                 }}
               >
-                <PixelText size={7} color={cooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
+                <PixelText size={16} variant="vt323" color={cooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
               </Pressable>
             </View>
             {cooldown.locked && (
-              <PixelText size={6} dim style={{ marginTop: 6, textAlign: 'center' }}>
+              <PixelText size={13} variant="vt323" dim style={{ marginTop: 6, textAlign: 'center' }}>
                 AVAILABLE WK {cooldown.availableWeek}
               </PixelText>
             )}
@@ -767,39 +885,47 @@ function NarrativeMessageRow({
   const isUnread = !message.readAt;
   const isPending = message.isActionable && !message.respondedAt;
   const canDelete = !isPending;
-  const borderColor = isPending ? WK.green : isUnread ? WK.yellow : WK.border;
+  const stripeColor = isPending ? WK.green : WK.tealLight;
+  const iconColor = isPending ? WK.green : WK.tealLight;
 
   return (
     <Pressable onPress={() => { hapticTap(); onPress(message); }}>
       <View style={{
         backgroundColor: WK.tealCard,
         borderWidth: 3,
-        borderColor,
-        borderLeftWidth: 4,
-        borderLeftColor: borderColor,
-        padding: 12,
+        borderColor: WK.border,
+        borderLeftWidth: 5,
+        borderLeftColor: stripeColor,
         marginBottom: 10,
+        flexDirection: 'row',
         ...pixelShadow,
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6, gap: 6 }}>
-          <Badge label="★" color="green" />
-          <PixelText
-            size={8}
-            color={isUnread ? WK.text : WK.dim}
-            style={{ flex: 1, marginRight: 8 }}
-            numberOfLines={2}
-          >
-            {message.title.toUpperCase()}
-          </PixelText>
-          {isPending && <Badge label="ACT" color="green" />}
-          {isUnread && !isPending && <Badge label="NEW" color="yellow" />}
-          {canDelete && (
-            <Pressable onPress={(e) => { e.stopPropagation?.(); hapticWarning(); onDelete(message); }} hitSlop={8}>
-              <Trash2 size={14} color={WK.dim} />
-            </Pressable>
-          )}
+        {/* Icon column */}
+        <View style={{ width: 44, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 14 }}>
+          <BookOpen size={18} color={iconColor} />
         </View>
-        <PixelText size={7} dim numberOfLines={2}>{message.body}</PixelText>
+
+        {/* Content column */}
+        <View style={{ flex: 1, paddingTop: 12, paddingBottom: 12, paddingRight: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+            <PixelText
+              size={8}
+              color={isUnread ? WK.text : WK.dim}
+              style={{ flex: 1, marginRight: 8 }}
+              numberOfLines={2}
+            >
+              {message.title.toUpperCase()}
+            </PixelText>
+            {isPending && <Badge label="ACT" color="green" />}
+            {isUnread && !isPending && <Badge label="NEW" color="yellow" />}
+            {canDelete && (
+              <Pressable onPress={(e) => { e.stopPropagation?.(); hapticWarning(); onDelete(message); }} hitSlop={12} style={{ marginLeft: 6 }}>
+                <Trash2 size={18} color={WK.red} />
+              </Pressable>
+            )}
+          </View>
+          <PixelText variant="body" size={13} dim numberOfLines={2}>{message.body}</PixelText>
+        </View>
       </View>
     </Pressable>
   );
@@ -867,19 +993,19 @@ function InboxMessageDetail({
       }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
           <Badge label={typeConf.label} color={typeConf.color} />
-          <PixelText size={7} dim>WK {message.week}</PixelText>
+          <PixelText size={14} variant="vt323" dim>WK {message.week}</PixelText>
         </View>
-        <PixelText size={9} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
-        <PixelText size={7} style={{ lineHeight: 16, color: WK.dim }}>{message.body}</PixelText>
+        <PixelText size={11} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
+        <PixelText size={14} variant="body" style={{ color: WK.dim }}>{message.body}</PixelText>
 
         {message.type === 'sponsor' && sponsorMeta && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
-            <PixelText size={7} color={WK.tealLight} style={{ marginBottom: 8 }}>OFFER DETAILS</PixelText>
+            <PixelText size={16} variant="vt323" color={WK.tealLight} style={{ marginBottom: 10 }}>OFFER DETAILS</PixelText>
             <OfferRow label="WEEKLY INCOME" value={`£${sponsorMeta.weeklyPayment.toLocaleString()}`} />
             <OfferRow label="CONTRACT LENGTH" value={`${sponsorMeta.contractWeeks} WEEKS`} />
             <OfferRow label="SPONSOR SIZE" value={String(sponsorMeta.companySize)} />
             <View style={{ marginTop: 8 }}>
-              <PixelText size={6} dim>
+              <PixelText size={13} variant="vt323" dim>
                 TOTAL VALUE: £{(sponsorMeta.weeklyPayment * sponsorMeta.contractWeeks).toLocaleString()}
               </PixelText>
             </View>
@@ -888,12 +1014,12 @@ function InboxMessageDetail({
 
         {message.type === 'investor' && investorMeta && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
-            <PixelText size={7} color={WK.tealLight} style={{ marginBottom: 8 }}>OFFER DETAILS</PixelText>
+            <PixelText size={16} variant="vt323" color={WK.tealLight} style={{ marginBottom: 10 }}>OFFER DETAILS</PixelText>
             <OfferRow label="INVESTMENT" value={formatCurrencyCompact(investorMeta.investmentAmount)} />
             <OfferRow label="EQUITY STAKE" value={`${investorMeta.equityPct}%`} />
             <OfferRow label="INVESTOR SIZE" value={String(investorMeta.investorSize)} />
             <View style={{ marginTop: 8 }}>
-              <PixelText size={6} dim>
+              <PixelText size={13} variant="vt323" dim>
                 INVESTOR RECEIVES {investorMeta.equityPct}% OF ALL FUTURE PLAYER SALES
               </PixelText>
             </View>
@@ -911,12 +1037,23 @@ function InboxMessageDetail({
             marginTop: 16, paddingVertical: 8, paddingHorizontal: 12,
             borderWidth: 2, borderColor: message.response === 'accepted' ? WK.green : WK.red,
           }}>
-            <PixelText size={7} color={message.response === 'accepted' ? WK.green : WK.red}>
+            <PixelText size={16} variant="vt323" color={message.response === 'accepted' ? WK.green : WK.red}>
               {message.response === 'accepted' ? '✓ ACCEPTED' : '✗ REJECTED'}
             </PixelText>
           </View>
         )}
       </View>
+
+      {message.type === 'guardian' && message.entityId && (
+        <GuardianPlayerCard playerId={message.entityId} />
+      )}
+
+      {message.type === 'guardian' && guardianMeta?.guardianIds && guardianMeta.guardianIds.length > 0 && (
+        <GuardianOverview
+          guardianIds={guardianMeta.guardianIds}
+          worstGuardianId={guardianMeta.worstGuardianId}
+        />
+      )}
 
       {multiGemMeta && multiGemMeta.playerIds.map((pid) => (
         <GemPlayerCard key={pid} playerId={pid} messageId={message.id} />
@@ -935,27 +1072,27 @@ function InboxMessageDetail({
           marginTop: 10,
           ...pixelShadow,
         }}>
-          <PixelText size={8} upper style={{ marginBottom: 12 }}>Mission Complete</PixelText>
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>SCOUT</PixelText>
-              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.scoutName}</PixelText>
+          <PixelText size={9} upper style={{ marginBottom: 12 }}>Mission Complete</PixelText>
+          <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>SCOUT</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.text}>{missionSummaryMeta.missionSummary.scoutName}</PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>TARGET</PixelText>
-              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.position}</PixelText>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>TARGET</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.text}>{missionSummaryMeta.missionSummary.position}</PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>REGION</PixelText>
-              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.targetNationality ?? 'Domestic'}</PixelText>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>REGION</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.text}>{missionSummaryMeta.missionSummary.targetNationality ?? 'Domestic'}</PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={6} dim>DURATION</PixelText>
-              <PixelText size={6} color={WK.text}>{missionSummaryMeta.missionSummary.weeksTotal} WEEKS</PixelText>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+              <PixelText size={14} variant="vt323" dim>DURATION</PixelText>
+              <PixelText size={18} variant="vt323" color={WK.text}>{missionSummaryMeta.missionSummary.weeksTotal} WEEKS</PixelText>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
-              <PixelText size={6} dim>GEMS FOUND</PixelText>
-              <PixelText size={6} color={missionSummaryMeta.missionSummary.gemsFound > 0 ? WK.green : WK.dim}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+              <PixelText size={14} variant="vt323" dim>GEMS FOUND</PixelText>
+              <PixelText size={18} variant="vt323" color={missionSummaryMeta.missionSummary.gemsFound > 0 ? WK.green : WK.dim}>
                 {missionSummaryMeta.missionSummary.gemsFound}
               </PixelText>
             </View>
@@ -1034,12 +1171,12 @@ function NarrativeMessageDetail({
         ...pixelShadow,
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 }}>
-          <Badge label="★" color="green" />
-          <PixelText size={7} dim color={WK.tealLight}>STORY EVENT</PixelText>
+          <BookOpen size={16} color={WK.tealLight} />
+          <PixelText size={14} variant="vt323" color={WK.tealLight}>STORY EVENT</PixelText>
         </View>
 
         <PixelText size={9} upper style={{ marginBottom: 14 }}>{message.title}</PixelText>
-        <PixelText size={7} style={{ lineHeight: 16, color: WK.dim }}>{message.body}</PixelText>
+        <PixelText variant="body" size={14} style={{ color: WK.dim }}>{message.body}</PixelText>
 
         {message.statImpacts && message.statImpacts.length > 0 && (
           <View style={{
@@ -1049,34 +1186,20 @@ function NarrativeMessageDetail({
             padding: 10,
             gap: 6,
           }}>
-            <PixelText size={6} dim style={{ marginBottom: 4 }}>STAT IMPACT</PixelText>
-            {message.statImpacts.map((impact, i) => {
-              const isMorale = impact.label.toUpperCase().includes('MORALE');
-              return (
-                <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <PixelText size={6} dim>{impact.label}</PixelText>
-                  {isMorale ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <PixelText size={6} color={WK.dim}>{impact.from}</PixelText>
-                      <PixelText size={6} dim> → </PixelText>
-                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>{impact.to}</PixelText>
-                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>
-                        ({impact.delta >= 0 ? '+' : ''}{impact.delta})
-                      </PixelText>
-                    </View>
-                  ) : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <PixelText size={6} dim>{impact.from}</PixelText>
-                      <PixelText size={6} dim>→</PixelText>
-                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>{impact.to}</PixelText>
-                      <PixelText size={6} color={impact.delta >= 0 ? WK.green : WK.red}>
-                        ({impact.delta >= 0 ? '+' : ''}{impact.delta})
-                      </PixelText>
-                    </View>
-                  )}
+            <PixelText size={14} variant="vt323" dim style={{ marginBottom: 4 }}>STAT IMPACT</PixelText>
+            {message.statImpacts.map((impact, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <PixelText size={14} variant="vt323" dim>{impact.label}</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <PixelText size={14} variant="vt323" color={WK.dim}>{impact.from}</PixelText>
+                  <PixelText size={14} variant="vt323" dim>→</PixelText>
+                  <PixelText size={14} variant="vt323" color={impact.delta >= 0 ? WK.green : WK.red}>{impact.to}</PixelText>
+                  <PixelText size={14} variant="vt323" color={impact.delta >= 0 ? WK.green : WK.red}>
+                    ({impact.delta >= 0 ? '+' : ''}{impact.delta})
+                  </PixelText>
                 </View>
-              );
-            })}
+              </View>
+            ))}
           </View>
         )}
 
@@ -1085,7 +1208,7 @@ function NarrativeMessageDetail({
             marginTop: 16, paddingVertical: 8, paddingHorizontal: 12,
             borderWidth: 2, borderColor: WK.tealMid,
           }}>
-            <PixelText size={7} dim>✓ RESPONDED</PixelText>
+            <PixelText size={16} variant="vt323" color={WK.tealLight}>✓ RESPONDED</PixelText>
           </View>
         )}
       </View>

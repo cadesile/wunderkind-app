@@ -7,7 +7,7 @@ import { repairFacilityCost } from '@/types/facility';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { FACILITY_DEFS, FacilityMeta, FacilityType } from '@/types/facility';
-import { PixelText } from '@/components/ui/PixelText';
+import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -106,13 +106,13 @@ function FacilityCard({
       backgroundColor: WK.tealCard,
       borderWidth: 3,
       borderColor: cardBorder,
-      padding: 14,
+      padding: 12,
       marginBottom: 10,
       ...pixelShadow,
     }}>
       {/* Title row */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <PixelText size={8} upper style={{ flex: 1 }}>{def.label}</PixelText>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <BodyText size={15} upper style={{ flex: 1 }}>{def.label}</BodyText>
         <View style={{
           borderWidth: 2,
           borderColor: level > 0 ? WK.yellow : WK.border,
@@ -123,58 +123,49 @@ function FacilityCard({
         </View>
       </View>
 
-      <PixelText size={6} dim style={{ marginBottom: 10 }}>{def.description}</PixelText>
+      {/* Active benefit */}
+      <BodyText size={13} color={WK.tealLight} style={{ marginBottom: 2 }}>
+        ◆ {LEVEL_BENEFIT_LABELS[def.type](level)}
+      </BodyText>
 
-      {/* Level bar */}
-      <PixelText size={6} dim style={{ marginBottom: 4 }}>LEVEL</PixelText>
-      <View style={{
-        height: 6,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        borderWidth: 2,
-        borderColor: WK.border,
-        marginBottom: 10,
-      }}>
-        <View style={{ height: '100%', width: `${levelPct}%`, backgroundColor: WK.tealLight }} />
+      {/* Description */}
+      <BodyText size={12} dim style={{ marginBottom: 10 }}>{def.description}</BodyText>
+
+      {/* Dual progress bars — side by side */}
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+        {/* Level bar */}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+            <BodyText size={11} dim>LEVEL</BodyText>
+            <BodyText size={11} dim>{level}/10</BodyText>
+          </View>
+          <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+            <View style={{ height: '100%', width: `${levelPct}%`, backgroundColor: WK.tealLight }} />
+          </View>
+        </View>
+
+        {/* Condition bar — only when built */}
+        {level > 0 && (
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+              <BodyText size={11} dim>CONDITION</BodyText>
+              <BodyText size={11} color={condColor}>{Math.round(condition)}%</BodyText>
+            </View>
+            <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+              <View style={{ height: '100%', width: `${condition}%`, backgroundColor: condColor }} />
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* Condition bar — only shown for built facilities */}
-      {level > 0 && (
-        <>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-            <PixelText size={6} dim>CONDITION</PixelText>
-            <PixelText size={6} color={condColor}>{Math.round(condition)}%</PixelText>
-          </View>
-          <View style={{
-            height: 6,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            borderWidth: 2,
-            borderColor: WK.border,
-            marginBottom: 6,
-          }}>
-            <View style={{ height: '100%', width: `${condition}%`, backgroundColor: condColor }} />
-          </View>
-          <PixelText size={6} color={WK.dim} style={{ marginBottom: 10 }}>
-            EFFECTIVE LV {effectiveLevel}
-          </PixelText>
-        </>
-      )}
-
-      {/* Active benefit */}
-      <PixelText size={6} color={WK.tealLight} style={{ marginBottom: 4 }}>
-        ◆ {LEVEL_BENEFIT_LABELS[def.type](level)}
-      </PixelText>
-      <PixelText size={6} dim style={{ marginBottom: atMax ? 12 : 4 }}>
-        MAINTENANCE: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/WK`}
-      </PixelText>
-      {!atMax && (
-        <PixelText size={6} color={WK.dim} style={{ marginBottom: 12 }}>
-          NEXT LEVEL: £{(nextMaintenance / 100).toFixed(2)}/WK
-        </PixelText>
-      )}
+      {/* Maintenance — single line */}
+      <BodyText size={12} dim style={{ marginBottom: 12 }}>
+        MAINT: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/wk`}
+        {!atMax ? `  ·  LV${level + 1}: £${(nextMaintenance / 100).toFixed(2)}/wk` : ''}
+      </BodyText>
 
       {/* Action buttons */}
       <View style={{ gap: 8 }}>
-        {/* Repair button — shown when condition < 100 and level > 0 */}
         {needsRepair && (
           <Button
             label={`REPAIR  £${repairCost.toLocaleString()}`}
@@ -185,7 +176,6 @@ function FacilityCard({
           />
         )}
 
-        {/* Upgrade button */}
         {atMax ? (
           <View style={{ borderWidth: 2, borderColor: WK.dim, padding: 8, alignItems: 'center' }}>
             <PixelText size={7} dim>MAX LEVEL</PixelText>
@@ -222,17 +212,17 @@ function FacilityCard({
               maxWidth: 340,
               ...pixelShadow,
             }}>
-              <PixelText size={9} upper style={{ marginBottom: 14 }}>Upgrade {def.label}</PixelText>
+              <PixelText size={9} upper style={{ marginBottom: 12 }}>Upgrade {def.label}</PixelText>
               {!canAffordUpgrade ? (
-                <PixelText size={7} color={WK.orange} style={{ marginBottom: 20 }}>
-                  INSUFFICIENT FUNDS{'\n'}NEED £{upgradeCost.toLocaleString()}
-                </PixelText>
+                <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
+                  INSUFFICIENT FUNDS — need £{upgradeCost.toLocaleString()}
+                </BodyText>
               ) : (
                 <>
-                  <PixelText size={7} dim style={{ marginBottom: 6 }}>LEVEL {level} → {level + 1}</PixelText>
-                  <PixelText size={7} color={WK.yellow} style={{ marginBottom: 20 }}>
+                  <BodyText size={13} dim style={{ marginBottom: 4 }}>LEVEL {level} → {level + 1}</BodyText>
+                  <BodyText size={13} color={WK.yellow} style={{ marginBottom: 20 }}>
                     COST: £{upgradeCost.toLocaleString()}
-                  </PixelText>
+                  </BodyText>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -267,19 +257,19 @@ function FacilityCard({
               maxWidth: 340,
               ...pixelShadow,
             }}>
-              <PixelText size={9} upper style={{ marginBottom: 14 }}>Repair {def.label}</PixelText>
+              <PixelText size={9} upper style={{ marginBottom: 12 }}>Repair {def.label}</PixelText>
               {!canAffordRepair ? (
-                <PixelText size={7} color={WK.red} style={{ marginBottom: 20 }}>
-                  INSUFFICIENT FUNDS{'\n'}NEED £{repairCost.toLocaleString()}
-                </PixelText>
+                <BodyText size={13} color={WK.red} style={{ marginBottom: 20 }}>
+                  INSUFFICIENT FUNDS — need £{repairCost.toLocaleString()}
+                </BodyText>
               ) : (
                 <>
-                  <PixelText size={7} dim style={{ marginBottom: 6 }}>
+                  <BodyText size={13} dim style={{ marginBottom: 4 }}>
                     CONDITION {Math.round(condition)}% → 100%
-                  </PixelText>
-                  <PixelText size={7} color={WK.orange} style={{ marginBottom: 20 }}>
+                  </BodyText>
+                  <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
                     COST: £{repairCost.toLocaleString()}
-                  </PixelText>
+                  </BodyText>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -354,12 +344,15 @@ export default function FacilitiesScreen() {
           backgroundColor: WK.tealCard,
           borderWidth: 3,
           borderColor: WK.yellow,
-          padding: 14,
+          padding: 12,
           marginTop: 4,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           ...pixelShadow,
         }}>
-          <PixelText size={7} dim style={{ marginBottom: 6 }}>TOTAL WEEKLY UPKEEP</PixelText>
-          <PixelText size={14} color={WK.orange}>
+          <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
+          <PixelText size={12} color={WK.orange}>
             £{(calculateTotalUpkeep(levels) / 100).toFixed(2)}
           </PixelText>
         </View>

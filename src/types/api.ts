@@ -1,5 +1,16 @@
 export type { MarketDataResponse } from './market';
 import type { FinancialCategory } from './finance';
+import type { GameConfig } from './gameConfig';
+
+// ─── Starter Config ───────────────────────────────────────────────────────────
+
+export interface StarterConfig {
+  startingBalance: number;       // pence
+  starterPlayerCount: number;
+  starterCoachCount: number;
+  starterScoutCount: number;
+  starterSponsorTier: string;    // 'SMALL' | 'MEDIUM' | 'LARGE'
+}
 
 // ─── Academy Status ───────────────────────────────────────────────────────────
 
@@ -223,6 +234,8 @@ export interface SyncAcceptedResponse {
   accepted: true;
   weekNumber: number;
   syncedAt: string;
+  /** Server may piggyback updated engine constants on any sync response */
+  gameConfig?: GameConfig;
   academy: {
     reputation: number;
     totalCareerEarnings: number;

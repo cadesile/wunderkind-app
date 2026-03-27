@@ -9,11 +9,12 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
+import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
 import { useNarrativeSync } from '@/hooks/useNarrativeSync';
-import { useGameConfigSync } from '@/hooks/useGameConfigSync';
+import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 import { useArchetypeSync } from '@/hooks/useArchetypeSync';
 import { useProspectSync } from '@/hooks/useProspectSync';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
@@ -21,6 +22,8 @@ import { WelcomeSplash } from '@/components/WelcomeSplash';
 import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
 import { useAcademyStore } from '@/stores/academyStore';
+import { PixelText } from '@/components/ui/PixelText';
+import { Button } from '@/components/ui/Button';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,18 +44,32 @@ function LoadingScreen() {
 function AppNavigator() {
   const [fontsLoaded, fontError] = useFonts({
     PressStart2P_400Regular,
+    VT323_400Regular,
     FlagsColorWorld: require('../assets/fonts/FlagsColorWorld.ttf'),
   });
   const { isReady, isOnboarding, registerAcademy, showWelcomeSplash, dismissWelcomeSplash } = useAuthFlow();
   const academyName = useAcademyStore((s) => s.academy.name);
   useNarrativeSync();
-  useGameConfigSync();
   useArchetypeSync();
   useProspectSync();
 
   // Tracks whether the player tapped "START AGAIN" on the game over screen
   const [newGameOnboarding, setNewGameOnboarding] = useState(false);
   const pendingNewGame = useLossConditionStore((s) => s.pendingNewGame);
+
+  // Config gate: must have a valid GameConfig before entering the main UI
+  const [configReady, setConfigReady] = useState(false);
+  const [configError, setConfigError] = useState(false);
+
+  useEffect(() => {
+    void fetchAndCacheGameConfig().then((ok) => {
+      if (ok) {
+        setConfigReady(true);
+      } else {
+        setConfigError(true);
+      }
+    });
+  }, []);
 
   // Restore any persisted sync queue items from previous sessions
   useEffect(() => {
@@ -73,8 +90,33 @@ function AppNavigator() {
     void doNewGameReset();
   }, [pendingNewGame]);
 
-  // Wait for both font and auth to be ready
-  if ((!fontsLoaded && !fontError) || !isReady) {
+  // Hard block: first launch with no network — config has never been cached
+  if (configError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: WK.greenDark, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <PixelText size={8} upper color={WK.red} style={{ textAlign: 'center', marginBottom: 16 }}>
+          COULD NOT LOAD GAME CONFIG
+        </PixelText>
+        <PixelText size={6} dim style={{ textAlign: 'center', marginBottom: 24 }}>
+          CHECK YOUR CONNECTION AND RETRY
+        </PixelText>
+        <Button
+          label="RETRY"
+          variant="yellow"
+          onPress={() => {
+            setConfigError(false);
+            void fetchAndCacheGameConfig().then((ok) => {
+              if (ok) setConfigReady(true);
+              else setConfigError(true);
+            });
+          }}
+        />
+      </View>
+    );
+  }
+
+  // Block until fonts, auth, and game config are all ready
+  if ((!fontsLoaded && !fontError) || !isReady || !configReady) {
     return <LoadingScreen />;
   }
 

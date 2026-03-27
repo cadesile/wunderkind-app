@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Wunderkind Factory",
-    "slug": "wunderkind-factory",
+    "slug": "buildmyclub",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -31,6 +31,19 @@
     "plugins": [
       "expo-router",
       "expo-asset"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bc8700ca-196b-4e62-a48d-f24a1cda9347"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bc8700ca-196b-4e62-a48d-f24a1cda9347"
+      },
+      "router": {}
+    },
+    "owner": "courtney.adesile"
   }
 }
