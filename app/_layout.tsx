@@ -6,8 +6,9 @@ enableScreens();
 import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
@@ -22,8 +23,12 @@ import { WelcomeSplash } from '@/components/WelcomeSplash';
 import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useSquadStore } from '@/stores/squadStore';
 import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
+
+// Keep the native splash visible until AppNavigator signals it's ready
+SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,14 +37,6 @@ const queryClient = new QueryClient({
     mutations: { retry: 1 },
   },
 });
-
-function LoadingScreen() {
-  return (
-    <View style={{ flex: 1, backgroundColor: WK.greenDark, justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="large" color={WK.yellow} />
-    </View>
-  );
-}
 
 function AppNavigator() {
   const [fontsLoaded, fontError] = useFonts({
@@ -60,6 +57,28 @@ function AppNavigator() {
   // Config gate: must have a valid GameConfig before entering the main UI
   const [configReady, setConfigReady] = useState(false);
   const [configError, setConfigError] = useState(false);
+
+  // Zustand persist hydration gate — waits for AsyncStorage rehydration on both
+  // critical stores before allowing the main UI to render, preventing stale-state flicker
+  const [storesHydrated, setStoresHydrated] = useState(false);
+
+  useEffect(() => {
+    async function waitForHydration() {
+      const stores = [useAcademyStore, useSquadStore] as const;
+      for (const store of stores) {
+        if (!store.persist.hasHydrated()) {
+          await new Promise<void>((resolve) => {
+            const unsub = store.persist.onFinishHydration(() => {
+              unsub();
+              resolve();
+            });
+          });
+        }
+      }
+      setStoresHydrated(true);
+    }
+    void waitForHydration();
+  }, []);
 
   useEffect(() => {
     void fetchAndCacheGameConfig().then((ok) => {
@@ -90,6 +109,16 @@ function AppNavigator() {
     void doNewGameReset();
   }, [pendingNewGame]);
 
+  const isFullyReady = (fontsLoaded || !!fontError) && isReady && configReady && storesHydrated;
+
+  // Hide the native splash only once every gate has passed — prevents any flicker
+  // between the static splash frame and the first pixel-art render
+  useEffect(() => {
+    if (isFullyReady) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isFullyReady]);
+
   // Hard block: first launch with no network — config has never been cached
   if (configError) {
     return (
@@ -115,10 +144,8 @@ function AppNavigator() {
     );
   }
 
-  // Block until fonts, auth, and game config are all ready
-  if ((!fontsLoaded && !fontError) || !isReady || !configReady) {
-    return <LoadingScreen />;
-  }
+  // Return null while gates are pending — native splash remains visible, zero flicker
+  if (!isFullyReady) return null;
 
   if (isOnboarding || newGameOnboarding) {
     return (
