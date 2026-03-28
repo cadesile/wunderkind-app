@@ -20,6 +20,9 @@
     "staging": {
       "extends": "base",
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "http://204.168.207.171:8080"
       }
@@ -27,6 +30,9 @@
     "production": {
       "extends": "base",
       "distribution": "store",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.buildmyclub.co.uk"
       }

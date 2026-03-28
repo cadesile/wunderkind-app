@@ -273,6 +273,22 @@ export function useAuthFlow(): AuthFlowResult {
 
   useEffect(() => {
     async function initialize() {
+      // On web, AsyncStorage (backed by localStorage) rehydrates the Zustand store
+      // asynchronously. If we read token/email/password from the hook closure before
+      // hydration completes, they are null even when valid credentials are stored —
+      // causing a spurious re-registration and subsequent 401s on authenticated calls.
+      if (!useAuthStore.persist.hasHydrated()) {
+        await new Promise<void>((resolve) => {
+          const unsub = useAuthStore.persist.onFinishHydration(() => {
+            unsub();
+            resolve();
+          });
+        });
+      }
+
+      // Read fresh post-hydration values rather than the stale closure snapshot.
+      const { token, email, password } = useAuthStore.getState();
+
       if (token) {
         // Verify the academy still exists on the backend.
         // On 404 → wipe all local data and send the user back to onboarding.

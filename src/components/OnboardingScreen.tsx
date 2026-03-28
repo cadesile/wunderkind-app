@@ -30,6 +30,14 @@ interface Props {
 type Gender = 'male' | 'female';
 type Step = 'manager' | 'country' | 'name';
 
+const RANDOM_FIRST_NAMES_MALE   = ['James', 'Carlos', 'Marco', 'Luca', 'Pierre', 'Stefan', 'David', 'Thomas', 'Andre', 'Roberto', 'Diego', 'Klaus', 'Jan', 'Erik', 'Miguel'];
+const RANDOM_FIRST_NAMES_FEMALE = ['Maria', 'Elena', 'Sophie', 'Laura', 'Emma', 'Lucia', 'Anna', 'Clara', 'Isabel', 'Sara', 'Marta', 'Ingrid', 'Bianca', 'Valentina', 'Nadia'];
+const RANDOM_LAST_NAMES         = ['Silva', 'Müller', 'Smith', 'García', 'Rossi', 'Santos', 'Weber', 'Costa', 'Lopez', 'Bauer', 'Ferreira', 'Novak', 'Van Dijk', 'Moretti', 'Ramos'];
+
+function pick<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_MANAGER_AGE = 25;
 const MAX_MANAGER_AGE = 65;
@@ -208,6 +216,22 @@ export function OnboardingScreen({ onRegister }: Props) {
 
   const dob = buildDob(dobDay, dobMonth, dobYear);
 
+  function randomiseManager() {
+    const g = pick(['male', 'female'] as Gender[]);
+    const first = pick(g === 'male' ? RANDOM_FIRST_NAMES_MALE : RANDOM_FIRST_NAMES_FEMALE);
+    const last  = pick(RANDOM_LAST_NAMES);
+    setManagerName(`${first} ${last}`);
+    setGender(g);
+    setManagerNationality(pick(ACADEMY_COUNTRIES).code);
+    setDobDay(pick(DAY_OPTIONS));
+    setDobMonth(pick(MONTH_OPTIONS).value);
+    setDobYear(pick(YEAR_OPTIONS));
+  }
+
+  function randomiseCountry() {
+    setSelectedCountry(pick(ACADEMY_COUNTRIES).code);
+  }
+
   // Live avatar preview — deterministic from manager name
   const avatarAppearance = useMemo(() => {
     const seed = managerName.trim() || 'preview-manager';
@@ -283,6 +307,17 @@ export function OnboardingScreen({ onRegister }: Props) {
               <View style={{ alignItems: 'center', marginBottom: 20 }}>
                 <Avatar appearance={avatarAppearance} role="COACH" size={80} morale={70} />
                 <PixelText size={5} dim style={{ marginTop: 6 }}>YOUR MANAGER</PixelText>
+                <Pressable onPress={randomiseManager} style={{ marginTop: 10 }}>
+                  <View style={{
+                    borderWidth: 2,
+                    borderColor: WK.tealLight,
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    backgroundColor: WK.tealDark,
+                  }}>
+                    <PixelText size={6} color={WK.tealLight}>⚄ RANDOM</PixelText>
+                  </View>
+                </Pressable>
               </View>
 
               {/* Name */}
@@ -442,6 +477,21 @@ export function OnboardingScreen({ onRegister }: Props) {
               </PixelText>
 
               <View style={{ gap: 8, marginBottom: 20 }}>
+                <Pressable onPress={randomiseCountry}>
+                  <View style={{
+                    borderWidth: 2,
+                    borderColor: WK.tealLight,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    backgroundColor: WK.tealDark,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}>
+                    <PixelText size={6} color={WK.tealLight}>⚄ RANDOM LOCATION</PixelText>
+                  </View>
+                </Pressable>
                 {ACADEMY_COUNTRIES.map((country) => {
                   const isSelected = selectedCountry === country.code;
                   return (

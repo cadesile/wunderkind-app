@@ -138,64 +138,69 @@ export default function TabLayout() {
 
   async function doAdvanceWeek() {
     startTick();
-    // Yield to the render thread so the overlay paints before the tick runs
-    await new Promise<void>((r) => setTimeout(r, 16));
+    try {
+      // Yield to the render thread so the overlay paints before the tick runs
+      await new Promise<void>((r) => setTimeout(r, 16));
 
-    const result = processWeeklyTick();
+      const result = processWeeklyTick();
 
-    // Read post-tick state — stores have already been mutated by processWeeklyTick()
-    const { academy } = useAcademyStore.getState();
-    const { transactions, transfers } = useFinanceStore.getState();
-    const { coaches } = useCoachStore.getState();
-    const { scouts } = useScoutStore.getState();
-    const { levels } = useFacilityStore.getState();
-    const activePlayers = useSquadStore.getState().players.filter((p) => p.isActive);
+      // Read post-tick state — stores have already been mutated by processWeeklyTick()
+      const { academy } = useAcademyStore.getState();
+      const { transactions, transfers } = useFinanceStore.getState();
+      const { coaches } = useCoachStore.getState();
+      const { scouts } = useScoutStore.getState();
+      const { levels } = useFacilityStore.getState();
+      const activePlayers = useSquadStore.getState().players.filter((p) => p.isActive);
 
-    // GameLoop tags transactions with weekNumber+1 (the week after the tick runs)
-    const ledgerWeek = result.week + 1;
+      // GameLoop tags transactions with weekNumber+1 (the week after the tick runs)
+      const ledgerWeek = result.week + 1;
 
-    const weekTransfers: SyncTransfer[] = transfers
-      .filter((t) => t.week === result.week)
-      .map(({ playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type }) => ({
-        playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type,
-      }));
+      const weekTransfers: SyncTransfer[] = transfers
+        .filter((t) => t.week === result.week)
+        .map(({ playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type }) => ({
+          playerId, playerName, destinationClub, grossFee, agentCommission, netProceeds, type,
+        }));
 
-    // Transactions are stored in whole pounds — convert to pence for a consistent payload unit
-    const weekLedger: SyncLedgerEntry[] = transactions
-      .filter((tx) => tx.weekNumber === ledgerWeek)
-      .map(({ category, amount, description }) => ({
-        category,
-        amount: amount * 100,
-        description,
-      }));
+      // Transactions are stored in whole pounds — convert to pence for a consistent payload unit
+      const weekLedger: SyncLedgerEntry[] = transactions
+        .filter((tx) => tx.weekNumber === ledgerWeek)
+        .map(({ category, amount, description }) => ({
+          category,
+          amount: amount * 100,
+          description,
+        }));
 
-    syncQueue.enqueue({
-      weekNumber:          result.week,
-      clientTimestamp:     result.processedAt,
+      syncQueue.enqueue({
+        weekNumber:          result.week,
+        clientTimestamp:     result.processedAt,
 
-      // Financial — all in pence, signed (allows negative deficit weeks)
-      earningsDelta:       result.financialSummary.net,
-      balance:             academy.balance,
-      totalCareerEarnings: academy.totalCareerEarnings,
+        // Financial — all in pence, signed (allows negative deficit weeks)
+        earningsDelta:       result.financialSummary.net,
+        balance:             academy.balance,
+        totalCareerEarnings: academy.totalCareerEarnings,
 
-      // Reputation — both delta and absolute anchor
-      reputationDelta:     Math.round(result.reputationDelta),
-      reputation:          academy.reputation,
+        // Reputation — both delta and absolute anchor
+        reputationDelta:     Math.round(result.reputationDelta),
+        reputation:          academy.reputation,
 
-      // Academy snapshot
-      hallOfFamePoints:    academy.hallOfFamePoints,
-      squadSize:           activePlayers.length,
-      staffCount:          coaches.length + scouts.length,
-      facilityLevels:      levels,
+        // Academy snapshot
+        hallOfFamePoints:    academy.hallOfFamePoints,
+        squadSize:           activePlayers.length,
+        staffCount:          coaches.length + scouts.length,
+        facilityLevels:      levels,
 
-      transfers:           weekTransfers,
-      ledger:              weekLedger,
-    });
-
-    endTick();
+        transfers:           weekTransfers,
+        ledger:              weekLedger,
+      });
+    } finally {
+      endTick();
+    }
   }
 
   function handleAdvanceButton() {
+    // Prevent double-press while the overlay is active
+    if (useTickProgressStore.getState().isProcessing) return;
+
     // Auto-resolve any blocks where one of the players has already left the squad
     const currentPlayers = useSquadStore.getState().players;
     useAltercationStore.getState().pendingBlocks.forEach((block) => {
