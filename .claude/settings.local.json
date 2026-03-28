@@ -28,7 +28,8 @@
       "Bash(lando php:*)",
       "Bash(python3:*)",
       "Bash(curl:*)",
-      "Bash(npx eas:*)"
+      "Bash(npx eas:*)",
+      "Bash(npx expo:*)"
     ]
   }
 }
