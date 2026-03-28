@@ -5,10 +5,15 @@ on:
     branches:
       - stage
 
+permissions:
+  contents: read
+
 jobs:
   update:
     name: EAS OTA Update Staging
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -17,7 +22,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.6'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -30,6 +35,6 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: EAS Update (OTA)
-        run: eas update --branch staging --message "Staging OTA from stage branch"
+        run: eas update --branch staging --message "Staging OTA from stage branch" --non-interactive
         env:
           EXPO_PUBLIC_API_BASE_URL: http://204.168.207.171:8080

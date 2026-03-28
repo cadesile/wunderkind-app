@@ -5,10 +5,15 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
   update:
     name: EAS OTA Update Production
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -17,7 +22,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.6'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -30,6 +35,6 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: EAS Update (OTA)
-        run: eas update --branch production --message "Production OTA from master"
+        run: eas update --branch production --message "Production OTA from master" --non-interactive
         env:
           EXPO_PUBLIC_API_BASE_URL: https://api.buildmyclub.co.uk
