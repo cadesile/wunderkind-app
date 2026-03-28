@@ -70,6 +70,22 @@ export function GlobalHeader() {
           )}
         </View>
 
+        {/* Build SHA badge */}
+        {!!process.env.EXPO_PUBLIC_BUILD_SHA && (
+          <View style={{
+            backgroundColor: WK.border,
+            borderWidth: 1,
+            borderColor: WK.dim,
+            paddingHorizontal: 5,
+            paddingVertical: 2,
+            marginRight: 4,
+          }}>
+            <BodyText size={9} color={WK.dim}>
+              {process.env.EXPO_PUBLIC_BUILD_SHA.slice(0, 7)}
+            </BodyText>
+          </View>
+        )}
+
         {/* Inbox — 44×44 tap zone */}
         <Pressable
           onPress={() => router.push('/inbox')}

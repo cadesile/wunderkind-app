@@ -38,3 +38,4 @@ jobs:
         run: eas update --branch production --message "Production OTA from master" --non-interactive
         env:
           EXPO_PUBLIC_API_BASE_URL: https://api.buildmyclub.co.uk
+          EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
