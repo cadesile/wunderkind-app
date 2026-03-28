@@ -8,3 +8,6 @@ web-build/
 .DS_Store
 ios/
 android/
+
+# Claude Code agent worktrees
+.claude/worktrees/
