@@ -20,6 +20,10 @@ import { MarketCoach, MarketScout, Scout } from '@/types/market';
 import { Coach, CoachRole } from '@/types/coach';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { penceToPounds, formatPounds } from '@/utils/currency';
+import { randomBaseMorale } from '@/utils/morale';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { TIER_ORDER } from '@/types/academy';
+import type { AcademyTier } from '@/types/academy';
 
 type MarketTab = 'COACHES' | 'SCOUTS';
 
@@ -46,20 +50,32 @@ function StatBar({ value, max = 100 }: { value: number; max?: number }) {
 function MarketCoachCard({ coach }: { coach: MarketCoach }) {
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const balance = useAcademyStore((s) => s.academy.balance ?? 0);
+  const reputationTier = useAcademyStore((s) => s.academy.reputationTier);
   const addCoach = useCoachStore((s) => s.addCoach);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
   const [hireError, setHireError] = useState<string | null>(null);
+  const [showTierPopup, setShowTierPopup] = useState(false);
 
   const signingCost = coach.salary * 4; // 4 weeks upfront, pence
   const canAfford = balance >= signingCost;
 
+  // Tier restriction: coach tier must not exceed current academy tier
+  const academyTierKey = (reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
+  const coachTierKey = (coach.tier ?? 'local') as AcademyTier;
+  const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[academyTierKey];
+
   async function handleHire() {
+    if (isTierRestricted) {
+      setShowTierPopup(true);
+      return;
+    }
     setHiring(true);
     setHireError(null);
     try {
       await marketApi.assignEntity('coach', coach.id);
       const personality = generatePersonality();
+      const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
       addCoach({
         id: coach.id,
         name: `${coach.firstName} ${coach.lastName}`,
@@ -68,11 +84,12 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
         influence: coach.influence,
         nationality: coach.nationality,
         joinedWeek: weekNumber,
-        morale: coach.morale ?? 70,
+        morale: coach.morale ?? randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
         specialisms: coach.specialisms,
         personality,
         appearance: generateAppearance(coach.id, 'COACH', 35, personality),
         relationships: [],
+        tier: coach.tier,
       });
       removeFromMarket('coach', coach.id);
     } catch {
@@ -82,76 +99,114 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
     }
   }
 
+  const cardOpacity = isTierRestricted ? 0.55 : canAfford ? 1 : 0.55;
+
   return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: canAfford ? WK.border : WK.tealMid,
-      padding: 12,
-      marginBottom: 10,
-      opacity: canAfford ? 1 : 0.55,
-      ...pixelShadow,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar
-          appearance={generateAppearance(coach.id, 'COACH', 35)}
-          role="COACH"
-          size={44}
-          morale={70}
-        />
-        <View style={{ flex: 1 }}>
-          <PixelText size={8} upper numberOfLines={1}>
-            {coach.firstName} {coach.lastName}
-          </PixelText>
-          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>
-            {coach.role.toUpperCase()}
-          </PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-            <FlagText nationality={coach.nationality} size={10} />
-            <PixelText size={6} dim>{coach.nationality}</PixelText>
+    <>
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: isTierRestricted ? WK.tealMid : canAfford ? WK.border : WK.tealMid,
+        padding: 12,
+        marginBottom: 10,
+        opacity: cardOpacity,
+        ...pixelShadow,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+          <Avatar
+            appearance={generateAppearance(coach.id, 'COACH', 35)}
+            role="COACH"
+            size={44}
+            morale={70}
+          />
+          <View style={{ flex: 1 }}>
+            <PixelText size={8} upper numberOfLines={1}>
+              {coach.firstName} {coach.lastName}
+            </PixelText>
+            <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>
+              {coach.role.toUpperCase()}
+            </PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <FlagText nationality={coach.nationality} size={10} />
+              <PixelText size={6} dim>{coach.nationality}</PixelText>
+            </View>
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <Badge label={`INF ${coach.influence}`} color="yellow" />
+            <PixelText size={6} dim>£{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
           </View>
         </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Badge label={`INF ${coach.influence}`} color="yellow" />
-          <PixelText size={6} dim>£{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
-        </View>
-      </View>
 
-      {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-          {(Object.entries(coach.specialisms) as [string, number][]).map(([key, val]) => (
-            <Badge
-              key={key}
-              label={key.toUpperCase()}
-              color={val >= 70 ? 'green' : val >= 40 ? 'yellow' : 'dim'}
-            />
-          ))}
-        </View>
-      )}
-
-      <StatBar value={coach.influence} max={20} />
-
-      {!canAfford && (
-        <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
-          INSUFFICIENT FUNDS
-        </PixelText>
-      )}
-
-      <View style={{ marginTop: 10 }}>
-        <Button
-          label={hiring ? 'HIRING...' : 'HIRE'}
-          variant="teal"
-          fullWidth
-          onPress={handleHire}
-          disabled={hiring || !canAfford}
-        />
-        {hireError && (
-          <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
-            {hireError}
-          </PixelText>
+        {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+            {(Object.entries(coach.specialisms) as [string, number][]).map(([key, val]) => (
+              <Badge
+                key={key}
+                label={key.toUpperCase()}
+                color={val >= 70 ? 'green' : val >= 40 ? 'yellow' : 'dim'}
+              />
+            ))}
+          </View>
         )}
+
+        <StatBar value={coach.influence} max={20} />
+
+        {isTierRestricted ? (
+          <PixelText size={6} color={WK.tealLight} style={{ marginTop: 6, textAlign: 'center' }}>
+            {coachTierKey.toUpperCase()} TIER REQUIRED
+          </PixelText>
+        ) : !canAfford ? (
+          <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+            INSUFFICIENT FUNDS
+          </PixelText>
+        ) : null}
+
+        <View style={{ marginTop: 10 }}>
+          <Button
+            label={hiring ? 'HIRING...' : 'HIRE'}
+            variant="teal"
+            fullWidth
+            onPress={handleHire}
+            disabled={hiring || !canAfford}
+          />
+          {hireError && (
+            <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+              {hireError}
+            </PixelText>
+          )}
+        </View>
       </View>
-    </View>
+
+      {/* Tier restriction popup */}
+      <Modal
+        visible={showTierPopup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTierPopup(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+          onPress={() => setShowTierPopup(false)}
+        >
+          <Pressable onPress={() => {}}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: WK.border,
+              padding: 20,
+              maxWidth: 300,
+              ...pixelShadow,
+            }}>
+              <PixelText size={8} upper style={{ marginBottom: 12 }}>Not Interested</PixelText>
+              <PixelText size={7} style={{ marginBottom: 16, lineHeight: 16 }}>
+                {coach.firstName} {coach.lastName} isn't interested in working at that level.
+              </PixelText>
+              <Button label="OK" variant="teal" fullWidth onPress={() => setShowTierPopup(false)} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -166,19 +221,31 @@ const RANGE_BADGE_COLOR: Record<MarketScout['scoutingRange'], 'dim' | 'yellow' |
 function MarketScoutCard({ scout }: { scout: MarketScout }) {
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const balance = useAcademyStore((s) => s.academy.balance ?? 0);
+  const reputationTier = useAcademyStore((s) => s.academy.reputationTier);
   const addScout = useScoutStore((s) => s.addScout);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
   const [hireError, setHireError] = useState<string | null>(null);
+  const [showTierPopup, setShowTierPopup] = useState(false);
 
   const signingCost = scout.salary * 4; // 4 weeks upfront, pence
   const canAfford = balance >= signingCost;
 
+  // Tier restriction: scout tier must not exceed current academy tier
+  const academyTierKey = (reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
+  const scoutTierKey = (scout.tier ?? 'local') as AcademyTier;
+  const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[academyTierKey];
+
   async function handleHire() {
+    if (isTierRestricted) {
+      setShowTierPopup(true);
+      return;
+    }
     setHiring(true);
     setHireError(null);
     try {
       await marketApi.assignEntity('scout', scout.id);
+      const { defaultMoraleMin: scoutMoraleMin, defaultMoraleMax: scoutMoraleMax } = useGameConfigStore.getState().config;
       addScout({
         id: scout.id,
         name: `${scout.firstName} ${scout.lastName}`,
@@ -187,10 +254,11 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
         successRate: scout.successRate,
         nationality: scout.nationality,
         joinedWeek: weekNumber,
-        morale: 70,
+        morale: randomBaseMorale(scoutMoraleMin, scoutMoraleMax),
         appearance: generateAppearance(scout.id, 'SCOUT', 35),
         relationships: [],
         assignedPlayerIds: [],
+        tier: scout.tier,
       });
       removeFromMarket('scout', scout.id);
     } catch {
@@ -200,64 +268,102 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
     }
   }
 
+  const cardOpacity = isTierRestricted ? 0.55 : canAfford ? 1 : 0.55;
+
   return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: canAfford ? WK.border : WK.tealMid,
-      padding: 12,
-      marginBottom: 10,
-      opacity: canAfford ? 1 : 0.55,
-      ...pixelShadow,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar
-          appearance={generateAppearance(scout.id, 'SCOUT', 35)}
-          role="SCOUT"
-          size={44}
-          morale={70}
-        />
-        <View style={{ flex: 1 }}>
-          <PixelText size={8} upper numberOfLines={1}>
-            {scout.firstName} {scout.lastName}
+    <>
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: isTierRestricted ? WK.tealMid : canAfford ? WK.border : WK.tealMid,
+        padding: 12,
+        marginBottom: 10,
+        opacity: cardOpacity,
+        ...pixelShadow,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+          <Avatar
+            appearance={generateAppearance(scout.id, 'SCOUT', 35)}
+            role="SCOUT"
+            size={44}
+            morale={70}
+          />
+          <View style={{ flex: 1 }}>
+            <PixelText size={8} upper numberOfLines={1}>
+              {scout.firstName} {scout.lastName}
+            </PixelText>
+            <View style={{ marginTop: 2 }}>
+              <Badge label={`${scout.scoutingRange.toUpperCase()} SCOUT`} color={RANGE_BADGE_COLOR[scout.scoutingRange]} />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <FlagText nationality={scout.nationality} size={10} />
+              <PixelText size={6} dim>{scout.nationality}</PixelText>
+            </View>
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <Badge label={`${scout.successRate}%`} color="green" />
+            <PixelText size={6} dim>£{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
+          </View>
+        </View>
+
+        <StatBar value={scout.successRate} max={100} />
+
+        {isTierRestricted ? (
+          <PixelText size={6} color={WK.tealLight} style={{ marginTop: 6, textAlign: 'center' }}>
+            {scoutTierKey.toUpperCase()} TIER REQUIRED
           </PixelText>
-          <View style={{ marginTop: 2 }}>
-            <Badge label={`${scout.scoutingRange.toUpperCase()} SCOUT`} color={RANGE_BADGE_COLOR[scout.scoutingRange]} />
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-            <FlagText nationality={scout.nationality} size={10} />
-            <PixelText size={6} dim>{scout.nationality}</PixelText>
-          </View>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Badge label={`${scout.successRate}%`} color="green" />
-          <PixelText size={6} dim>£{Math.round(scout.salary / 100).toLocaleString()}/wk</PixelText>
-        </View>
-      </View>
-
-      <StatBar value={scout.successRate} max={100} />
-
-      {!canAfford && (
-        <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
-          INSUFFICIENT FUNDS
-        </PixelText>
-      )}
-
-      <View style={{ marginTop: 10 }}>
-        <Button
-          label={hiring ? 'HIRING...' : 'HIRE'}
-          variant="teal"
-          fullWidth
-          onPress={handleHire}
-          disabled={hiring || !canAfford}
-        />
-        {hireError && (
+        ) : !canAfford ? (
           <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
-            {hireError}
+            INSUFFICIENT FUNDS
           </PixelText>
-        )}
+        ) : null}
+
+        <View style={{ marginTop: 10 }}>
+          <Button
+            label={hiring ? 'HIRING...' : 'HIRE'}
+            variant="teal"
+            fullWidth
+            onPress={handleHire}
+            disabled={hiring || !canAfford}
+          />
+          {hireError && (
+            <PixelText size={6} color={WK.red} style={{ marginTop: 6, textAlign: 'center' }}>
+              {hireError}
+            </PixelText>
+          )}
+        </View>
       </View>
-    </View>
+
+      {/* Tier restriction popup */}
+      <Modal
+        visible={showTierPopup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTierPopup(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+          onPress={() => setShowTierPopup(false)}
+        >
+          <Pressable onPress={() => {}}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: WK.border,
+              padding: 20,
+              maxWidth: 300,
+              ...pixelShadow,
+            }}>
+              <PixelText size={8} upper style={{ marginBottom: 12 }}>Not Interested</PixelText>
+              <PixelText size={7} style={{ marginBottom: 16, lineHeight: 16 }}>
+                {scout.firstName} {scout.lastName} isn't interested in working at that level.
+              </PixelText>
+              <Button label="OK" variant="teal" fullWidth onPress={() => setShowTierPopup(false)} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 

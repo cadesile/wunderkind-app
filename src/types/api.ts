@@ -10,6 +10,8 @@ export interface StarterConfig {
   starterCoachCount: number;
   starterScoutCount: number;
   starterSponsorTier: string;    // 'SMALL' | 'MEDIUM' | 'LARGE'
+  /** Default academy tier for new academies e.g. 'local' | 'regional' | 'national' | 'elite' */
+  starterAcademyTier: string;
 }
 
 // ─── Academy Status ───────────────────────────────────────────────────────────
@@ -82,21 +84,39 @@ export interface ApiPlayerDetail {
 // ─── Staff ────────────────────────────────────────────────────────────────────
 
 export interface StaffResponse {
-  staff: ApiStaffMember[];
+  coaches: ApiStaffCoach[];
+  scouts: ApiStaffScout[];
 }
 
-export interface ApiStaffMember {
+export interface ApiStaffCoach {
   id: string;
   firstName: string;
   lastName: string;
+  dateOfBirth?: string;
   nationality?: string;
-  role: 'head_coach' | 'assistant_coach' | 'scout' | 'fitness_coach' | 'analyst';
-  specialty: string | null;
+  role: 'head_coach' | 'assistant_coach' | 'fitness_coach' | 'analyst';
   coachingAbility: number;
   scoutingRange: number;
-  morale: number;
   /** Weekly salary in pence */
   weeklySalary: number;
+  morale: number;
+  specialisms?: Record<string, number>;
+  tier?: string;
+}
+
+export interface ApiStaffScout {
+  id: string;
+  /** Full name as a single string */
+  name: string;
+  dateOfBirth?: string;
+  nationality: string;
+  /** 0–100 scouting range */
+  scoutingRange: number;
+  /** Weekly salary in pence */
+  weeklySalary: number;
+  morale: number;
+  specialisms?: Record<string, number>;
+  tier?: string;
 }
 
 // ─── Facilities ───────────────────────────────────────────────────────────────

@@ -36,6 +36,12 @@ export interface GameConfig {
   /** Injury severity weight for serious injuries. Default: 10 */
   injurySeriousWeight: number;
 
+  // ── Morale ────────────────────────────────────────────────────────────────
+  /** Lower bound of the random base morale range for newly assigned players/coaches/scouts. Default: 50 */
+  defaultMoraleMin: number;
+  /** Upper bound of the random base morale range for newly assigned players/coaches/scouts. Default: 80 */
+  defaultMoraleMax: number;
+
   // ── Scouting ──────────────────────────────────────────────────────────
   /** Morale value below which a scout makes no weekly progress. Default: 40 */
   scoutMoraleThreshold: number;
@@ -69,6 +75,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   injuryMinorWeight: 60,
   injuryModerateWeight: 30,
   injurySeriousWeight: 10,
+
+  defaultMoraleMin: 50,
+  defaultMoraleMax: 80,
 
   scoutMoraleThreshold: 40,
   scoutRevealWeeks: 2,

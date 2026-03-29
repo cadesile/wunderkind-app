@@ -1,5 +1,6 @@
 import { Position, PersonalityMatrix, PlayerAttributes } from './player';
 import { CoachRole, CoachSpecialisms } from './coach';
+import type { AcademyTier } from './academy';
 
 // ─── Hired staff types (locally-generated) ────────────────────────────────────
 
@@ -37,6 +38,8 @@ export interface Scout {
   morale?: number;
   relationships?: import('./player').Relationship[];
   activeMission?: ScoutingMission;
+  /** Academy tier this scout belongs to — from backend */
+  tier?: AcademyTier;
 }
 
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
@@ -115,6 +118,8 @@ export interface MarketPlayer {
   assignedScoutId?: string;
   /** True for players discovered by a scout mission — protects them from backend market refresh wipes. */
   isLocalGem?: boolean;
+  /** Academy tier this player belongs to — from backend */
+  tier?: AcademyTier;
 }
 
 /** A coach available in the backend market. */
@@ -131,6 +136,8 @@ export interface MarketCoach {
   /** Attribute training boosts — maps attribute name to strength (0–100) */
   specialisms?: CoachSpecialisms;
   morale?: number;
+  /** Academy tier this coach belongs to — from backend */
+  tier?: AcademyTier;
 }
 
 /** A scout available in the backend market. */
@@ -146,6 +153,8 @@ export interface MarketScout {
   successRate: number;
   /** Weekly, in pence */
   salary: number;
+  /** Academy tier this scout belongs to — from backend */
+  tier?: AcademyTier;
 }
 
 export interface ScoutingTask {

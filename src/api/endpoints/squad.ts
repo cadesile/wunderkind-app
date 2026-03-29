@@ -6,8 +6,9 @@ import type { SquadResponse } from '@/types/api';
  * Returns the full squad roster from the server.
  * Used for server-side validation / reconciliation; local squadStore is authoritative for gameplay.
  */
-export async function getSquad(): Promise<SquadResponse> {
-  return apiRequest<SquadResponse>('/api/squad');
+export async function getSquad(tier?: string | null): Promise<SquadResponse> {
+  const url = tier ? `/api/squad?tier=${encodeURIComponent(tier)}` : '/api/squad';
+  return apiRequest<SquadResponse>(url);
 }
 
 interface ReleasePlayerResponse {

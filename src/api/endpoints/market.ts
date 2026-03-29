@@ -44,6 +44,7 @@ interface RawPlayer {
   height?: number;
   weight?: number;
   guardians?: ApiGuardian[];
+  tier?: string;
 }
 
 interface RawCoach {
@@ -58,6 +59,7 @@ interface RawCoach {
   morale?: number;
   /** e.g. {"pace": 85, "technical": 70} — attribute boost map */
   specialisms?: Record<string, number>;
+  tier?: string;
 }
 
 interface RawScout {
@@ -67,6 +69,7 @@ interface RawScout {
   nationality: string;
   experience: number;
   judgements: unknown[];
+  tier?: string;
 }
 
 interface RawSponsor {
@@ -190,6 +193,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
             }
           : null,
         guardians: p.guardians ?? [],
+        tier: p.tier as import('@/types/academy').AcademyTier | undefined,
       };
     }),
 
@@ -203,6 +207,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
       salary: c.weeklySalary,
       morale: c.morale,
       specialisms: c.specialisms as import('@/types/coach').CoachSpecialisms | undefined,
+      tier: c.tier as import('@/types/academy').AcademyTier | undefined,
     })),
 
     scouts: raw.scouts.map((s) => {
@@ -217,6 +222,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
         scoutingRange: mapScoutingRange(s.experience),
         successRate,
         salary: successRate * 300,
+        tier: s.tier as import('@/types/academy').AcademyTier | undefined,
       };
     }),
 
@@ -260,8 +266,12 @@ export interface MarketAssignResponse {
 
 export const marketApi = {
   /** GET /api/market/data — full market snapshot, transforms to app types. */
-  async getMarketData(country?: string | null): Promise<MarketData> {
-    const url = country ? `/api/market/data?country=${encodeURIComponent(country)}` : '/api/market/data';
+  async getMarketData(country?: string | null, tier?: string | null): Promise<MarketData> {
+    const params = new URLSearchParams();
+    if (country) params.set('country', country);
+    if (tier) params.set('tier', tier);
+    const query = params.toString();
+    const url = query ? `/api/market/data?${query}` : '/api/market/data';
     const raw = await apiRequest<RawMarketData>(url);
     return transformMarketData(raw);
   },

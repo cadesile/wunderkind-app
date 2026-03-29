@@ -9,7 +9,7 @@ import { useMarketStore } from '@/stores/marketStore';
 import { register, login } from '@/api/endpoints/auth';
 import { checkAcademy } from '@/api/endpoints/academy';
 import { fetchStarterConfig } from '@/api/endpoints/starterConfig';
-import { ApiError, ApiPlayerDetail, ApiStaffMember } from '@/types/api';
+import { ApiError, ApiPlayerDetail, ApiStaffCoach, ApiStaffScout } from '@/types/api';
 import { marketApi } from '@/api/endpoints/market';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
 import { getSquad } from '@/api/endpoints/squad';
@@ -20,13 +20,16 @@ import type { ApiGuardian } from '@/types/api';
 import type { Guardian } from '@/types/guardian';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
+import { randomBaseMorale } from '@/utils/morale';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import type { MarketData, MarketPlayer, MarketCoach, MarketScout, Scout } from '@/types/market';
 import type { Player, Position } from '@/types/player';
 import type { Coach, CoachRole } from '@/types/coach';
 import type { AcademyCountryCode } from '@/utils/nationality';
 import { ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
 import type { ManagerProfileInput } from '@/types/api';
-import type { ManagerProfile } from '@/types/academy';
+import type { ManagerProfile, AcademyTier } from '@/types/academy';
+import { TIER_REPUTATION_BASELINE } from '@/types/academy';
 
 function generateDeviceEmail(): string {
   const chars = 'abcdef0123456789';
@@ -98,6 +101,7 @@ function marketPlayerToPlayer(mp: MarketPlayer, weekNumber: number, gameDate: Da
   const age = typeof ageRaw === 'number' ? ageRaw : 14;
   // Store guardians from backend data — no local generation
   storeBackendGuardians(mp.id, mp.guardians ?? []);
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
   return {
     id: mp.id,
     name: `${mp.firstName} ${mp.lastName}`,
@@ -113,10 +117,11 @@ function marketPlayerToPlayer(mp: MarketPlayer, weekNumber: number, gameDate: Da
     agentId: mp.agent?.id ?? null,
     joinedWeek: weekNumber,
     isActive: true,
-    morale: 40,
+    morale: randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
     relationships: [],
     enrollmentEndWeek: weekNumber + 52,
     extensionCount: 0,
+    tier: mp.tier,
     ...(mp.attributes ? { attributes: mp.attributes } : {}),
   } as Player;
 }
@@ -129,6 +134,7 @@ function apiPlayerToPlayer(ap: ApiPlayerDetail, weekNumber: number): Player {
   const estimatedYear = new Date().getFullYear() - ap.age;
   // Store guardians from backend data — no local generation
   storeBackendGuardians(ap.id, ap.guardians ?? []);
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
   return {
     id: ap.id,
     name: `${ap.firstName} ${ap.lastName}`,
@@ -144,7 +150,7 @@ function apiPlayerToPlayer(ap: ApiPlayerDetail, weekNumber: number): Player {
     agentId: ap.agent?.id ?? null,
     joinedWeek: weekNumber,
     isActive: true,
-    morale: ap.morale ?? 70,
+    morale: ap.morale ?? randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
     relationships: [],
     enrollmentEndWeek: weekNumber + 52,
     extensionCount: 0,
@@ -154,6 +160,7 @@ function apiPlayerToPlayer(ap: ApiPlayerDetail, weekNumber: number): Player {
 /** Build a Coach from the backend market pool entry (full data including specialisms). */
 function marketCoachToCoach(mc: MarketCoach, weekNumber: number): Coach {
   const personality = generatePersonality();
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
   return {
     id: mc.id,
     name: `${mc.firstName} ${mc.lastName}`,
@@ -164,15 +171,17 @@ function marketCoachToCoach(mc: MarketCoach, weekNumber: number): Coach {
     appearance: generateAppearance(mc.id, 'COACH', 35, personality),
     nationality: mc.nationality,
     joinedWeek: weekNumber,
-    morale: mc.morale ?? 70,
+    morale: mc.morale ?? randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
     specialisms: mc.specialisms,
     relationships: [],
+    tier: mc.tier,
   };
 }
 
-/** Fallback: build a Coach from ApiStaffMember. */
-function apiStaffToCoach(s: ApiStaffMember, weekNumber: number): Coach {
+/** Fallback: build a Coach from the staff endpoint ApiStaffCoach shape. */
+function apiStaffToCoach(s: ApiStaffCoach, weekNumber: number): Coach {
   const personality = generatePersonality();
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
   return {
     id: s.id,
     name: `${s.firstName} ${s.lastName}`,
@@ -183,8 +192,10 @@ function apiStaffToCoach(s: ApiStaffMember, weekNumber: number): Coach {
     appearance: generateAppearance(s.id, 'COACH', 35, personality),
     nationality: s.nationality ?? '',
     joinedWeek: weekNumber,
-    morale: s.morale ?? 70,
+    morale: s.morale ?? randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
+    specialisms: s.specialisms as import('@/types/coach').CoachSpecialisms | undefined,
     relationships: [],
+    tier: s.tier as AcademyTier | undefined,
   };
 }
 
@@ -192,6 +203,7 @@ function apiStaffToCoach(s: ApiStaffMember, weekNumber: number): Coach {
 function marketScoutToScout(ms: MarketScout, weekNumber: number, gameDate: Date): Scout {
   const ageRaw = ms.dateOfBirth ? computePlayerAge(ms.dateOfBirth, gameDate) : 35;
   const age = typeof ageRaw === 'number' ? ageRaw : 35;
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
   return {
     id: ms.id,
     name: `${ms.firstName} ${ms.lastName}`,
@@ -201,31 +213,37 @@ function marketScoutToScout(ms: MarketScout, weekNumber: number, gameDate: Date)
     nationality: ms.nationality,
     joinedWeek: weekNumber,
     appearance: generateAppearance(ms.id, 'SCOUT', age),
-    morale: 70,
+    morale: randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
     relationships: [],
     assignedPlayerIds: [],
+    tier: ms.tier,
   };
 }
 
-/** Fallback: build a Scout from ApiStaffMember. */
-function apiStaffToScout(s: ApiStaffMember, weekNumber: number): Scout {
-  const successRate = Math.min(90, 40 + s.scoutingRange * 5);
+/** Fallback: build a Scout from the staff endpoint ApiStaffScout shape.
+ * scoutingRange is 0–100 (not the old 1–10 experience scale). */
+function apiStaffToScout(s: ApiStaffScout, weekNumber: number): Scout {
+  // Scale 0–100 range → 'local' / 'national' / 'international'
   const scoutingRange: Scout['scoutingRange'] =
-    s.scoutingRange >= 8 ? 'international' : s.scoutingRange >= 4 ? 'national' : 'local';
-  // Backend scouts have no salary field — derive from successRate (pence) as a fallback
+    s.scoutingRange >= 80 ? 'international' : s.scoutingRange >= 40 ? 'national' : 'local';
+  // Derive successRate from 0–100 scoutingRange: maps to 40–90
+  const successRate = Math.min(90, Math.round(40 + (s.scoutingRange / 100) * 50));
+  // Backend scouts may return weeklySalary 0 — derive from successRate as fallback
   const salary = s.weeklySalary > 0 ? s.weeklySalary : successRate * 300;
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
   return {
     id: s.id,
-    name: `${s.firstName} ${s.lastName}`,
+    name: s.name,
     salary,
     scoutingRange,
     successRate,
-    nationality: s.nationality ?? '',
+    nationality: s.nationality,
     joinedWeek: weekNumber,
     appearance: generateAppearance(s.id, 'SCOUT', 35),
-    morale: s.morale ?? 70,
+    morale: s.morale ?? randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
     relationships: [],
     assignedPlayerIds: [],
+    tier: s.tier as AcademyTier | undefined,
   };
 }
 
@@ -260,7 +278,7 @@ export interface AuthFlowResult {
 export function useAuthFlow(): AuthFlowResult {
   const { token, email, password, setToken, setCredentials, setUserId } =
     useAuthStore();
-  const { setName: setAcademyName, addBalance, setCreatedAt, setSponsorIds, setInvestorId, setCountry, setManagerProfile } =
+  const { setName: setAcademyName, addBalance, setCreatedAt, setSponsorIds, setInvestorId, setCountry, setManagerProfile, setReputation } =
     useAcademyStore();
   const { setPlayers } = useSquadStore();
   const { addCoach } = useCoachStore();
@@ -394,7 +412,7 @@ export function useAuthFlow(): AuthFlowResult {
     // 2. Fetch market data — populates rich player pool (attributes, dateOfBirth, etc.)
     let marketData: MarketData = { players: [], coaches: [], scouts: [], agents: [], investors: [], sponsors: [] };
     try {
-      const fetched = await marketApi.getMarketData(country);
+      const fetched = await marketApi.getMarketData(country, starterConfig.starterAcademyTier);
       marketData = fetched;
       setMarketData(fetched);
     } catch (err) {
@@ -422,6 +440,7 @@ export function useAuthFlow(): AuthFlowResult {
     const STARTER_PLAYER_COUNT = starterConfig.starterPlayerCount;
     const STARTER_COACH_COUNT = starterConfig.starterCoachCount;
     const STARTER_SCOUT_COUNT = starterConfig.starterScoutCount;
+    const academyTier = starterConfig.starterAcademyTier;
 
     const matchingSponsors = marketData.sponsors.filter(
       (s) => s.companySize === starterConfig.starterSponsorTier,
@@ -432,6 +451,9 @@ export function useAuthFlow(): AuthFlowResult {
     // 4. Academy setup
     setCreatedAt(new Date().toISOString());
     addBalance(startingBalance);
+    // Set initial reputation from the academy tier baseline
+    const tierBaseline = TIER_REPUTATION_BASELINE[academyTier as AcademyTier] ?? 0;
+    setReputation(tierBaseline);
     initAllLevels();
 
     // 5 & 6. Fetch the backend-assigned squad and staff, cross-referencing with market
@@ -450,7 +472,7 @@ export function useAuthFlow(): AuthFlowResult {
 
     // Tier 1: fetch backend-assigned squad/staff
     try {
-      const [squadResp, staffResp] = await Promise.all([getSquad(), getStaff()]);
+      const [squadResp, staffResp] = await Promise.all([getSquad(academyTier), getStaff(academyTier)]);
 
       const allSquadPlayers = squadResp.players.map((apiPlayer) => {
         const mp = marketData.players.find((p) => p.id === apiPlayer.id);
@@ -462,15 +484,13 @@ export function useAuthFlow(): AuthFlowResult {
       // Guards against the backend migration not yet being applied.
       players = allSquadPlayers.filter((p) => p.nationality === homeNationality);
 
-      const coachStaff = staffResp.staff.filter((s) => s.role !== 'scout');
-      assignedCoaches = coachStaff.map((s) => {
-        const mc = marketData.coaches.find((c) => c.id === s.id);
-        return mc ? marketCoachToCoach(mc, weekNumber) : apiStaffToCoach(s, weekNumber);
+      assignedCoaches = staffResp.coaches.map((c) => {
+        const mc = marketData.coaches.find((m) => m.id === c.id);
+        return mc ? marketCoachToCoach(mc, weekNumber) : apiStaffToCoach(c, weekNumber);
       });
 
-      const scoutStaff = staffResp.staff.filter((s) => s.role === 'scout');
-      assignedScouts = scoutStaff.map((s) => {
-        const ms = marketData.scouts.find((sc) => sc.id === s.id);
+      assignedScouts = staffResp.scouts.map((s) => {
+        const ms = marketData.scouts.find((m) => m.id === s.id);
         return ms ? marketScoutToScout(ms, weekNumber, gameDate) : apiStaffToScout(s, weekNumber);
       });
 

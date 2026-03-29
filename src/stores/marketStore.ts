@@ -19,6 +19,7 @@ import { useGuardianStore } from './guardianStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { updateCoachRelationship } from '@/engine/RelationshipService';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { randomBaseMorale } from '@/utils/morale';
 import type { ApiGuardian } from '@/types/api';
 import type { Guardian } from '@/types/guardian';
 
@@ -272,7 +273,7 @@ export const useMarketStore = create<MarketState>()(
           agentId: player.agent?.id ?? null,
           joinedWeek: weekNumber,
           isActive: true,
-          morale: 40,
+          morale: randomBaseMorale(useGameConfigStore.getState().config.defaultMoraleMin, useGameConfigStore.getState().config.defaultMoraleMax),
           relationships: [],
           scoutingReport: finalScoutingReport,
           // Pass backend attributes through so GameLoop doesn't need to generate them
@@ -333,9 +334,10 @@ export const useMarketStore = create<MarketState>()(
           appearance: generateAppearance(marketCoach.id, 'COACH', 35, personality),
           nationality: marketCoach.nationality,
           joinedWeek: weekNumber,
-          morale: marketCoach.morale ?? 70,
+          morale: marketCoach.morale ?? randomBaseMorale(useGameConfigStore.getState().config.defaultMoraleMin, useGameConfigStore.getState().config.defaultMoraleMax),
           specialisms: marketCoach.specialisms,
           relationships: [],
+          tier: marketCoach.tier,
         });
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== coachId) }));
 
@@ -364,9 +366,10 @@ export const useMarketStore = create<MarketState>()(
           nationality: marketScout.nationality,
           joinedWeek: weekNumber,
           appearance: generateAppearance(marketScout.id, 'SCOUT', scoutAge),
-          morale: 70,
+          morale: randomBaseMorale(useGameConfigStore.getState().config.defaultMoraleMin, useGameConfigStore.getState().config.defaultMoraleMax),
           relationships: [],
           assignedPlayerIds: [],
+          tier: marketScout.tier,
         });
         set((state) => ({ marketScouts: state.marketScouts.filter((s) => s.id !== scoutId) }));
       },

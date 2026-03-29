@@ -1,3 +1,11 @@
+/**
+ * Returns a random starting morale value within [min, max].
+ * Pass defaultMoraleMin / defaultMoraleMax from GameConfig.
+ */
+export function randomBaseMorale(min: number, max: number): number {
+  return Math.round(min + Math.random() * (max - min));
+}
+
 /** Returns a face emoji representing a morale value (0–100). */
 export function moraleEmoji(morale: number): string {
   if (morale >= 80) return '😄';
