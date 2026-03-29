@@ -89,6 +89,7 @@ export interface ApiStaffMember {
   id: string;
   firstName: string;
   lastName: string;
+  nationality?: string;
   role: 'head_coach' | 'assistant_coach' | 'scout' | 'fitness_coach' | 'analyst';
   specialty: string | null;
   coachingAbility: number;

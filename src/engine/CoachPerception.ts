@@ -15,9 +15,10 @@ export interface CoachOpinion {
 /**
  * Returns the head coach's perception of a market player's asking price.
  * Influence (1-20): higher = lower variance. Error = (20 - influence) / 20.
+ * playerFeeMultiplier: from GameConfig — scales the market value baseline.
  */
-export function getCoachPerception(player: MarketPlayer, coach: Coach): CoachOpinion {
-  const baseValue = player.marketValue ?? player.currentAbility * 1000;
+export function getCoachPerception(player: MarketPlayer, coach: Coach, playerFeeMultiplier: number): CoachOpinion {
+  const baseValue = player.marketValue ?? player.currentAbility * playerFeeMultiplier;
   const currentOffer = player.currentOffer ?? baseValue;
 
   // effectiveInfluence may be halved by low morale (set by setLowMoraleFlags)

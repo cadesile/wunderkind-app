@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useCoachStore } from '@/stores/coachStore';
 import { useAcademyStore } from '@/stores/academyStore';
-import { generateCoachProspects } from '@/engine/recruitment';
+import { useMarketStore } from '@/stores/marketStore';
+import { generateAppearance } from '@/engine/appearance';
 import { Avatar } from '@/components/ui/Avatar';
 import { PixelText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
@@ -15,6 +16,7 @@ import { Card } from '@/components/ui/Card';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { hapticWarning } from '@/utils/haptics';
 import { Coach } from '@/types/coach';
+import { MarketCoach } from '@/types/market';
 
 // ─── Coach card ───────────────────────────────────────────────────────────────
 
@@ -29,7 +31,7 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={coach.age ?? 35} />
+        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
@@ -74,7 +76,7 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
 
 // ─── Prospect card ────────────────────────────────────────────────────────────
 
-function ProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
+function ProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => void }) {
   return (
     <View style={{
       backgroundColor: WK.tealCard,
@@ -85,9 +87,9 @@ function ProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={70} />
+        <Avatar appearance={generateAppearance(coach.id, 'COACH', 35)} role="COACH" size={44} morale={70} />
         <View style={{ flex: 1 }}>
-          <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
+          <PixelText size={8} upper numberOfLines={1}>{coach.firstName} {coach.lastName}</PixelText>
           <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
             <FlagText nationality={coach.nationality} size={12} />
@@ -96,7 +98,7 @@ function ProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
         </View>
         <Badge label={`INF ${coach.influence}`} color="green" />
       </View>
-      <PixelText size={6} dim>SALARY: £{coach.salary.toLocaleString()}/wk</PixelText>
+      <PixelText size={6} dim>SALARY: £{Math.round(coach.salary / 100).toLocaleString()}/wk</PixelText>
       <View style={{ marginTop: 8 }}>
         <Button label="SIGN" variant="yellow" fullWidth onPress={onSign} />
       </View>
@@ -107,10 +109,10 @@ function ProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function CoachesScreen() {
-  const { coaches, addCoach, removeCoach } = useCoachStore();
+  const { coaches, removeCoach } = useCoachStore();
   const { academy, addEarnings } = useAcademyStore();
+  const { coaches: marketCoaches, hireCoach } = useMarketStore();
   const [showModal, setShowModal] = useState(false);
-  const [prospects, setProspects] = useState<Coach[]>([]);
 
   const weekNumber = academy.weekNumber ?? 1;
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
@@ -118,22 +120,23 @@ export default function CoachesScreen() {
   const [signError, setSignError] = useState<string | null>(null);
   const [pendingFireId, setPendingFireId] = useState<string | null>(null);
 
+  // Show up to 3 coaches from the market pool
+  const prospects = marketCoaches.slice(0, 3);
+
   function openScout() {
     setSignError(null);
-    setProspects(generateCoachProspects(3, weekNumber));
     setShowModal(true);
   }
 
-  function signCoach(coach: Coach) {
-    const signingFee = coach.salary * 4; // one month upfront
+  function signCoach(coach: MarketCoach) {
+    const signingFee = coach.salary * 4; // 4 weeks upfront, pence
     if (academy.totalCareerEarnings < signingFee) {
-      setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
+      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(signingFee / 100).toLocaleString()}`);
       return;
     }
     setSignError(null);
     addEarnings(-signingFee);
-    addCoach({ ...coach, joinedWeek: weekNumber });
-    setProspects((prev) => prev.filter((p) => p.id !== coach.id));
+    hireCoach(coach.id, weekNumber);
   }
 
   function fireCoach(id: string) {
@@ -214,7 +217,8 @@ export default function CoachesScreen() {
 
               {prospects.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                  <PixelText size={7} dim>ALL PROSPECTS SIGNED</PixelText>
+                  <PixelText size={7} dim>NO COACHES AVAILABLE</PixelText>
+                  <PixelText size={6} dim style={{ marginTop: 6 }}>Check back after the market refreshes</PixelText>
                   <View style={{ marginTop: 12 }}>
                     <Button label="CLOSE" variant="teal" onPress={() => setShowModal(false)} />
                   </View>

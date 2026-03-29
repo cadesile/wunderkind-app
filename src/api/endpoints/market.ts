@@ -50,6 +50,7 @@ interface RawCoach {
   id: string;
   firstName: string;
   lastName: string;
+  nationality?: string;
   role: string;               // snake_case: "head_coach" | "fitness_coach" etc.
   coachingAbility: number;    // 0–100
   scoutingRange: number;
@@ -196,7 +197,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
       id: c.id,
       firstName: c.firstName,
       lastName: c.lastName,
-      nationality: '',                       // not included in backend response
+      nationality: c.nationality ?? '',
       role: mapCoachRole(c.role),
       influence: mapInfluence(c.coachingAbility),
       salary: c.weeklySalary,

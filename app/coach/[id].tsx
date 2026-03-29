@@ -1,16 +1,22 @@
+import { useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText } from '@/components/ui/PixelText';
+import { PixelDialog } from '@/components/ui/PixelDialog';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useCoachStore } from '@/stores/coachStore';
+import { useAcademyStore } from '@/stores/academyStore';
+import { useFinanceStore } from '@/stores/financeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { Relationship } from '@/types/player';
 import { moraleLabel } from '@/utils/morale';
+import { penceToPounds } from '@/utils/currency';
 
 function moraleColor(morale: number): string {
   if (morale >= 60) return WK.green;
@@ -36,7 +42,31 @@ export default function CoachDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const coach = useCoachStore((s) => s.coaches.find((c) => c.id === id));
+  const removeCoach = useCoachStore((s) => s.removeCoach);
+  const { academy, addBalance } = useAcademyStore();
   const players = useSquadStore((s) => s.players);
+  const [releaseDialogVisible, setReleaseDialogVisible] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+
+  function confirmRelease() {
+    if (!coach) return;
+    const penaltyPence = Math.floor(coach.salary * 26 * 0.25);
+    const penaltyPounds = Math.round(penaltyPence / 100);
+    if (penceToPounds(academy.balance ?? 0) < penaltyPounds) {
+      setReleaseError(`INSUFFICIENT FUNDS — need £${penaltyPounds.toLocaleString()}`);
+      setReleaseDialogVisible(false);
+      return;
+    }
+    addBalance(-penaltyPounds * 100);
+    useFinanceStore.getState().addTransaction({
+      amount: -penaltyPence,
+      category: 'contract_termination',
+      description: `Released ${coach.name} (25% early termination)`,
+      weekNumber: academy.weekNumber ?? 1,
+    });
+    removeCoach(coach.id);
+    router.back();
+  }
 
   if (!coach) {
     return (
@@ -155,7 +185,32 @@ export default function CoachDetailScreen() {
             ))}
           </View>
         )}
+
+        {/* Release */}
+        {releaseError && (
+          <PixelText size={6} color={WK.red} style={{ textAlign: 'center', marginTop: 4 }}>
+            {releaseError}
+          </PixelText>
+        )}
+        <Button
+          label="RELEASE COACH"
+          variant="red"
+          fullWidth
+          onPress={() => { setReleaseError(null); setReleaseDialogVisible(true); }}
+          style={{ marginTop: 4 }}
+        />
+
       </ScrollView>
+
+      <PixelDialog
+        visible={releaseDialogVisible}
+        title="Release Coach?"
+        message={coach ? `Release ${coach.name}?\n\nEarly termination fee: £${Math.round(coach.salary * 26 * 0.25 / 100).toLocaleString()}\n(25% of 26 remaining weeks)` : ''}
+        onClose={() => setReleaseDialogVisible(false)}
+        onConfirm={confirmRelease}
+        confirmLabel="RELEASE"
+        confirmVariant="red"
+      />
     </SafeAreaView>
   );
 }

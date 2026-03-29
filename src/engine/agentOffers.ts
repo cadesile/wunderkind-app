@@ -29,7 +29,7 @@ export function generateDestinationClub(): string {
  * Attempt to generate an agent transfer offer for the current week.
  *
  * Probability scales at 5% per active player, capped at 60%.
- * Fee = overallRating × rand(80–120) × 100 pence, scaled by reputation.
+ * Fee = overallRating × rand(80–120) × playerFeeMultiplier pence, scaled by reputation.
  *
  * Returns null when the probability roll fails or required data is missing.
  */
@@ -38,6 +38,7 @@ export function generateAgentOffer(
   players: Player[],
   agents: Agent[],
   academyReputation: number,
+  playerFeeMultiplier: number,
 ): AgentOffer | null {
   const activePlayers = players.filter((p) => p.isActive);
 
@@ -53,10 +54,10 @@ export function generateAgentOffer(
   const player = pick(activePlayers);
   const agent  = pick(agents);
 
-  // Fee in pence: ability × random multiplier × 100, scaled by reputation
+  // Fee in pence: OVR × rand(80–120) × playerFeeMultiplier × reputationMod
   const multiplier    = 80 + Math.random() * 40;           // 80–120
   const reputationMod = 1 + academyReputation / 200;       // 1.0–1.5
-  const estimatedFee  = Math.round(player.overallRating * multiplier * 100 * reputationMod);
+  const estimatedFee  = Math.round(player.overallRating * multiplier * playerFeeMultiplier * reputationMod);
 
   const netProceeds = Math.round(estimatedFee * (1 - agent.commissionRate / 100));
 

@@ -3,6 +3,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useMarketStore } from '@/stores/marketStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { calculateNetSalePrice } from '@/engine/finance';
 
 /**
@@ -91,7 +92,8 @@ export function handleAcceptAgentOffer(offerId: string): void {
   const { setReputation, markRepActivity } = useAcademyStore.getState();
 
   if (soldPlayer) {
-    const fairValuePence = soldPlayer.overallRating * 100_000; // OVR × £1,000
+    const { playerFeeMultiplier } = useGameConfigStore.getState().config;
+    const fairValuePence = soldPlayer.overallRating * playerFeeMultiplier * 100;
     const ratio = fairValuePence > 0 ? offer.estimatedFee / fairValuePence : 1;
 
     if (ratio >= 1.25) {

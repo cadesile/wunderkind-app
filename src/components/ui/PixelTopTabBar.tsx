@@ -36,8 +36,9 @@ export function PixelTopTabBar({ tabs, active, onChange }: Props) {
             }}
           >
             <PixelText
-              size={9}
+              size={16}
               color={isActive ? WK.yellow : WK.dim}
+              style={{ fontFamily: WK.fontSubNav }}
             >
               {tab}
             </PixelText>

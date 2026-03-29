@@ -18,7 +18,6 @@ import { generatePersonality } from '@/engine/personality';
 import { useGuardianStore } from '@/stores/guardianStore';
 import type { ApiGuardian } from '@/types/api';
 import type { Guardian } from '@/types/guardian';
-import { generateCoachProspect, generateScout as generateLocalScout } from '@/engine/recruitment';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { MarketData, MarketPlayer, MarketCoach, MarketScout, Scout } from '@/types/market';
@@ -182,7 +181,7 @@ function apiStaffToCoach(s: ApiStaffMember, weekNumber: number): Coach {
     influence: Math.max(1, Math.min(20, Math.round(s.coachingAbility / 5))),
     personality,
     appearance: generateAppearance(s.id, 'COACH', 35, personality),
-    nationality: '',
+    nationality: s.nationality ?? '',
     joinedWeek: weekNumber,
     morale: s.morale ?? 70,
     relationships: [],
@@ -213,13 +212,15 @@ function apiStaffToScout(s: ApiStaffMember, weekNumber: number): Scout {
   const successRate = Math.min(90, 40 + s.scoutingRange * 5);
   const scoutingRange: Scout['scoutingRange'] =
     s.scoutingRange >= 8 ? 'international' : s.scoutingRange >= 4 ? 'national' : 'local';
+  // Backend scouts have no salary field — derive from successRate (pence) as a fallback
+  const salary = s.weeklySalary > 0 ? s.weeklySalary : successRate * 300;
   return {
     id: s.id,
     name: `${s.firstName} ${s.lastName}`,
-    salary: s.weeklySalary,
+    salary,
     scoutingRange,
     successRate,
-    nationality: '',
+    nationality: s.nationality ?? '',
     joinedWeek: weekNumber,
     appearance: generateAppearance(s.id, 'SCOUT', 35),
     morale: s.morale ?? 70,
@@ -511,10 +512,10 @@ export function useAuthFlow(): AuthFlowResult {
       console.warn('[useAuthFlow] No players available from backend or pool — squad will be empty.');
     }
     if (assignedCoaches.length === 0) {
-      assignedCoaches = [generateCoachProspect(weekNumber)];
+      console.warn('[useAuthFlow] No coaches assigned from backend — academy will start with no coaches.');
     }
     if (assignedScouts.length === 0) {
-      assignedScouts = [generateLocalScout(weekNumber)];
+      console.warn('[useAuthFlow] No scouts assigned from backend — academy will start with no scouts.');
     }
 
     setPlayers(players);

@@ -4,6 +4,7 @@ import { Mail, AlertTriangle, Home } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
+import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { FacilityType } from '@/types/facility';
 import { PixelText, BodyText } from './ui/PixelText';
@@ -26,7 +27,10 @@ export function GlobalHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const academy = useAcademyStore((s) => s.academy);
-  const unreadCount = useInboxStore((s) => s.messages.filter((m) => !m.isRead).length);
+  const unreadCount =
+    useInboxStore((s) => s.messages.filter((m) => !m.isRead).length) +
+    useInboxStore((s) => s.agentOffers.filter((o) => o.status === 'pending').length) +
+    useNarrativeStore((s) => s.messages.filter((m) => !m.readAt).length);
   const syncStatus = useSyncStatus();
 
   const facilityWarning = useFacilityStore((s) =>

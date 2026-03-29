@@ -24,8 +24,9 @@ export const WK = {
   border: '#0d2e28',
 
   // Typography
-  font:    'PressStart2P_400Regular',
-  fontVT323: 'VT323_400Regular',  // pixel terminal font — legible at 16–20px
+  font:       'PressStart2P_400Regular',
+  fontVT323:  'VT323_400Regular',  // pixel terminal font — legible at 16–20px
+  fontSubNav: 'VT323_400Regular',  // sub-nav / table header font — narrower than Press Start 2P, fits 5 tabs at ~360dp
 } as const;
 
 /** Returns bar fill color based on 1–20 trait value */

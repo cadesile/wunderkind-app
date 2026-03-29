@@ -1,12 +1,12 @@
 # wunderkind-app — Project Context
 
-> Generated: 2026-03-26 23:40:06 | Stack: unknown | Dev: bare
+> Generated: 2026-03-29 18:54:27 | Stack: unknown | Dev: bare
 
 ---
 
 ## Overview
 
-The Wunderkind Factory is a React Native mobile game where players manage a football academy, overseeing player development through an 8-trait Personality Matrix engine, finances, scouting, and staff. The app is client-authoritative and offline-first, processing all game logic (weekly ticks, trait shifts, financial calculations) entirely on-device via Zustand stores persisted with AsyncStorage. Completed game state is then asynchronously synced to a Symfony backend API using TanStack Query offline mutations, enabling seamless play without a network connection.
+The Wunderkind Factory is a React Native mobile game where players manage a football academy — recruiting players, hiring coaches and scouts, handling finances, and developing talent through an 8-trait Personality Matrix engine. The app runs a client-authoritative "Weekly Tick" game loop entirely on-device, persisting all state offline via Zustand and AsyncStorage, then asynchronously syncing key metrics to a Symfony backend API. Built with Expo SDK 54, Expo Router, TanStack Query v5, and NativeWind, it features a retro pixel-art design system and supports seamless play with or without a network connection.
 
 ---
 
@@ -45,6 +45,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 - `expo-router`: ~6.0.23
 - `expo-splash-screen`: ~31.0.13
 - `expo-status-bar`: ~3.0.9
+- `expo-updates`: ~29.0.16
 - `expo-web-browser`: ~15.0.10
 - `lucide-react-native`: ^0.475.0
 - `nativewind`: ^4.2.2
@@ -61,6 +62,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 
 **devDependencies:**
 - `@types/react`: ~19.1.0
+- `sharp`: ^0.34.5
 - `tailwindcss`: 3.3.2
 - `typescript`: ~5.9.2
 
@@ -107,13 +109,15 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 │   ├── android-icon-monochrome.png
 │   ├── favicon.png
 │   ├── icon.png
+│   ├── logo_master.png
 │   └── splash-icon.png
 ├── docs
 │   ├── wunderkind-app-context.md
 │   └── wunderkind-app-context.md.tmp
 ├── scripts
 │   ├── dev-proxy.py
-│   └── generate_project_context.sh
+│   ├── generate_project_context.sh
+│   └── generate-assets.js
 ├── src
 │   ├── api
 │   │   ├── endpoints
@@ -215,6 +219,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 ├── app.json
 ├── babel.config.js
 ├── CLAUDE.md
+├── eas.json
 ├── global.css
 ├── metro.config.js
 ├── nativewind-env.d.ts
@@ -224,7 +229,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 ├── tailwind.config.js
 └── tsconfig.json
 
-26 directories, 128 files
+26 directories, 131 files
 ```
 
 ---
@@ -277,6 +282,14 @@ composer install
 ## Recent Git Activity
 
 ```
+2615bfb latest
+23ee143 update assets
+700331b added version to header
+e7a0425 Remove stale Claude agent worktree gitlink; ignore .claude/worktrees/
+a9d3dce updated workflows
+00d2aca looking to fix bugs on android
+c04aded updated deployment
+efaa536 latest code + expo deploy
 62453f8 added ui-ux-pro
 363de47 frontend latest
 3e6d0cd latest project
@@ -284,32 +297,24 @@ d9f2b8a updated latest context
 175602e latest
 250f9e7 Fix currency formatting, scout gem source, and major feature additions
 6e67f74 update docs
-dd2e47b Implement Phase 1 & 2: NPC interaction ledger + coach performance link
-9154a98 ui fixes
-ca0553d ui fixes
-948b72e Populate transfers and ledger in weekly sync payload
-b13672d Centralise player asking price into getPlayerAskingPrice utility
-2152caf Implement sponsor/investor offer events + fix starter balance from backend
-346c77a Update project context generator for React Native app
-0a1aacc Fix agent offer UX, player rating stability, and coach valuation alignment
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Store/Slice pattern (Zustand)** — state is partitioned into domain-scoped stores (`academyStore`, `squadStore`, `loanStore`, etc.) each owning its own slice of client state, analogous to Redux slices or repository-per-aggregate.
-- **Service layer** — `src/engine/` acts as a pure business-logic layer (`GameLoop`, `DevelopmentService`, `ScoutingService`, `FormulaEngine`) decoupled from UI and persistence, similar to a Domain Service layer in DDD.
-- **Command/Query separation (CQRS-lite)** — `src/api/endpoints/` holds read operations (queries) while `src/api/mutations/` isolates write operations (commands), mirroring CQRS without a full event bus.
-- **Offline-first / Optimistic Update pattern** — TanStack Query mutations apply local state changes immediately (e.g. `removeFromMarket`) then sync to the Symfony backend asynchronously, with a `syncQueue` for reconciliation.
-- **Adapter/DTO transform layer** — `src/api/endpoints/` explicitly maps raw backend types to app-internal types (e.g. `ATT→FWD`, pence→pounds, `coachingAbility→influence`), acting as an Anti-Corruption Layer between the backend contract and domain models.
+- **Store/Repository Pattern** — `src/stores/` acts as a client-side data layer (academyStore, squadStore, marketStore, etc.), encapsulating state mutations and persistence behind a consistent interface, mirroring a repository pattern for local data.
+- **Service Layer** — `src/api/endpoints/` and `src/api/mutations/` separate API communication concerns from UI; endpoints expose typed fetch functions while mutations wrap TanStack Query hooks, forming a two-tier service layer.
+- **Engine/Domain Layer** — `src/engine/` (GameLoop, CoachPerception, CoachValuation, agentOffers) houses pure business logic isolated from UI and persistence, analogous to a domain/application layer in DDD.
+- **DTO / Transform Layer** — `src/types/` defines app-side types that diverge from backend shapes; `src/api/endpoints/market.ts` explicitly transforms raw API responses into app DTOs (e.g. `ATT→FWD`, string→number coercions), acting as an anti-corruption layer.
+- **Command/Event Separation (soft CQRS)** — reads flow through TanStack Query hooks (queries), while writes flow through Zustand store actions and `src/api/mutations/` (commands), keeping read and write paths distinct without full CQRS infrastructure.
 
 ---
 
 ## Current Development Focus
 
-- **UI/UX design system integration** — The `ui-ux-pro-max` skill was just added with extensive stack/style/chart data; AI can accelerate consistent pixel-art component generation across React Native screens using this design intelligence layer.
-- **NPC interaction & coach performance systems** — The Phase 1 & 2 ledger/coach-performance commit signals active game logic expansion; AI can help model NPC decision trees, balance trait-driven behavior, and surface edge cases in the Personality Matrix engine.
-- **Currency & data formatting correctness** — A dedicated fix commit for currency formatting suggests this is a recurring pain point; AI can audit pence/pounds conversions across all API boundaries and flag inconsistencies before they ship.
-- **Frontend–backend sync reliability** — Multiple "frontend latest" and "latest project" commits imply rapid iteration against a live Symfony API; AI can help enforce the API contract (type transforms, pence convention, field mismatches) and generate typed adapters as endpoints evolve.
-- **Scout/market data pipeline** — The scout gem source fix and market store complexity (5-min cache, optimistic updates, multi-entity transforms) indicate this area is brittle; AI can help design robust cache invalidation logic and generate thorough integration test cases.
+- **Asset pipeline & branding** — Multiple asset updates (`android-icon-foreground/monochrome`, `splash-icon`, `logo_master`, `generate-assets.js`) suggest ongoing visual identity work; AI could automate asset variant generation and consistency checks across platforms.
+- **CI/CD & deployment workflows** — Active changes to `eas-update-prod.yml`, `eas-update-staging.yml`, and deployment commits indicate evolving release infrastructure; AI could help optimize workflow logic, add rollback gates, or validate EAS config diffs.
+- **Android bug resolution** — The explicit "looking to fix bugs on android" commit signals platform-specific issues; AI could assist with diagnosing NativeWind/Reanimated compatibility, safe-area quirks, or metro bundler anomalies on Android.
+- **GlobalHeader iteration** — `GlobalHeader.tsx` is among the most recently touched source files alongside the version display addition; AI could help with responsive layout, sync-state indicator logic, or accessibility improvements.
+- **App configuration drift** — `app.json`, `package.json`, and `package-lock.json` all modified recently alongside `_layout.tsx`; AI could audit dependency compatibility (especially with `--legacy-peer-deps` requirement) and flag risky version bumps before they reach production.

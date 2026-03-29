@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, FlatList, Modal, Pressable } from 'react-native';
+import { useState, useMemo } from 'react';
+import { View, FlatList, ScrollView, Modal, Pressable, TextInput } from 'react-native';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,12 +12,16 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
-import { generateCoachProspects, generateScoutProspects } from '@/engine/recruitment';
+import { useMarketStore } from '@/stores/marketStore';
+import type { MarketCoach, MarketScout } from '@/types/market';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
+import { SortableTable } from '@/components/ui/SortableTable';
+import type { ColumnDef } from '@/components/ui/SortableTable';
 import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
+import type { Clique } from '@/types/interaction';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -30,7 +34,7 @@ import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
 import { ArchetypeBadge } from '@/components/ArchetypeBadge';
 
-const ACADEMY_TABS = ['SQUAD', 'COACHES', 'SCOUTS'] as const;
+const ACADEMY_TABS = ['SQUAD', 'COACHES', 'SCOUTS', 'DRESSING ROOM'] as const;
 type AcademyTab = typeof ACADEMY_TABS[number];
 
 // ─── Player card ──────────────────────────────────────────────────────────────
@@ -148,7 +152,7 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
       ...pixelShadow,
     }}>
       {/* Avatar */}
-      <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={coach.age ?? 35} />
+      <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={35} />
 
       {/* Main content */}
       <View style={{ flex: 1 }}>
@@ -189,7 +193,7 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
   );
 }
 
-function CoachProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void }) {
+function CoachProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => void }) {
   return (
     <View style={{
       backgroundColor: WK.tealCard,
@@ -200,9 +204,8 @@ function CoachProspectCard({ coach, onSign }: { coach: Coach; onSign: () => void
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={70} />
         <View style={{ flex: 1 }}>
-          <PixelText size={9} upper numberOfLines={1}>{coach.name}</PixelText>
+          <PixelText size={9} upper numberOfLines={1}>{coach.firstName} {coach.lastName}</PixelText>
           <PixelText size={8} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
             <FlagText nationality={coach.nationality} size={12} />
@@ -276,7 +279,7 @@ function ScoutRow({ scout }: { scout: Scout }) {
   );
 }
 
-function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void }) {
+function ScoutProspectCard({ scout, onSign }: { scout: MarketScout; onSign: () => void }) {
   return (
     <View style={{
       backgroundColor: WK.tealCard,
@@ -287,9 +290,8 @@ function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void
       ...pixelShadow,
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <Avatar appearance={scout.appearance} role="SCOUT" size={44} morale={scout.morale ?? 70} />
         <View style={{ flex: 1 }}>
-          <PixelText size={9} upper numberOfLines={1}>{scout.name}</PixelText>
+          <PixelText size={9} upper numberOfLines={1}>{scout.firstName} {scout.lastName}</PixelText>
           <PixelText size={8} color={WK.tealLight} style={{ marginTop: 2 }}>
             {RANGE_LABEL[scout.scoutingRange]} SCOUT
           </PixelText>
@@ -310,16 +312,89 @@ function ScoutProspectCard({ scout, onSign }: { scout: Scout; onSign: () => void
 
 // ─── Panes ────────────────────────────────────────────────────────────────────
 
+function shortName(full: string): string {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length < 2) return full;
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+}
+
 const POSITION_FILTERS = ['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const;
 type PositionFilter = typeof POSITION_FILTERS[number];
 
 function SquadPane() {
   const [posFilter, setPosFilter] = useState<PositionFilter>('ALL');
   const allPlayers = useSquadStore((s) => s.players);
+  const router = useRouter();
 
-  const players = allPlayers
-    .filter((p) => p.isActive && (posFilter === 'ALL' || p.position === posFilter))
-    .sort((a, b) => b.overallRating - a.overallRating);
+  const players = allPlayers.filter(
+    (p) => p.isActive && (posFilter === 'ALL' || p.position === posFilter),
+  );
+
+  const PLAYER_COLS: ColumnDef<typeof players[number]>[] = [
+    {
+      key: 'position',
+      label: 'POS',
+      flex: 1,
+      sortValue: (p) => p.position,
+      render: (p) => (
+        <View style={{
+          backgroundColor: WK.tealDark,
+          borderWidth: 1,
+          borderColor: WK.border,
+          paddingHorizontal: 4,
+          paddingVertical: 2,
+          alignItems: 'center',
+        }}>
+          <PixelText size={8} color={WK.tealLight}>{p.position}</PixelText>
+        </View>
+      ),
+    },
+    {
+      key: 'name',
+      label: 'NAME',
+      flex: 2.5,
+      sortValue: (p) => p.name,
+      render: (p) => (
+        <BodyText size={13} upper numberOfLines={1} style={{ flex: 1 }}>{shortName(p.name)}</BodyText>
+      ),
+    },
+    {
+      key: 'nationality',
+      label: 'NAT',
+      flex: 1,
+      align: 'center',
+      sortValue: (p) => p.nationality,
+      render: (p) => <FlagText nationality={p.nationality} size={16} />,
+    },
+    {
+      key: 'age',
+      label: 'AGE',
+      flex: 1,
+      align: 'center',
+      sortValue: (p) => p.age,
+      render: (p) => <PixelText size={9} color={WK.dim}>{p.age}</PixelText>,
+    },
+    {
+      key: 'morale',
+      label: 'MOR',
+      flex: 1,
+      align: 'center',
+      sortValue: (p) => p.morale ?? 50,
+      render: (p) => {
+        const m = p.morale ?? 50;
+        const color = m >= 70 ? WK.green : m >= 40 ? WK.yellow : WK.red;
+        return <PixelText size={9} color={color}>{m}</PixelText>;
+      },
+    },
+    {
+      key: 'overallRating',
+      label: 'OVR',
+      flex: 1,
+      align: 'center',
+      sortValue: (p) => p.overallRating,
+      render: (p) => <Badge label={String(p.overallRating)} color="yellow" />,
+    },
+  ];
 
   return (
     <View style={{ flex: 1 }}>
@@ -353,27 +428,27 @@ function SquadPane() {
         })}
       </View>
 
-      {players.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <PixelText size={8} dim>NO PLAYERS</PixelText>
-        </View>
-      ) : (
-        <FlatList
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
+        <SortableTable
+          columns={PLAYER_COLS}
           data={players}
-          keyExtractor={(p) => p.id}
-          renderItem={({ item }) => <PlayerRow player={item} />}
-          contentContainerStyle={{ padding: 10 }}
+          defaultSortKey="overallRating"
+          defaultSortDir="desc"
+          onRowPress={(p) => { hapticTap(); router.push(`/player/${p.id}`); }}
+          emptyMessage="NO PLAYERS"
         />
-      )}
+      </ScrollView>
     </View>
   );
 }
 
 function CoachesPane() {
-  const { coaches, addCoach, removeCoach } = useCoachStore();
+  const { coaches, removeCoach } = useCoachStore();
   const { academy, addBalance } = useAcademyStore();
+  const marketCoaches = useMarketStore((s) => s.coaches);
+  const hireCoach = useMarketStore((s) => s.hireCoach);
+  const router = useRouter();
   const [showModal, setShowModal] = useState(false);
-  const [prospects, setProspects] = useState<Coach[]>([]);
   const [signError, setSignError] = useState<string | null>(null);
   const [pendingFire, setPendingFire] = useState<{ coach: Coach; penalty: number; penaltyPence: number } | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
@@ -382,22 +457,23 @@ function CoachesPane() {
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
   const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
 
+  // Show up to 3 available market coaches in the recruit modal
+  const prospectCoaches = marketCoaches.slice(0, 3);
+
   function openScout() {
     setSignError(null);
-    setProspects(generateCoachProspects(3, weekNumber));
     setShowModal(true);
   }
 
-  function signCoach(coach: Coach) {
-    const signingFee = coach.salary * 4; // whole pounds
-    if (academy.balance < signingFee * 100) { // balance is pence
+  function signCoach(mc: MarketCoach) {
+    const signingFee = mc.salary * 4;
+    if (academy.balance < signingFee * 100) {
       setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addBalance(-signingFee * 100); // deduct pence
-    addCoach({ ...coach, joinedWeek: weekNumber });
-    setProspects((prev) => prev.filter((p) => p.id !== coach.id));
+    addBalance(-signingFee * 100);
+    hireCoach(mc.id, weekNumber);
   }
 
   function fireCoach(coach: Coach) {
@@ -416,7 +492,7 @@ function CoachesPane() {
       setPendingFire(null);
       return;
     }
-    addBalance(-penalty * 100); // penalty is whole pounds → pence
+    addBalance(-penalty * 100);
     useFinanceStore.getState().addTransaction({
       amount: -penaltyPence,
       category: 'contract_termination',
@@ -426,6 +502,47 @@ function CoachesPane() {
     removeCoach(coach.id);
     setPendingFire(null);
   }
+
+  const COACH_COLS: ColumnDef<Coach>[] = [
+    {
+      key: 'name',
+      label: 'NAME',
+      flex: 2.5,
+      sortValue: (c) => c.name,
+      render: (c) => <BodyText size={13} upper numberOfLines={1}>{shortName(c.name)}</BodyText>,
+    },
+    {
+      key: 'nationality',
+      label: 'NAT',
+      flex: 1,
+      align: 'center',
+      sortValue: (c) => c.nationality,
+      render: (c) => <FlagText nationality={c.nationality} size={16} />,
+    },
+    {
+      key: 'role',
+      label: 'ROLE',
+      flex: 2,
+      sortValue: (c) => c.role,
+      render: (c) => <PixelText size={8} color={WK.tealLight} numberOfLines={1}>{c.role.toUpperCase()}</PixelText>,
+    },
+    {
+      key: 'influence',
+      label: 'INF',
+      flex: 1,
+      align: 'center',
+      sortValue: (c) => c.influence,
+      render: (c) => <Badge label={`${c.influence}`} color="yellow" />,
+    },
+    {
+      key: 'salary',
+      label: 'WAGE',
+      flex: 1.5,
+      align: 'right',
+      sortValue: (c) => c.salary,
+      render: (c) => <PixelText size={9} color={WK.orange}>£{Math.round(c.salary / 100).toLocaleString()}</PixelText>,
+    },
+  ];
 
   return (
     <View style={{ flex: 1 }}>
@@ -445,18 +562,16 @@ function CoachesPane() {
         <Button label="◈ RECRUIT COACHES" variant="green" fullWidth onPress={openScout} />
       </View>
 
-      {coaches.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <PixelText size={8} dim>NO COACHES SIGNED</PixelText>
-        </View>
-      ) : (
-        <FlatList
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}>
+        <SortableTable
+          columns={COACH_COLS}
           data={coaches}
-          keyExtractor={(c) => c.id}
-          renderItem={({ item }) => <CoachRow coach={item} onFire={() => fireCoach(item)} />}
-          contentContainerStyle={{ padding: 10 }}
+          defaultSortKey="influence"
+          defaultSortDir="desc"
+          onRowPress={(c) => { hapticTap(); router.push(`/coach/${c.id}`); }}
+          emptyMessage="NO COACHES SIGNED"
         />
-      )}
+      </ScrollView>
 
       <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
         <Pressable
@@ -473,9 +588,10 @@ function CoachesPane() {
             }}>
               <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 14 }}>Review Prospects</PixelText>
               <BodyText size={13} dim style={{ textAlign: 'center', marginBottom: 14 }}>SIGNING FEE = 4 WKS SALARY</BodyText>
-              {prospects.length === 0 ? (
+              {prospectCoaches.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                  <PixelText size={7} dim>ALL PROSPECTS SIGNED</PixelText>
+                  <PixelText size={7} dim>NO COACHES AVAILABLE</PixelText>
+                  <PixelText size={6} dim style={{ marginTop: 6 }}>Check back after advancing a week</PixelText>
                   <View style={{ marginTop: 12 }}>
                     <Button label="CLOSE" variant="teal" onPress={() => setShowModal(false)} />
                   </View>
@@ -487,7 +603,7 @@ function CoachesPane() {
                       {signError}
                     </BodyText>
                   )}
-                  {prospects.map((c) => (
+                  {prospectCoaches.map((c) => (
                     <CoachProspectCard key={c.id} coach={c} onSign={() => signCoach(c)} />
                   ))}
                   <Button label="CLOSE" variant="teal" fullWidth onPress={() => setShowModal(false)} />
@@ -498,7 +614,6 @@ function CoachesPane() {
         </Pressable>
       </Modal>
 
-      {/* Fire coach confirmation dialog */}
       <PixelDialog
         visible={!!pendingFire}
         title="Release Coach?"
@@ -511,7 +626,6 @@ function CoachesPane() {
         confirmVariant="red"
       />
 
-      {/* Insufficient funds after fire attempt */}
       <PixelDialog
         visible={!!fireError}
         title="Insufficient Funds"
@@ -523,10 +637,12 @@ function CoachesPane() {
 }
 
 function ScoutsPane() {
-  const { scouts, addScout, removeScout } = useScoutStore();
+  const { scouts, removeScout } = useScoutStore();
   const { academy, addBalance } = useAcademyStore();
+  const marketScouts = useMarketStore((s) => s.marketScouts);
+  const hireScout = useMarketStore((s) => s.hireScout);
+  const router = useRouter();
   const [showModal, setShowModal] = useState(false);
-  const [prospects, setProspects] = useState<Scout[]>([]);
   const [signError, setSignError] = useState<string | null>(null);
   const [pendingFire, setPendingFire] = useState<{ scout: Scout; penalty: number; penaltyPence: number } | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
@@ -534,22 +650,23 @@ function ScoutsPane() {
   const weekNumber = academy.weekNumber ?? 1;
   const totalSalary = scouts.reduce((s, sc) => s + sc.salary, 0);
 
+  // Show up to 3 available market scouts in the recruit modal
+  const prospectScouts = marketScouts.slice(0, 3);
+
   function openRecruit() {
     setSignError(null);
-    setProspects(generateScoutProspects(3, weekNumber));
     setShowModal(true);
   }
 
-  function signScout(scout: Scout) {
-    const signingFee = scout.salary * 4; // whole pounds
-    if (academy.balance < signingFee * 100) { // balance is pence
+  function signScout(ms: MarketScout) {
+    const signingFee = ms.salary * 4;
+    if (academy.balance < signingFee * 100) {
       setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addBalance(-signingFee * 100); // deduct pence
-    addScout({ ...scout, joinedWeek: weekNumber });
-    setProspects((prev) => prev.filter((p) => p.id !== scout.id));
+    addBalance(-signingFee * 100);
+    hireScout(ms.id, weekNumber);
   }
 
   function fireScout(scout: Scout) {
@@ -568,7 +685,7 @@ function ScoutsPane() {
       setPendingFire(null);
       return;
     }
-    addBalance(-penalty * 100); // penalty is whole pounds → pence
+    addBalance(-penalty * 100);
     useFinanceStore.getState().addTransaction({
       amount: -penaltyPence,
       category: 'contract_termination',
@@ -578,6 +695,62 @@ function ScoutsPane() {
     removeScout(scout.id);
     setPendingFire(null);
   }
+
+  const SCOUT_COLS: ColumnDef<Scout>[] = [
+    {
+      key: 'name',
+      label: 'NAME',
+      flex: 2.5,
+      sortValue: (s) => s.name,
+      render: (s) => <BodyText size={13} upper numberOfLines={1}>{shortName(s.name)}</BodyText>,
+    },
+    {
+      key: 'nationality',
+      label: 'NAT',
+      flex: 1,
+      align: 'center',
+      sortValue: (s) => s.nationality,
+      render: (s) => <FlagText nationality={s.nationality} size={16} />,
+    },
+    {
+      key: 'scoutingRange',
+      label: 'SPEC',
+      flex: 1.5,
+      sortValue: (s) => s.scoutingRange,
+      render: (s) => <PixelText size={8} color={WK.tealLight}>{RANGE_LABEL[s.scoutingRange]}</PixelText>,
+    },
+    {
+      key: 'salary',
+      label: 'WAGE',
+      flex: 1.5,
+      align: 'right',
+      sortValue: (s) => s.salary,
+      render: (s) => <PixelText size={9} color={WK.orange}>£{Math.round(s.salary / 100).toLocaleString()}</PixelText>,
+    },
+    {
+      key: 'status',
+      label: 'STATUS',
+      flex: 1.5,
+      align: 'center',
+      sortValue: (s) => (s.activeMission?.status === 'active' ? 1 : 0),
+      render: (s) => {
+        const onMission = s.activeMission?.status === 'active';
+        return (
+          <View style={{
+            backgroundColor: onMission ? WK.yellow + '33' : WK.tealDark,
+            borderWidth: 1,
+            borderColor: onMission ? WK.yellow : WK.dim,
+            paddingHorizontal: 5,
+            paddingVertical: 2,
+          }}>
+            <PixelText size={8} color={onMission ? WK.yellow : WK.dim}>
+              {onMission ? 'ACTIVE' : 'FREE'}
+            </PixelText>
+          </View>
+        );
+      },
+    },
+  ];
 
   return (
     <View style={{ flex: 1 }}>
@@ -597,18 +770,16 @@ function ScoutsPane() {
         <Button label="◈ RECRUIT SCOUTS" variant="green" fullWidth onPress={openRecruit} />
       </View>
 
-      {scouts.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <PixelText size={8} dim>NO SCOUTS RECRUITED</PixelText>
-        </View>
-      ) : (
-        <FlatList
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}>
+        <SortableTable
+          columns={SCOUT_COLS}
           data={scouts}
-          keyExtractor={(s) => s.id}
-          renderItem={({ item }) => <ScoutRow scout={item} />}
-          contentContainerStyle={{ padding: 10 }}
+          defaultSortKey="salary"
+          defaultSortDir="desc"
+          onRowPress={(s) => { hapticTap(); router.push(`/scout/${s.id}`); }}
+          emptyMessage="NO SCOUTS RECRUITED"
         />
-      )}
+      </ScrollView>
 
       <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
         <Pressable
@@ -625,9 +796,10 @@ function ScoutsPane() {
             }}>
               <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 14 }}>Scout Prospects</PixelText>
               <BodyText size={13} dim style={{ textAlign: 'center', marginBottom: 14 }}>SIGNING FEE = 4 WKS SALARY</BodyText>
-              {prospects.length === 0 ? (
+              {prospectScouts.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                  <PixelText size={7} dim>ALL PROSPECTS RECRUITED</PixelText>
+                  <PixelText size={7} dim>NO SCOUTS AVAILABLE</PixelText>
+                  <PixelText size={6} dim style={{ marginTop: 6 }}>Check back after advancing a week</PixelText>
                   <View style={{ marginTop: 12 }}>
                     <Button label="CLOSE" variant="teal" onPress={() => setShowModal(false)} />
                   </View>
@@ -639,7 +811,7 @@ function ScoutsPane() {
                       {signError}
                     </BodyText>
                   )}
-                  {prospects.map((s) => (
+                  {prospectScouts.map((s) => (
                     <ScoutProspectCard key={s.id} scout={s} onSign={() => signScout(s)} />
                   ))}
                   <Button label="CLOSE" variant="teal" fullWidth onPress={() => setShowModal(false)} />
@@ -650,7 +822,6 @@ function ScoutsPane() {
         </Pressable>
       </Modal>
 
-      {/* Fire scout confirmation dialog */}
       <PixelDialog
         visible={!!pendingFire}
         title="Release Scout?"
@@ -663,7 +834,6 @@ function ScoutsPane() {
         confirmVariant="red"
       />
 
-      {/* Insufficient funds after fire attempt */}
       <PixelDialog
         visible={!!fireError}
         title="Insufficient Funds"
@@ -671,6 +841,198 @@ function ScoutsPane() {
         onClose={() => setFireError(null)}
       />
     </View>
+  );
+}
+
+// ─── Dressing Room ────────────────────────────────────────────────────────────
+
+function handleGroupSession(targetType: 'squad' | 'staff'): void {
+  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const groupSessionLog = useInteractionStore.getState().groupSessionLog;
+
+  const recentUses = groupSessionLog.filter(
+    (e) => e.targetType === targetType && e.week >= weekNumber - 4,
+  ).length;
+
+  const moraleDelta =
+    recentUses <= 1 ? 8 :
+    recentUses === 2 ? 4 :
+    recentUses === 3 ? 1 : -3;
+
+  if (targetType === 'squad') {
+    useSquadStore.getState().players
+      .filter((p) => p.isActive)
+      .forEach((p) => useSquadStore.getState().updateMorale(p.id, moraleDelta));
+  } else {
+    useCoachStore.getState().coaches
+      .forEach((c) => useCoachStore.getState().updateMorale(c.id, moraleDelta));
+  }
+
+  useInteractionStore.getState().logInteraction({
+    week: weekNumber,
+    actorType: 'amp',
+    actorId: 'amp',
+    targetType: targetType === 'squad' ? 'squad' : 'staff',
+    targetId: targetType === 'squad' ? 'squad_wide' : 'staff_wide',
+    category: 'AMP_GROUP',
+    subtype: targetType === 'squad' ? 'dressing_room_address' : 'full_staff_address',
+    relationshipDelta: 0,
+    traitDeltas: {},
+    moraleDelta,
+    isVisibleToAmp: true,
+    visibilityReason: 'direct_action',
+    narrativeSummary: targetType === 'squad'
+      ? `You addressed the squad. (${moraleDelta > 0 ? '+' : ''}${moraleDelta} morale)`
+      : `You held a staff meeting. (${moraleDelta > 0 ? '+' : ''}${moraleDelta} morale)`,
+  });
+
+  useInteractionStore.getState().logGroupSession({ week: weekNumber, targetType });
+
+  if (recentUses >= 3) {
+    useInteractionStore.getState().logInteraction({
+      week: weekNumber,
+      actorType: 'system',
+      actorId: 'system',
+      targetType: targetType === 'squad' ? 'squad' : 'staff',
+      targetId: targetType === 'squad' ? 'squad_wide' : 'staff_wide',
+      category: 'SYSTEM',
+      subtype: 'group_session_fatigue',
+      relationshipDelta: 0,
+      traitDeltas: {},
+      moraleDelta: 0,
+      isVisibleToAmp: true,
+      visibilityReason: 'direct_action',
+      narrativeSummary: 'Your group sessions are losing effect. The squad has heard it before.',
+    });
+  }
+}
+
+function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) => void }) {
+  const health = useInteractionStore((s) => s.dressingRoomHealth);
+  const cliques = useInteractionStore((s) => s.cliques);
+  const allPlayers = useSquadStore((s) => s.players);
+  const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
+  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const groupSessionLog = useInteractionStore((s) => s.groupSessionLog);
+
+  const detectedCliques = cliques.filter((c) => c.isDetected);
+  const cliquedIds = new Set(detectedCliques.flatMap((c) => c.memberIds));
+  const noGroupCount = activePlayers.filter((p) => !cliquedIds.has(p.id)).length;
+
+  function getUseCount(type: 'squad' | 'staff'): number {
+    return groupSessionLog.filter(
+      (e) => e.targetType === type && e.week >= weekNumber - 4,
+    ).length;
+  }
+
+  function fatigueColor(uses: number): string {
+    if (uses <= 1) return WK.green;
+    if (uses === 2) return WK.yellow;
+    if (uses === 3) return WK.orange;
+    return WK.red;
+  }
+
+  const squadUses = getUseCount('squad');
+  const staffUses = getUseCount('staff');
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 12 }}>
+
+      {/* Atmosphere card */}
+      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+        <PixelText size={8} upper color={WK.yellow}>DRESSING ROOM ATMOSPHERE</PixelText>
+
+        {health === null ? (
+          <BodyText size={13} dim style={{ marginTop: 10 }}>Advance a week to see atmosphere data.</BodyText>
+        ) : (
+          <>
+            {health.tension > 60 && (
+              <View style={{ backgroundColor: 'rgba(200,30,30,0.15)', borderWidth: 2, borderColor: WK.red, padding: 6, marginTop: 8 }}>
+                <PixelText size={6} color={WK.red}>⚠ VOLATILE — HIGH TENSION IN THE GROUP</PixelText>
+              </View>
+            )}
+            {/* Cohesion */}
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <BodyText size={13} dim>COHESION</BodyText>
+                <PixelText size={7} color={WK.green}>{health.cohesion}</PixelText>
+              </View>
+              <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                <View style={{ height: '100%', width: `${health.cohesion}%`, backgroundColor: WK.green }} />
+              </View>
+            </View>
+            {/* Tension */}
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <BodyText size={13} dim>TENSION</BodyText>
+                <PixelText size={7} color={WK.red}>{health.tension}</PixelText>
+              </View>
+              <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                <View style={{ height: '100%', width: `${health.tension}%`, backgroundColor: WK.red }} />
+              </View>
+            </View>
+            {/* Avg morale */}
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <BodyText size={13} dim>AVG MORALE</BodyText>
+                <PixelText size={7} color={WK.yellow}>{health.squadMoraleAverage}</PixelText>
+              </View>
+              <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                <View style={{ height: '100%', width: `${health.squadMoraleAverage}%`, backgroundColor: WK.yellow }} />
+              </View>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Groups card — only shown once at least one group has formed */}
+      {detectedCliques.length > 0 && (
+        <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+          <PixelText size={8} upper color={WK.yellow}>GROUPS</PixelText>
+
+          {detectedCliques.map((clique) => (
+            <Pressable
+              key={clique.id}
+              onPress={() => onRenamePress(clique)}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: WK.border }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 10, height: 10, backgroundColor: CLIQUE_PALETTE[clique.color], borderWidth: 2, borderColor: WK.border }} />
+                <PixelText size={7}>{clique.name.toUpperCase()}</PixelText>
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                <BodyText size={11} dim>{clique.memberIds.length} MEMBERS</BodyText>
+                <BodyText size={11} color={WK.yellow}>[ RENAME ]</BodyText>
+              </View>
+            </Pressable>
+          ))}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 }}>
+            <View style={{ width: 10, height: 10, backgroundColor: NO_GROUP_COLOR, borderWidth: 2, borderColor: WK.border }} />
+            <BodyText size={13} color={NO_GROUP_COLOR}>NO GROUP</BodyText>
+            <BodyText size={11} dim>— {noGroupCount} PLAYERS</BodyText>
+          </View>
+        </View>
+      )}
+
+      {/* Group sessions card */}
+      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 12 }}>GROUP SESSIONS</PixelText>
+
+        <Button label="ADDRESS THE SQUAD" variant="yellow" fullWidth onPress={() => handleGroupSession('squad')} />
+        <View style={{ marginTop: 4, marginBottom: 12, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+          <BodyText size={11} color={fatigueColor(squadUses)}>{squadUses} uses in last 4 weeks</BodyText>
+          {squadUses >= 4 && <BodyText size={11} color={WK.red}>— LOSING EFFECT</BodyText>}
+        </View>
+
+        <Button label="STAFF MEETING" variant="teal" fullWidth onPress={() => handleGroupSession('staff')} />
+        <View style={{ marginTop: 4, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+          <BodyText size={11} color={fatigueColor(staffUses)}>{staffUses} uses in last 4 weeks</BodyText>
+          {staffUses >= 4 && <BodyText size={11} color={WK.red}>— LOSING EFFECT</BodyText>}
+        </View>
+      </View>
+
+    </ScrollView>
   );
 }
 
@@ -774,6 +1136,9 @@ function UpkeepWarningBanner() {
 
 export default function AcademyHubScreen() {
   const [activeTab, setActiveTab] = useState<AcademyTab>('SQUAD');
+  const [renameTarget, setRenameTarget] = useState<Clique | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameClique = useInteractionStore((s) => s.renameClique);
   const academy = useAcademyStore((s) => s.academy);
 
   // balance is stored in pence — convert to whole pounds for display
@@ -812,6 +1177,43 @@ export default function AcademyHubScreen() {
       {activeTab === 'SQUAD' && <SquadPane />}
       {activeTab === 'COACHES' && <CoachesPane />}
       {activeTab === 'SCOUTS' && <ScoutsPane />}
+      {activeTab === 'DRESSING ROOM' && (
+        <DressingRoomPane
+          onRenamePress={(clique) => { setRenameTarget(clique); setRenameValue(clique.name); }}
+        />
+      )}
+
+      {/* Clique rename modal */}
+      <Modal visible={renameTarget !== null} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: WK.tealDark, borderWidth: 3, borderColor: WK.yellow, padding: 20, ...pixelShadow }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 10, height: 10, backgroundColor: CLIQUE_PALETTE[renameTarget?.color ?? 'coral'] }} />
+              <PixelText size={8} upper color={WK.yellow}>RENAME GROUP</PixelText>
+            </View>
+            <TextInput
+              style={{ marginTop: 16, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.yellow, color: WK.text, fontFamily: WK.font, fontSize: 9, padding: 10 }}
+              value={renameValue}
+              onChangeText={setRenameValue}
+              maxLength={20}
+              autoFocus
+            />
+            <View style={{ marginTop: 16, flexDirection: 'row', gap: 8 }}>
+              <Button
+                label="SAVE"
+                variant="yellow"
+                disabled={renameValue.trim().length === 0}
+                onPress={() => {
+                  if (renameTarget && renameValue.trim()) renameClique(renameTarget.id, renameValue.trim());
+                  setRenameTarget(null);
+                }}
+                style={{ flex: 1 }}
+              />
+              <Button label="CANCEL" variant="teal" onPress={() => setRenameTarget(null)} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

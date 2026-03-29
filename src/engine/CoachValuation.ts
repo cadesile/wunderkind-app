@@ -20,9 +20,10 @@ export interface CoachOpinion {
  * Returns a coach's opinion on a market player's current offer.
  * Coach.influence (1-20) drives accuracy — higher influence = smaller error.
  * Only meaningful after scouting (revealed status).
+ * playerFeeMultiplier: from GameConfig — scales the market value baseline.
  */
-export function getCoachOpinion(player: MarketPlayer, coach: Coach): CoachOpinion {
-  const baseValue = player.marketValue ?? player.currentAbility * 1000;
+export function getCoachOpinion(player: MarketPlayer, coach: Coach, playerFeeMultiplier: number): CoachOpinion {
+  const baseValue = player.marketValue ?? player.currentAbility * playerFeeMultiplier;
 
   // influence 1-20: error decreases as influence increases
   const influenceError = clamp((20 - coach.influence) / 20, 0, 1);

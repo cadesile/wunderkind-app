@@ -21,7 +21,7 @@ export const formatCurrency = (pence: number, symbol: string = '£'): string => 
  * @example formatCurrencyWhole(500000) → "£5,000"
  */
 export const formatCurrencyWhole = (pence: number, symbol: string = '£'): string => {
-  const pounds = Math.floor(pence / 100);
+  const pounds = Math.round(pence / 100);
   return `${symbol}${pounds.toLocaleString('en-GB')}`;
 };
 
@@ -62,7 +62,7 @@ export const getDebtAmount = (balance: number): number =>
   balance < 0 ? Math.abs(balance) : 0;
 
 /** Convert backend pence to whole pounds (integer). */
-export const penceToPounds = (pence: number): number => Math.floor(pence / 100);
+export const penceToPounds = (pence: number): number => Math.round(pence / 100);
 
 /** Convert whole pounds to pence. */
 export const poundsToPence = (pounds: number): number => Math.round(pounds * 100);

@@ -18,6 +18,7 @@ import { useAcademyStore } from './academyStore';
 import { useGuardianStore } from './guardianStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { updateCoachRelationship } from '@/engine/RelationshipService';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import type { ApiGuardian } from '@/types/api';
 import type { Guardian } from '@/types/guardian';
 
@@ -98,6 +99,7 @@ export const useMarketStore = create<MarketState>()(
 
       setMarketData: (data) => {
         const existingPlayers = get().players;
+        const { playerFeeMultiplier } = useGameConfigStore.getState().config;
 
         // Preserve locally-added gem players that the backend doesn't know about
         const localGems = existingPlayers.filter(
@@ -111,8 +113,8 @@ export const useMarketStore = create<MarketState>()(
               ...p,
               scoutingStatus: existing.scoutingStatus,
               scoutingProgress: existing.scoutingProgress ?? 0,
-              marketValue: existing.marketValue ?? p.currentAbility * 1000,
-              currentOffer: existing.currentOffer ?? calculateAgentOffer(p.currentAbility * 1000),
+              marketValue: existing.marketValue ?? p.currentAbility * playerFeeMultiplier,
+              currentOffer: existing.currentOffer ?? calculateAgentOffer(p.currentAbility * playerFeeMultiplier),
               perceivedAbility: existing.perceivedAbility,
               assignedScoutId: existing.assignedScoutId,
             };
@@ -121,8 +123,8 @@ export const useMarketStore = create<MarketState>()(
             ...p,
             scoutingStatus: 'hidden' as const,
             scoutingProgress: 0,
-            marketValue: p.currentAbility * 1000,
-            currentOffer: calculateAgentOffer(p.currentAbility * 1000),
+            marketValue: p.currentAbility * playerFeeMultiplier,
+            currentOffer: calculateAgentOffer(p.currentAbility * playerFeeMultiplier),
           };
         });
         set({
@@ -198,7 +200,7 @@ export const useMarketStore = create<MarketState>()(
         // Coach opinion and morale effects
         if (headCoach && player.marketValue && player.currentOffer) {
           try {
-            const opinion = getCoachPerception(player, headCoach);
+            const opinion = getCoachPerception(player, headCoach, useGameConfigStore.getState().config.playerFeeMultiplier);
             if (opinion.verdict === 'insulting') {
               useCoachStore.getState().updateMorale(headCoach.id, -10);
               updateCoachRelationship(headCoach.id, 'manager', 'manager', -15);
@@ -296,7 +298,7 @@ export const useMarketStore = create<MarketState>()(
 
         if (headCoach && player.marketValue && player.currentOffer) {
           try {
-            const opinion = getCoachPerception(player, headCoach);
+            const opinion = getCoachPerception(player, headCoach, useGameConfigStore.getState().config.playerFeeMultiplier);
             if (opinion.verdict === 'steal') {
               // Rejected a deal coach wanted
               useCoachStore.getState().updateMorale(headCoach.id, -5);

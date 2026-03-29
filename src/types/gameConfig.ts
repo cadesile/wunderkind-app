@@ -7,6 +7,15 @@ export interface GameConfig {
   /** Minimum academy tenure in weeks before clique eligibility. Default: 3 */
   cliqueMinTenureWeeks: number;
 
+  // ── Pricing ───────────────────────────────────────────────────────────────
+  /**
+   * Scales all player transfer fees and market values.
+   * fee_pence = OVR × rand(80–120) × playerFeeMultiplier × reputationMod
+   * marketValue_pounds = OVR × playerFeeMultiplier
+   * Default: 1000  (OVR 50 → ~£50,000 fee)
+   */
+  playerFeeMultiplier: number;
+
   // ── Engine constants ──────────────────────────────────────────────────────
   /** Base XP awarded per player per week before facility/coach multipliers. Default: 10 */
   baseXP: number;
@@ -48,6 +57,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   cliqueRelationshipThreshold: 20,
   cliqueSquadCapPercent: 30,
   cliqueMinTenureWeeks: 3,
+
+  playerFeeMultiplier: 1000,
 
   baseXP: 10,
   baseInjuryProbability: 0.05,

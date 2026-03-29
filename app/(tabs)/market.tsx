@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { useState, useCallback, useMemo } from 'react';
+import { View, FlatList, RefreshControl, Modal, TouchableOpacity, TextInput, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SlidersHorizontal } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { PixelText } from '@/components/ui/PixelText';
@@ -16,41 +17,11 @@ import { generatePersonality } from '@/engine/personality';
 import { generateAppearance } from '@/engine/appearance';
 import { Avatar } from '@/components/ui/Avatar';
 import { MarketCoach, MarketScout, Scout } from '@/types/market';
-import { Coach } from '@/types/coach';
+import { Coach, CoachRole } from '@/types/coach';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { penceToPounds, formatPounds } from '@/utils/currency';
 
 type MarketTab = 'COACHES' | 'SCOUTS';
-
-// ─── Market entity transforms ─────────────────────────────────────────────────
-
-function marketCoachToCoach(c: MarketCoach, weekNumber: number): Coach {
-  const personality = generatePersonality();
-  return {
-    id: c.id,
-    name: `${c.firstName} ${c.lastName}`,
-    role: c.role,
-    salary: c.salary,
-    influence: c.influence,
-    personality,
-    appearance: generateAppearance(c.id, 'COACH', 35, personality),
-    nationality: c.nationality,
-    joinedWeek: weekNumber,
-  };
-}
-
-function marketScoutToScout(s: MarketScout, weekNumber: number): Scout {
-  return {
-    id: s.id,
-    name: `${s.firstName} ${s.lastName}`,
-    salary: s.salary,
-    scoutingRange: s.scoutingRange,
-    successRate: s.successRate,
-    nationality: s.nationality,
-    joinedWeek: weekNumber,
-    appearance: generateAppearance(s.id, 'SCOUT', 35),
-  };
-}
 
 // ─── Stat bar ─────────────────────────────────────────────────────────────────
 
@@ -88,8 +59,21 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
     setHireError(null);
     try {
       await marketApi.assignEntity('coach', coach.id);
-      const newCoach = marketCoachToCoach(coach, weekNumber);
-      addCoach(newCoach);
+      const personality = generatePersonality();
+      addCoach({
+        id: coach.id,
+        name: `${coach.firstName} ${coach.lastName}`,
+        role: coach.role,
+        salary: coach.salary,
+        influence: coach.influence,
+        nationality: coach.nationality,
+        joinedWeek: weekNumber,
+        morale: coach.morale ?? 70,
+        specialisms: coach.specialisms,
+        personality,
+        appearance: generateAppearance(coach.id, 'COACH', 35, personality),
+        relationships: [],
+      });
       removeFromMarket('coach', coach.id);
     } catch {
       setHireError('Unable to hire this coach. Please try again.');
@@ -195,8 +179,19 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
     setHireError(null);
     try {
       await marketApi.assignEntity('scout', scout.id);
-      const newScout = marketScoutToScout(scout, weekNumber);
-      addScout(newScout);
+      addScout({
+        id: scout.id,
+        name: `${scout.firstName} ${scout.lastName}`,
+        salary: scout.salary,
+        scoutingRange: scout.scoutingRange,
+        successRate: scout.successRate,
+        nationality: scout.nationality,
+        joinedWeek: weekNumber,
+        morale: 70,
+        appearance: generateAppearance(scout.id, 'SCOUT', 35),
+        relationships: [],
+        assignedPlayerIds: [],
+      });
       removeFromMarket('scout', scout.id);
     } catch {
       setHireError('Unable to hire this scout. Please try again.');
@@ -266,6 +261,414 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
   );
 }
 
+// ─── Filter sheet helpers ─────────────────────────────────────────────────────
+
+const ALL_COACH_ROLES: CoachRole[] = [
+  'Head Coach',
+  'Fitness Coach',
+  'Youth Coach',
+  'GK Coach',
+  'Tactical Analyst',
+];
+
+const ALL_SCOUTING_RANGES: MarketScout['scoutingRange'][] = ['local', 'national', 'international'];
+
+function FilterInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType = 'numeric',
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  keyboardType?: 'numeric' | 'default';
+}) {
+  return (
+    <View style={{ marginBottom: 10 }}>
+      <PixelText size={6} dim style={{ marginBottom: 4 }}>{label}</PixelText>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder ?? ''}
+        placeholderTextColor={WK.tealLight}
+        keyboardType={keyboardType}
+        style={{
+          backgroundColor: WK.greenDark,
+          borderWidth: 2,
+          borderColor: WK.border,
+          color: '#fff',
+          fontFamily: 'PressStart2P_400Regular',
+          fontSize: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+        }}
+      />
+    </View>
+  );
+}
+
+function FilterPill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        borderWidth: 2,
+        borderColor: active ? WK.yellow : WK.border,
+        backgroundColor: active ? WK.yellow : WK.tealCard,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        marginRight: 6,
+        marginBottom: 6,
+      }}
+    >
+      <PixelText size={6} color={active ? WK.greenDark : WK.tealLight}>
+        {label}
+      </PixelText>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Coach filter state & sheet ───────────────────────────────────────────────
+
+interface CoachFilters {
+  wageMin: string;
+  wageMax: string;
+  influenceMin: string;
+  influenceMax: string;
+  roles: CoachRole[];
+}
+
+const DEFAULT_COACH_FILTERS: CoachFilters = {
+  wageMin: '',
+  wageMax: '',
+  influenceMin: '',
+  influenceMax: '',
+  roles: [],
+};
+
+function coachFiltersActive(f: CoachFilters): boolean {
+  return (
+    f.wageMin !== '' ||
+    f.wageMax !== '' ||
+    f.influenceMin !== '' ||
+    f.influenceMax !== '' ||
+    f.roles.length > 0
+  );
+}
+
+function applyCoachFilters(coaches: MarketCoach[], f: CoachFilters): MarketCoach[] {
+  return coaches.filter((c) => {
+    const wagePerWeekPounds = Math.round(c.salary / 100);
+    if (f.wageMin !== '' && wagePerWeekPounds < Number(f.wageMin)) return false;
+    if (f.wageMax !== '' && wagePerWeekPounds > Number(f.wageMax)) return false;
+    if (f.influenceMin !== '' && c.influence < Number(f.influenceMin)) return false;
+    if (f.influenceMax !== '' && c.influence > Number(f.influenceMax)) return false;
+    if (f.roles.length > 0 && !f.roles.includes(c.role)) return false;
+    return true;
+  });
+}
+
+function CoachFilterSheet({
+  visible,
+  filters,
+  onApply,
+  onClose,
+}: {
+  visible: boolean;
+  filters: CoachFilters;
+  onApply: (f: CoachFilters) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<CoachFilters>(filters);
+
+  // Sync draft when sheet opens
+  const handleOpen = useCallback(() => setDraft(filters), [filters]);
+
+  function toggleRole(role: CoachRole) {
+    setDraft((prev) => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter((r) => r !== role)
+        : [...prev.roles, role],
+    }));
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onShow={handleOpen}
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}
+        onPress={onClose}
+      >
+        <Pressable onPress={() => {}}>
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderTopWidth: 3,
+            borderLeftWidth: 3,
+            borderRightWidth: 3,
+            borderColor: WK.border,
+            padding: 16,
+            paddingBottom: 32,
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <PixelText size={9} upper>Filter Coaches</PixelText>
+              <TouchableOpacity onPress={onClose}>
+                <PixelText size={7} color={WK.tealLight}>✕</PixelText>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Wage range */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8 }}>WEEKLY WAGE (£)</PixelText>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MIN" value={draft.wageMin} onChangeText={(v) => setDraft({ ...draft, wageMin: v })} placeholder="0" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MAX" value={draft.wageMax} onChangeText={(v) => setDraft({ ...draft, wageMax: v })} placeholder="Any" />
+                </View>
+              </View>
+
+              {/* Influence range */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8, marginTop: 4 }}>INFLUENCE (1–20)</PixelText>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MIN" value={draft.influenceMin} onChangeText={(v) => setDraft({ ...draft, influenceMin: v })} placeholder="1" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MAX" value={draft.influenceMax} onChangeText={(v) => setDraft({ ...draft, influenceMax: v })} placeholder="20" />
+                </View>
+              </View>
+
+              {/* Role pills */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8, marginTop: 4 }}>ROLE</PixelText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+                {ALL_COACH_ROLES.map((role) => (
+                  <FilterPill
+                    key={role}
+                    label={role.toUpperCase()}
+                    active={draft.roles.includes(role)}
+                    onPress={() => toggleRole(role)}
+                  />
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Actions */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="RESET"
+                  variant="orange"
+                  fullWidth
+                  onPress={() => { setDraft(DEFAULT_COACH_FILTERS); onApply(DEFAULT_COACH_FILTERS); }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="APPLY"
+                  variant="teal"
+                  fullWidth
+                  onPress={() => { onApply(draft); onClose(); }}
+                />
+              </View>
+            </View>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Scout filter state & sheet ───────────────────────────────────────────────
+
+interface ScoutFilters {
+  wageMin: string;
+  wageMax: string;
+  successRateMin: string;
+  successRateMax: string;
+  ranges: MarketScout['scoutingRange'][];
+  nationality: string;
+}
+
+const DEFAULT_SCOUT_FILTERS: ScoutFilters = {
+  wageMin: '',
+  wageMax: '',
+  successRateMin: '',
+  successRateMax: '',
+  ranges: [],
+  nationality: '',
+};
+
+function scoutFiltersActive(f: ScoutFilters): boolean {
+  return (
+    f.wageMin !== '' ||
+    f.wageMax !== '' ||
+    f.successRateMin !== '' ||
+    f.successRateMax !== '' ||
+    f.ranges.length > 0 ||
+    f.nationality.trim() !== ''
+  );
+}
+
+function applyScoutFilters(scouts: MarketScout[], f: ScoutFilters): MarketScout[] {
+  const nat = f.nationality.trim().toLowerCase();
+  return scouts.filter((s) => {
+    const wagePerWeekPounds = Math.round(s.salary / 100);
+    if (f.wageMin !== '' && wagePerWeekPounds < Number(f.wageMin)) return false;
+    if (f.wageMax !== '' && wagePerWeekPounds > Number(f.wageMax)) return false;
+    if (f.successRateMin !== '' && s.successRate < Number(f.successRateMin)) return false;
+    if (f.successRateMax !== '' && s.successRate > Number(f.successRateMax)) return false;
+    if (f.ranges.length > 0 && !f.ranges.includes(s.scoutingRange)) return false;
+    if (nat !== '' && !s.nationality.toLowerCase().includes(nat)) return false;
+    return true;
+  });
+}
+
+function ScoutFilterSheet({
+  visible,
+  filters,
+  onApply,
+  onClose,
+}: {
+  visible: boolean;
+  filters: ScoutFilters;
+  onApply: (f: ScoutFilters) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<ScoutFilters>(filters);
+
+  const handleOpen = useCallback(() => setDraft(filters), [filters]);
+
+  function toggleRange(range: MarketScout['scoutingRange']) {
+    setDraft((prev) => ({
+      ...prev,
+      ranges: prev.ranges.includes(range)
+        ? prev.ranges.filter((r) => r !== range)
+        : [...prev.ranges, range],
+    }));
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onShow={handleOpen}
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}
+        onPress={onClose}
+      >
+        <Pressable onPress={() => {}}>
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderTopWidth: 3,
+            borderLeftWidth: 3,
+            borderRightWidth: 3,
+            borderColor: WK.border,
+            padding: 16,
+            paddingBottom: 32,
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <PixelText size={9} upper>Filter Scouts</PixelText>
+              <TouchableOpacity onPress={onClose}>
+                <PixelText size={7} color={WK.tealLight}>✕</PixelText>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Wage range */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8 }}>WEEKLY WAGE (£)</PixelText>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MIN" value={draft.wageMin} onChangeText={(v) => setDraft({ ...draft, wageMin: v })} placeholder="0" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MAX" value={draft.wageMax} onChangeText={(v) => setDraft({ ...draft, wageMax: v })} placeholder="Any" />
+                </View>
+              </View>
+
+              {/* Scouting range pills */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8, marginTop: 4 }}>SCOUTING RANGE</PixelText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+                {ALL_SCOUTING_RANGES.map((range) => (
+                  <FilterPill
+                    key={range}
+                    label={range.toUpperCase()}
+                    active={draft.ranges.includes(range)}
+                    onPress={() => toggleRange(range)}
+                  />
+                ))}
+              </View>
+
+              {/* Nationality */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8, marginTop: 4 }}>NATIONALITY</PixelText>
+              <FilterInput
+                label=""
+                value={draft.nationality}
+                onChangeText={(v) => setDraft({ ...draft, nationality: v })}
+                placeholder="e.g. English"
+                keyboardType="default"
+              />
+
+              {/* Success rate range */}
+              <PixelText size={7} color={WK.yellow} style={{ marginBottom: 8, marginTop: 4 }}>SUCCESS RATE (%)</PixelText>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MIN" value={draft.successRateMin} onChangeText={(v) => setDraft({ ...draft, successRateMin: v })} placeholder="0" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <FilterInput label="MAX" value={draft.successRateMax} onChangeText={(v) => setDraft({ ...draft, successRateMax: v })} placeholder="100" />
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Actions */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="RESET"
+                  variant="orange"
+                  fullWidth
+                  onPress={() => { setDraft(DEFAULT_SCOUT_FILTERS); onApply(DEFAULT_SCOUT_FILTERS); }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="APPLY"
+                  variant="teal"
+                  fullWidth
+                  onPress={() => { onApply(draft); onClose(); }}
+                />
+              </View>
+            </View>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ─── Empty / loading state ────────────────────────────────────────────────────
 
 function EmptyPane({ label, isLoading }: { label: string; isLoading: boolean }) {
@@ -283,41 +686,115 @@ function EmptyPane({ label, isLoading }: { label: string; isLoading: boolean }) 
 
 function CoachesPane({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
   const { coaches, isLoading } = useMarketStore();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<CoachFilters>(DEFAULT_COACH_FILTERS);
 
-  if (coaches.length === 0) {
-    return <EmptyPane label="NO COACHES AVAILABLE" isLoading={isLoading} />;
-  }
+  const filtered = useMemo(() => applyCoachFilters(coaches, filters), [coaches, filters]);
+  const isActive = coachFiltersActive(filters);
 
   return (
-    <FlatList
-      data={coaches}
-      keyExtractor={(c) => c.id}
-      renderItem={({ item }) => <MarketCoachCard coach={item} />}
-      contentContainerStyle={{ padding: 10 }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={WK.yellow} />
-      }
-    />
+    <View style={{ flex: 1 }}>
+      {/* Filter toolbar */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+      }}>
+        {isActive && (
+          <PixelText size={6} color={WK.yellow} style={{ marginRight: 8 }}>
+            {filtered.length}/{coaches.length}
+          </PixelText>
+        )}
+        <TouchableOpacity
+          onPress={() => setFilterOpen(true)}
+          style={{ padding: 6 }}
+        >
+          <SlidersHorizontal size={16} color={isActive ? WK.yellow : WK.tealLight} strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+
+      {filtered.length === 0 ? (
+        <EmptyPane label={isActive ? 'NO MATCHES' : 'NO COACHES AVAILABLE'} isLoading={isLoading} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(c) => c.id}
+          renderItem={({ item }) => <MarketCoachCard coach={item} />}
+          contentContainerStyle={{ padding: 10 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={WK.yellow} />
+          }
+        />
+      )}
+
+      <CoachFilterSheet
+        visible={filterOpen}
+        filters={filters}
+        onApply={setFilters}
+        onClose={() => setFilterOpen(false)}
+      />
+    </View>
   );
 }
 
 function ScoutsPane({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
   const { marketScouts, isLoading } = useMarketStore();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<ScoutFilters>(DEFAULT_SCOUT_FILTERS);
 
-  if (marketScouts.length === 0) {
-    return <EmptyPane label="NO SCOUTS AVAILABLE" isLoading={isLoading} />;
-  }
+  const filtered = useMemo(() => applyScoutFilters(marketScouts, filters), [marketScouts, filters]);
+  const isActive = scoutFiltersActive(filters);
 
   return (
-    <FlatList
-      data={marketScouts}
-      keyExtractor={(s) => s.id}
-      renderItem={({ item }) => <MarketScoutCard scout={item} />}
-      contentContainerStyle={{ padding: 10 }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={WK.yellow} />
-      }
-    />
+    <View style={{ flex: 1 }}>
+      {/* Filter toolbar */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+      }}>
+        {isActive && (
+          <PixelText size={6} color={WK.yellow} style={{ marginRight: 8 }}>
+            {filtered.length}/{marketScouts.length}
+          </PixelText>
+        )}
+        <TouchableOpacity
+          onPress={() => setFilterOpen(true)}
+          style={{ padding: 6 }}
+        >
+          <SlidersHorizontal size={16} color={isActive ? WK.yellow : WK.tealLight} strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+
+      {filtered.length === 0 ? (
+        <EmptyPane label={isActive ? 'NO MATCHES' : 'NO SCOUTS AVAILABLE'} isLoading={isLoading} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(s) => s.id}
+          renderItem={({ item }) => <MarketScoutCard scout={item} />}
+          contentContainerStyle={{ padding: 10 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={WK.yellow} />
+          }
+        />
+      )}
+
+      <ScoutFilterSheet
+        visible={filterOpen}
+        filters={filters}
+        onApply={setFilters}
+        onClose={() => setFilterOpen(false)}
+      />
+    </View>
   );
 }
 

@@ -713,7 +713,10 @@ export function processWeeklyTick(): WeeklyTick {
   // ── 8a. Agent offers: expire stale, generate new ──────────────────────────────
   expireOldOffers(weekNumber);
   const { agents: allAgents } = useMarketStore.getState();
-  const agentOffer = generateAgentOffer(weekNumber, players, allAgents, academy.reputation);
+  const agentOffer = generateAgentOffer(
+    weekNumber, players, allAgents, academy.reputation,
+    useGameConfigStore.getState().config.playerFeeMultiplier,
+  );
   if (agentOffer) {
     // Agents don't pursue injured players — they wait for full recovery
     const offerTarget = useSquadStore.getState().players.find((p) => p.id === agentOffer.playerId);

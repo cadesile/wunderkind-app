@@ -220,7 +220,7 @@ export default function PlayerDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['top', 'bottom']}>
       <PitchBackground />
 
       {/* ── Screen header ───────────────────────────────────────────────────── */}

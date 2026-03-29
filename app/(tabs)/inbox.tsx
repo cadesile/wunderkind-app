@@ -1259,7 +1259,7 @@ export default function InboxScreen() {
     ? (narrativeMessages.find((m) => m.id === selectedNarrative.id) ?? null)
     : null;
 
-  const totalUnread = inboxUnread + narrativeUnread;
+  const totalUnread = inboxUnread + narrativeUnread + pendingOffers.length;
   const headerLabel = totalUnread > 0 ? `INBOX (${totalUnread})` : 'INBOX';
 
   // Priority order: pending agent offers → actionable narrative → narrative → inbox
