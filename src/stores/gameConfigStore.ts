@@ -27,6 +27,19 @@ export const useGameConfigStore = create<GameConfigState>()(
         return Date.now() - new Date(lastFetchedAt).getTime() > REFETCH_INTERVAL_MS;
       },
     }),
-    { name: 'game-config-store', storage: zustandStorage },
+    {
+      name: 'game-config-store',
+      storage: zustandStorage,
+      // Deep-merge persisted config with DEFAULT_GAME_CONFIG so that new fields
+      // added to the default are always present even in old persisted sessions.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<GameConfigState>),
+        config: {
+          ...DEFAULT_GAME_CONFIG,
+          ...((persisted as Partial<GameConfigState>)?.config ?? {}),
+        },
+      }),
+    },
   ),
 );

@@ -120,7 +120,7 @@ export function processMissions(): void {
     tickMission(scout.id);
 
     // 2. Roll for player count using config-driven thresholds
-    const [t0, t1, t2, t3] = useGameConfigStore.getState().config.missionGemRollThresholds;
+    const [t0, t1, t2, t3] = useGameConfigStore.getState().config.missionGemRollThresholds ?? [0.25, 0.75, 0.85, 0.94];
     const roll = Math.random();
     const count =
       roll >= t3 ? 4 :
