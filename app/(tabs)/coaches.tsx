@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, FlatList, Modal, Pressable } from 'react-native';
+import { FAB_CLEARANCE } from './_layout';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -110,7 +111,7 @@ function ProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => voi
 
 export default function CoachesScreen() {
   const { coaches, removeCoach } = useCoachStore();
-  const { academy, addEarnings } = useAcademyStore();
+  const { academy, addBalance } = useAcademyStore();
   const { coaches: marketCoaches, hireCoach } = useMarketStore();
   const [showModal, setShowModal] = useState(false);
 
@@ -129,13 +130,14 @@ export default function CoachesScreen() {
   }
 
   function signCoach(coach: MarketCoach) {
-    const signingFee = coach.salary * 4; // 4 weeks upfront, pence
-    if (academy.totalCareerEarnings < signingFee) {
-      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(signingFee / 100).toLocaleString()}`);
+    // salary is in pence; balance is in whole pounds — convert before comparing/deducting
+    const signingFeePounds = Math.round((coach.salary * 4) / 100);
+    if ((academy.balance ?? 0) < signingFeePounds) {
+      setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addEarnings(-signingFee);
+    addBalance(-signingFeePounds);
     hireCoach(coach.id, weekNumber);
   }
 
@@ -174,7 +176,7 @@ export default function CoachesScreen() {
         </Card>
         <Card style={{ flex: 1, alignItems: 'center' }}>
           <PixelText size={6} dim>WEEKLY COST</PixelText>
-          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{totalSalary.toLocaleString()}</PixelText>
+          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{Math.round(totalSalary / 100).toLocaleString()}</PixelText>
         </Card>
       </View>
 
@@ -194,7 +196,7 @@ export default function CoachesScreen() {
           data={coaches}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <CoachCard coach={item} onFire={() => fireCoach(item.id)} />}
-          contentContainerStyle={{ padding: 10 }}
+          contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
         />
       )}
 

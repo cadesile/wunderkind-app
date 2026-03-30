@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { View, Pressable, Modal } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, LayoutGrid, Building2, DollarSign, Store } from 'lucide-react-native';
+import { Home, LayoutGrid, Building2, DollarSign, Store, Globe } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
 import { syncQueue } from '@/api/syncQueue';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useSquadStore } from '@/stores/squadStore';
@@ -33,6 +35,7 @@ const NAV_TABS: NavTabDef[] = [
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
   { name: 'market',     Icon: Store },
+  { name: 'world',      Icon: Globe },
 ];
 
 function NavTabButton({ name, Icon, state, navigation }: NavTabDef & { state: BottomTabBarProps['state']; navigation: BottomTabBarProps['navigation'] }) {
@@ -69,10 +72,8 @@ function NavTabButton({ name, Icon, state, navigation }: NavTabDef & { state: Bo
   );
 }
 
-function CustomTabBar({ state, navigation, onNextWeek }: BottomTabBarProps & { onNextWeek: () => void }) {
+function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const LEFT_TABS  = NAV_TABS.slice(0, 2);  // HUB, BUILD
-  const RIGHT_TABS = NAV_TABS.slice(2);     // FINANCE, MARKET
 
   return (
     <View style={{
@@ -83,33 +84,47 @@ function CustomTabBar({ state, navigation, onNextWeek }: BottomTabBarProps & { o
       height: 60 + insets.bottom,
       paddingBottom: insets.bottom,
     }}>
-      {/* Left nav: HOME, HUB */}
-      {LEFT_TABS.map((tab) => (
+      {NAV_TABS.map((tab) => (
         <NavTabButton key={tab.name} {...tab} state={state} navigation={navigation} />
       ))}
+    </View>
+  );
+}
 
-      {/* Centre action: NEXT WK */}
+const TAB_BAR_HEIGHT = 60;
+
+/**
+ * How much bottom padding ScrollViews need to ensure their last item
+ * is never obscured by the floating AdvanceFAB.
+ * FAB height (56) + gap above tab bar (8) + breathing room (8) = 72
+ */
+export const FAB_CLEARANCE = 72;
+
+function AdvanceFAB({ onPress }: { onPress: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{ position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' }}
+    >
       <Pressable
-        onPress={() => { hapticPress(); onNextWeek(); }}
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: WK.yellow,
-          borderLeftWidth: 3,
-          borderRightWidth: 3,
-          borderLeftColor: WK.border,
-          borderRightColor: WK.border,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 0,
-        }}
+        onPress={() => { hapticPress(); onPress(); }}
+        style={[
+          {
+            marginBottom: TAB_BAR_HEIGHT + insets.bottom + 8,
+            width: 56,
+            height: 56,
+            backgroundColor: WK.yellow,
+            borderWidth: 3,
+            borderColor: WK.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          pixelShadow,
+        ]}
       >
         <PixelText size={12} color={WK.border}>{'>>'}</PixelText>
       </Pressable>
-
-      {/* Right nav: BUILD, FINANCE, MARKET */}
-      {RIGHT_TABS.map((tab) => (
-        <NavTabButton key={tab.name} {...tab} state={state} navigation={navigation} />
-      ))}
     </View>
   );
 }
@@ -192,6 +207,11 @@ export default function TabLayout() {
         transfers:           weekTransfers,
         ledger:              weekLedger,
       });
+
+      // Background game-config refresh — every 4 game weeks, fire-and-forget
+      if (useGameConfigStore.getState().shouldRefetch(result.week)) {
+        void fetchAndCacheGameConfig(result.week);
+      }
     } finally {
       endTick();
     }
@@ -284,7 +304,7 @@ export default function TabLayout() {
       <GlobalHeader />
 
       <Tabs
-        tabBar={(props) => <CustomTabBar {...props} onNextWeek={handleAdvanceButton} />}
+        tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{ headerShown: false }}
       >
         {/* Primary tabs */}
@@ -293,6 +313,7 @@ export default function TabLayout() {
         <Tabs.Screen name="facilities" options={{ title: 'BUILD' }} />
         <Tabs.Screen name="finances"   options={{ title: 'FINANCE' }} />
         <Tabs.Screen name="market"     options={{ title: 'MARKET' }} />
+        <Tabs.Screen name="world"      options={{ title: 'WORLD' }} />
 
         {/* Hidden routes — no tab button, deep-link suppressed */}
         <Tabs.Screen name="advance" options={{ href: null }} />
@@ -300,6 +321,8 @@ export default function TabLayout() {
         <Tabs.Screen name="coaches" options={{ href: null }} />
         <Tabs.Screen name="inbox"   options={{ href: null }} />
       </Tabs>
+
+      <AdvanceFAB onPress={handleAdvanceButton} />
 
       {/* Weekly tick processing overlay */}
       <WeeklyTickOverlay />

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, FlatList, Modal, Pressable, TextInput } from 'react-native';
+import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useAcademyStore } from '@/stores/academyStore';
@@ -86,7 +87,7 @@ function BalancePane() {
   const netColor = displayNet >= 0 ? WK.green : WK.red;
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: FAB_CLEARANCE }}>
       {/* Current balance hero */}
       <View style={{
         backgroundColor: WK.tealCard,
@@ -216,7 +217,7 @@ function InvestorsPane() {
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: FAB_CLEARANCE }}>
       {assignedInvestor ? (
         <>
           <View style={{
@@ -354,7 +355,7 @@ function SponsorsPane() {
   const totalWeeklyIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: FAB_CLEARANCE }}>
       {/* Summary card */}
       <Card>
         <FinanceRow
@@ -493,7 +494,7 @@ function LoansPane() {
           data={loans}
           keyExtractor={(l) => l.id}
           renderItem={({ item }) => <LoanCard loan={item} />}
-          contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}
+          contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: FAB_CLEARANCE }}
         />
       )}
 
@@ -779,7 +780,7 @@ function LedgerPane() {
           data={filtered}
           keyExtractor={(tx) => tx.id}
           renderItem={renderTx}
-          contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}
+          contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: FAB_CLEARANCE }}
         />
       )}
     </View>

@@ -10,7 +10,7 @@ import { register, login } from '@/api/endpoints/auth';
 import { checkAcademy } from '@/api/endpoints/academy';
 import { fetchStarterConfig } from '@/api/endpoints/starterConfig';
 import { ApiError, ApiPlayerDetail, ApiStaffCoach, ApiStaffScout } from '@/types/api';
-import { marketApi } from '@/api/endpoints/market';
+import { marketApi, assignMarketEntity } from '@/api/endpoints/market';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
 import { getSquad } from '@/api/endpoints/squad';
 import { getStaff } from '@/api/endpoints/staff';
@@ -417,7 +417,7 @@ export function useAuthFlow(): AuthFlowResult {
       console.warn(`[useAuthFlow] Backend registration unavailable${status} — continuing offline`);
     }
 
-    // 2. Fetch market data — populates rich player pool (attributes, dateOfBirth, etc.)
+    // 2. Fetch market data — primary pool source.
     let marketData: MarketData = { players: [], coaches: [], scouts: [], agents: [], investors: [], sponsors: [] };
     try {
       const fetched = await marketApi.getMarketData(country, starterConfig.starterAcademyTier);
@@ -427,12 +427,18 @@ export function useAuthFlow(): AuthFlowResult {
       console.warn('[useAuthFlow] Market data fetch failed — continuing offline:', err);
     }
 
-    // 2b. Ensure the pool has enough home-nationality players before init.
-    // Idempotent — no-ops if pool is already full; safe to ignore failures.
-    try {
-      await marketApi.ensurePool(country, 10);
-    } catch (err) {
-      console.warn('[useAuthFlow] Pool ensure failed — continuing:', err);
+    // 2b. ensurePool is an edge-case fallback — only called when the pool is empty.
+    // If the primary fetch returned players, skip this entirely.
+    if (marketData.players.length === 0) {
+      console.warn('[useAuthFlow] Pool empty — calling ensurePool as fallback');
+      try {
+        await marketApi.ensurePool(country, 10);
+        const fetched = await marketApi.getMarketData(country, starterConfig.starterAcademyTier);
+        marketData = fetched;
+        setMarketData(fetched);
+      } catch (err) {
+        console.warn('[useAuthFlow] ensurePool fallback failed — continuing offline:', err);
+      }
     }
 
     // 3. Register academy server-side — backend assigns players/staff from pool
@@ -464,86 +470,80 @@ export function useAuthFlow(): AuthFlowResult {
     setReputation(tierBaseline);
     initAllLevels();
 
-    // 5 & 6. Fetch the backend-assigned squad and staff, cross-referencing with market
-    // data for full attribute/specialisms data.
-    //
-    // Three-tier fallback:
-    //   Tier 1 — backend getSquad()/getStaff() with market pool cross-reference
-    //   Tier 2 — pick directly from marketData pool (backend assigned but squad endpoint empty)
+    // 5. Select starter entities from market data according to starter-config counts.
+    //    Players: prefer home nationality; fall back to full pool if not enough.
+    //    Coaches and scouts: no nationality restriction at starter tier.
     const weekNumber = 1;
     const gameDate = getGameDate(weekNumber);
     const homeNationality = ACADEMY_CODE_TO_NATIONALITY[country];
+
+    const homePlayerPool = marketData.players.filter((p) => p.nationality === homeNationality);
+    const playerPool = homePlayerPool.length >= STARTER_PLAYER_COUNT ? homePlayerPool : marketData.players;
+    const selectedPlayers = [...playerPool].sort(() => Math.random() - 0.5).slice(0, STARTER_PLAYER_COUNT);
+    const selectedCoaches = [...marketData.coaches].sort(() => Math.random() - 0.5).slice(0, STARTER_COACH_COUNT);
+    const selectedScouts  = [...marketData.scouts].sort(() => Math.random() - 0.5).slice(0, STARTER_SCOUT_COUNT);
+
+    // 6. Assign selected entities to the academy via /api/market/assign.
+    //    Fire all assignments in parallel; log individual failures without aborting.
+    await Promise.all([
+      ...selectedPlayers.map((p) =>
+        assignMarketEntity({ entityType: 'player', entityId: p.id })
+          .catch((err) => console.warn(`[useAuthFlow] Failed to assign player ${p.id}:`, err)),
+      ),
+      ...selectedCoaches.map((c) =>
+        assignMarketEntity({ entityType: 'coach', entityId: c.id })
+          .catch((err) => console.warn(`[useAuthFlow] Failed to assign coach ${c.id}:`, err)),
+      ),
+      ...selectedScouts.map((s) =>
+        assignMarketEntity({ entityType: 'scout', entityId: s.id })
+          .catch((err) => console.warn(`[useAuthFlow] Failed to assign scout ${s.id}:`, err)),
+      ),
+    ]);
+
+    // 7. Confirm assignments via /api/squad and /api/staff.
+    //    Filter strictly to the IDs we selected — the backend's initializeAcademy may
+    //    also auto-assign entities server-side, which would otherwise inflate the squad.
+    //    All selected entities are in marketData (fetched before assignment), so every
+    //    cross-reference is guaranteed to succeed via marketPlayerToPlayer (full data).
+    //    Fall back to building directly from selected market entities if endpoints fail.
+    const selectedPlayerIds = new Set(selectedPlayers.map((p) => p.id));
+    const selectedCoachIds  = new Set(selectedCoaches.map((c) => c.id));
+    const selectedScoutIds  = new Set(selectedScouts.map((s) => s.id));
 
     let players: Player[] = [];
     let assignedCoaches: Coach[] = [];
     let assignedScouts: Scout[] = [];
 
-    // Tier 1: fetch backend-assigned squad/staff
     try {
-      const [squadResp, staffResp] = await Promise.all([getSquad(academyTier), getStaff(academyTier)]);
+      const [squadResp, staffResp] = await Promise.all([getSquad(), getStaff()]);
 
-      const allSquadPlayers = squadResp.players.map((apiPlayer) => {
-        const mp = marketData.players.find((p) => p.id === apiPlayer.id);
-        return mp
-          ? marketPlayerToPlayer(mp, weekNumber, gameDate)
-          : apiPlayerToPlayer(apiPlayer, weekNumber);
-      });
-      // Safety net: starting academy is always Local tier, so enforce home nationality.
-      // Guards against the backend migration not yet being applied.
-      players = allSquadPlayers.filter((p) => p.nationality === homeNationality);
+      players = squadResp.players
+        .filter((ap) => selectedPlayerIds.has(ap.id))
+        .map((ap) => {
+          const mp = marketData.players.find((p) => p.id === ap.id);
+          return mp ? marketPlayerToPlayer(mp, weekNumber, gameDate) : apiPlayerToPlayer(ap, weekNumber);
+        });
 
-      assignedCoaches = staffResp.coaches.map((c) => {
-        const mc = marketData.coaches.find((m) => m.id === c.id);
-        return mc ? marketCoachToCoach(mc, weekNumber) : apiStaffToCoach(c, weekNumber);
-      });
+      assignedCoaches = staffResp.coaches
+        .filter((c) => selectedCoachIds.has(c.id))
+        .map((c) => {
+          const mc = marketData.coaches.find((m) => m.id === c.id);
+          return mc ? marketCoachToCoach(mc, weekNumber) : apiStaffToCoach(c, weekNumber);
+        });
 
-      assignedScouts = staffResp.scouts.map((s) => {
-        const ms = marketData.scouts.find((m) => m.id === s.id);
-        return ms ? marketScoutToScout(ms, weekNumber, gameDate) : apiStaffToScout(s, weekNumber);
-      });
+      assignedScouts = staffResp.scouts
+        .filter((s) => selectedScoutIds.has(s.id))
+        .map((s) => {
+          const ms = marketData.scouts.find((m) => m.id === s.id);
+          return ms ? marketScoutToScout(ms, weekNumber, gameDate) : apiStaffToScout(s, weekNumber);
+        });
 
-      console.log(`[useAuthFlow] Tier 1: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s from backend`);
+      console.log(`[useAuthFlow] Confirmed: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s`);
     } catch (err) {
-      console.warn('[useAuthFlow] Squad/staff fetch failed:', err);
-    }
-
-    // Tier 2: backend returned empty — pull directly from market pool (home nationality only)
-    if (players.length === 0 && marketData.players.length > 0) {
-      console.warn('[useAuthFlow] Tier 2: backend squad empty — picking from market pool');
-      const homePool = marketData.players.filter((p) => p.nationality === homeNationality);
-      const pool = homePool.length >= STARTER_PLAYER_COUNT ? homePool : marketData.players;
-      const shuffled = [...pool].sort(() => Math.random() - 0.5);
-      players = shuffled
-        .slice(0, STARTER_PLAYER_COUNT)
-        .map((mp) => marketPlayerToPlayer(mp, weekNumber, gameDate));
-    }
-    if (assignedCoaches.length < STARTER_COACH_COUNT && marketData.coaches.length > 0) {
-      const needed = STARTER_COACH_COUNT - assignedCoaches.length;
-      const shuffled = [...marketData.coaches].sort(() => Math.random() - 0.5);
-      assignedCoaches = [
-        ...assignedCoaches,
-        ...shuffled.slice(0, needed).map((c) => marketCoachToCoach(c, weekNumber)),
-      ];
-    }
-    if (assignedScouts.length < STARTER_SCOUT_COUNT && marketData.scouts.length > 0) {
-      const needed = STARTER_SCOUT_COUNT - assignedScouts.length;
-      const shuffled = [...marketData.scouts].sort(() => Math.random() - 0.5);
-      assignedScouts = [
-        ...assignedScouts,
-        ...shuffled.slice(0, needed).map((s) => marketScoutToScout(s, weekNumber, gameDate)),
-      ];
-    }
-
-    // No local player generation fallback — players must come from the backend.
-    // If both Tier 1 and Tier 2 fail (no backend, empty pool), the squad starts empty.
-    if (players.length === 0) {
-      console.warn('[useAuthFlow] No players available from backend or pool — squad will be empty.');
-    }
-    if (assignedCoaches.length === 0) {
-      console.warn('[useAuthFlow] No coaches assigned from backend — academy will start with no coaches.');
-    }
-    if (assignedScouts.length === 0) {
-      console.warn('[useAuthFlow] No scouts assigned from backend — academy will start with no scouts.');
+      console.warn('[useAuthFlow] Squad/staff confirmation failed — using market selection:', err);
+      players         = selectedPlayers.map((mp) => marketPlayerToPlayer(mp, weekNumber, gameDate));
+      assignedCoaches = selectedCoaches.map((mc) => marketCoachToCoach(mc, weekNumber));
+      assignedScouts  = selectedScouts.map((ms) => marketScoutToScout(ms, weekNumber, gameDate));
     }
 
     setPlayers(players);

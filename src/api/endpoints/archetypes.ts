@@ -17,29 +17,12 @@ function resolveBaseUrl(): string {
 
 const BASE_URL = resolveBaseUrl();
 
-/**
- * Check the server's current archetype version hash via HEAD request.
- * Returns the hash string, or null if the request fails or header is absent.
- */
-export async function fetchArchetypeVersionHash(): Promise<string | null> {
-  try {
-    const token = useAuthStore.getState().token;
-    const res = await fetch(`${BASE_URL}/api/archetypes`, {
-      method: 'HEAD',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) return null;
-    return res.headers.get('X-Version-Hash') ?? res.headers.get('ETag') ?? null;
-  } catch {
-    return null;
-  }
+interface ArchetypesResponse {
+  archetypes: PlayerArchetype[];
+  versionHash: string;
 }
 
-/**
- * Fetch the full archetype list from the server.
- * Returns null if the request fails.
- */
-export async function fetchArchetypes(): Promise<PlayerArchetype[] | null> {
+async function getArchetypesResponse(): Promise<ArchetypesResponse | null> {
   try {
     const token = useAuthStore.getState().token;
     const res = await fetch(`${BASE_URL}/api/archetypes`, {
@@ -50,9 +33,26 @@ export async function fetchArchetypes(): Promise<PlayerArchetype[] | null> {
       },
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    return data as PlayerArchetype[];
+    return await res.json() as ArchetypesResponse;
   } catch {
     return null;
   }
+}
+
+/**
+ * Check the server's current archetype version hash.
+ * Returns the hash string, or null if the request fails.
+ */
+export async function fetchArchetypeVersionHash(): Promise<string | null> {
+  const data = await getArchetypesResponse();
+  return data?.versionHash ?? null;
+}
+
+/**
+ * Fetch the full archetype list from the server.
+ * Returns null if the request fails.
+ */
+export async function fetchArchetypes(): Promise<PlayerArchetype[] | null> {
+  const data = await getArchetypesResponse();
+  return data?.archetypes ?? null;
 }

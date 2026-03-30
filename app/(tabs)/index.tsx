@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { View, FlatList, ScrollView, Modal, Pressable, TextInput } from 'react-native';
+import { FAB_CLEARANCE } from './_layout';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -428,7 +429,7 @@ function SquadPane() {
         })}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}>
         <SortableTable
           columns={PLAYER_COLS}
           data={players}
@@ -562,7 +563,7 @@ function CoachesPane() {
         <Button label="◈ RECRUIT COACHES" variant="green" fullWidth onPress={openScout} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: FAB_CLEARANCE }}>
         <SortableTable
           columns={COACH_COLS}
           data={coaches}
@@ -770,7 +771,7 @@ function ScoutsPane() {
         <Button label="◈ RECRUIT SCOUTS" variant="green" fullWidth onPress={openRecruit} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: FAB_CLEARANCE }}>
         <SortableTable
           columns={SCOUT_COLS}
           data={scouts}
@@ -848,16 +849,7 @@ function ScoutsPane() {
 
 function handleGroupSession(targetType: 'squad' | 'staff'): void {
   const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
-  const groupSessionLog = useInteractionStore.getState().groupSessionLog;
-
-  const recentUses = groupSessionLog.filter(
-    (e) => e.targetType === targetType && e.week >= weekNumber - 4,
-  ).length;
-
-  const moraleDelta =
-    recentUses <= 1 ? 8 :
-    recentUses === 2 ? 4 :
-    recentUses === 3 ? 1 : -3;
+  const moraleDelta = 8;
 
   if (targetType === 'squad') {
     useSquadStore.getState().players
@@ -866,6 +858,8 @@ function handleGroupSession(targetType: 'squad' | 'staff'): void {
   } else {
     useCoachStore.getState().coaches
       .forEach((c) => useCoachStore.getState().updateMorale(c.id, moraleDelta));
+    useScoutStore.getState().scouts
+      .forEach((s) => useScoutStore.getState().updateMorale(s.id, moraleDelta));
   }
 
   useInteractionStore.getState().logInteraction({
@@ -882,29 +876,11 @@ function handleGroupSession(targetType: 'squad' | 'staff'): void {
     isVisibleToAmp: true,
     visibilityReason: 'direct_action',
     narrativeSummary: targetType === 'squad'
-      ? `You addressed the squad. (${moraleDelta > 0 ? '+' : ''}${moraleDelta} morale)`
-      : `You held a staff meeting. (${moraleDelta > 0 ? '+' : ''}${moraleDelta} morale)`,
+      ? `You addressed the squad. (+${moraleDelta} morale)`
+      : `You held a staff meeting. (+${moraleDelta} morale)`,
   });
 
   useInteractionStore.getState().logGroupSession({ week: weekNumber, targetType });
-
-  if (recentUses >= 3) {
-    useInteractionStore.getState().logInteraction({
-      week: weekNumber,
-      actorType: 'system',
-      actorId: 'system',
-      targetType: targetType === 'squad' ? 'squad' : 'staff',
-      targetId: targetType === 'squad' ? 'squad_wide' : 'staff_wide',
-      category: 'SYSTEM',
-      subtype: 'group_session_fatigue',
-      relationshipDelta: 0,
-      traitDeltas: {},
-      moraleDelta: 0,
-      isVisibleToAmp: true,
-      visibilityReason: 'direct_action',
-      narrativeSummary: 'Your group sessions are losing effect. The squad has heard it before.',
-    });
-  }
 }
 
 function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) => void }) {
@@ -914,6 +890,7 @@ function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) =
   const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const groupSessionLog = useInteractionStore((s) => s.groupSessionLog);
+  const [pendingSession, setPendingSession] = useState<'squad' | 'staff' | null>(null);
 
   const detectedCliques = cliques.filter((c) => c.isDetected);
   const cliquedIds = new Set(detectedCliques.flatMap((c) => c.memberIds));
@@ -925,18 +902,11 @@ function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) =
     ).length;
   }
 
-  function fatigueColor(uses: number): string {
-    if (uses <= 1) return WK.green;
-    if (uses === 2) return WK.yellow;
-    if (uses === 3) return WK.orange;
-    return WK.red;
-  }
-
   const squadUses = getUseCount('squad');
   const staffUses = getUseCount('staff');
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 12 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: FAB_CLEARANCE }}>
 
       {/* Atmosphere card */}
       <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
@@ -1019,18 +989,49 @@ function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) =
       <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
         <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 12 }}>GROUP SESSIONS</PixelText>
 
-        <Button label="ADDRESS THE SQUAD" variant="yellow" fullWidth onPress={() => handleGroupSession('squad')} />
-        <View style={{ marginTop: 4, marginBottom: 12, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-          <BodyText size={11} color={fatigueColor(squadUses)}>{squadUses} uses in last 4 weeks</BodyText>
-          {squadUses >= 4 && <BodyText size={11} color={WK.red}>— LOSING EFFECT</BodyText>}
+        <Button
+          label="ADDRESS THE SQUAD"
+          variant="yellow"
+          fullWidth
+          disabled={squadUses >= 1}
+          onPress={() => setPendingSession('squad')}
+        />
+        <View style={{ marginTop: 4, marginBottom: 12 }}>
+          <BodyText size={11} color={squadUses >= 1 ? WK.red : WK.green}>
+            {squadUses >= 1 ? 'Used this month — available next month' : 'Available'}
+          </BodyText>
         </View>
 
-        <Button label="STAFF MEETING" variant="teal" fullWidth onPress={() => handleGroupSession('staff')} />
-        <View style={{ marginTop: 4, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-          <BodyText size={11} color={fatigueColor(staffUses)}>{staffUses} uses in last 4 weeks</BodyText>
-          {staffUses >= 4 && <BodyText size={11} color={WK.red}>— LOSING EFFECT</BodyText>}
+        <Button
+          label="STAFF MEETING"
+          variant="teal"
+          fullWidth
+          disabled={staffUses >= 1}
+          onPress={() => setPendingSession('staff')}
+        />
+        <View style={{ marginTop: 4 }}>
+          <BodyText size={11} color={staffUses >= 1 ? WK.red : WK.green}>
+            {staffUses >= 1 ? 'Used this month — available next month' : 'Available'}
+          </BodyText>
         </View>
       </View>
+
+      <PixelDialog
+        visible={pendingSession !== null}
+        title={pendingSession === 'squad' ? 'ADDRESS THE SQUAD' : 'STAFF MEETING'}
+        message={
+          pendingSession === 'squad'
+            ? 'Gather the squad and deliver a motivational address. All active players will receive a +8 morale boost.'
+            : 'Hold a full staff meeting with coaches and scouts. All staff will receive a +8 morale boost.'
+        }
+        confirmLabel="CONFIRM"
+        cancelLabel="CANCEL"
+        onClose={() => setPendingSession(null)}
+        onConfirm={() => {
+          if (pendingSession) handleGroupSession(pendingSession);
+          setPendingSession(null);
+        }}
+      />
 
     </ScrollView>
   );

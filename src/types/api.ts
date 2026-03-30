@@ -291,10 +291,37 @@ export type LeaderboardCategory =
   | 'academy_reputation'
   | 'hall_of_fame';
 
+/**
+ * Scope of the leaderboard query.
+ * 'global' — all academies (current default).
+ * Extensible: 'friends' | 'season' | 'league' for future social features.
+ */
+export type LeaderboardScope = 'global';
+
+export interface LeaderboardParams {
+  page?: number;       // 1-indexed, defaults to 1
+  pageSize?: number;   // defaults to 20
+  scope?: LeaderboardScope;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   academyName: string;
-  score: number;
+  /** Absolute reputation value (0–100) — primary sort key */
+  reputation: number;
+  /** Cumulative career earnings in pence — secondary sort key */
+  totalCareerEarnings: number;
+  /** Academy's current week number — tertiary tiebreaker (ascending: fewer weeks = faster progression) */
+  weekNumber: number;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  /** Total number of academies matching the query (for client-side page calculation) */
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
 }
 
 // ─── Errors ──────────────────────────────────────────────────────────────────

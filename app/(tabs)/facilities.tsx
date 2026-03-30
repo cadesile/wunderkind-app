@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, Modal, Pressable } from 'react-native';
+import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
@@ -328,7 +329,7 @@ export default function FacilitiesScreen() {
         <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: 16 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
         {visibleDefs.map((def) => (
           <FacilityCard
             key={def.type}

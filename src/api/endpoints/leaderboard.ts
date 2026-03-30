@@ -1,11 +1,23 @@
 import { apiRequest } from '@/api/client';
-import { LeaderboardCategory, LeaderboardEntry } from '@/types/api';
+import {
+  LeaderboardCategory,
+  LeaderboardParams,
+  LeaderboardResponse,
+} from '@/types/api';
 
 export function getLeaderboard(
   category: LeaderboardCategory,
-  period: string = 'all-time',
-): Promise<LeaderboardEntry[]> {
-  return apiRequest<LeaderboardEntry[]>(
-    `/api/leaderboard/${category}?period=${encodeURIComponent(period)}`,
+  params: LeaderboardParams = {},
+): Promise<LeaderboardResponse> {
+  const { page = 1, pageSize = 20, scope = 'global' } = params;
+
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    scope,
+  });
+
+  return apiRequest<LeaderboardResponse>(
+    `/api/leaderboard/${category}?${query.toString()}`,
   );
 }

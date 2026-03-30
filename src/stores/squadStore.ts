@@ -65,7 +65,10 @@ export const useSquadStore = create<SquadState>()(
     (set, get) => ({
       players: [],
       addPlayer: (player) =>
-        set((state) => ({ players: [...state.players, player] })),
+        set((state) => {
+          if (state.players.some((p) => p.id === player.id)) return state;
+          return { players: [...state.players, player] };
+        }),
       removePlayer: (id) =>
         set((state) => ({ players: state.players.filter((p) => p.id !== id) })),
       setPlayers: (players) => set({ players }),

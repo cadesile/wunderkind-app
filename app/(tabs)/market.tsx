@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { View, FlatList, RefreshControl, Modal, TouchableOpacity, TextInput, ScrollView, Pressable } from 'react-native';
+import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SlidersHorizontal } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
@@ -57,8 +58,9 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
   const [hireError, setHireError] = useState<string | null>(null);
   const [showTierPopup, setShowTierPopup] = useState(false);
 
-  const signingCost = coach.salary * 4; // 4 weeks upfront, pence
-  const canAfford = balance >= signingCost;
+  // salary is in pence; balance is in whole pounds — convert before comparing
+  const signingCostPounds = Math.round((coach.salary * 4) / 100);
+  const canAfford = balance >= signingCostPounds;
 
   // Tier restriction: coach tier must not exceed current academy tier
   const academyTierKey = (reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
@@ -76,6 +78,7 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
       await marketApi.assignEntity('coach', coach.id);
       const personality = generatePersonality();
       const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
+      useAcademyStore.getState().addBalance(-signingCostPounds);
       addCoach({
         id: coach.id,
         name: `${coach.firstName} ${coach.lastName}`,
@@ -228,8 +231,9 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
   const [hireError, setHireError] = useState<string | null>(null);
   const [showTierPopup, setShowTierPopup] = useState(false);
 
-  const signingCost = scout.salary * 4; // 4 weeks upfront, pence
-  const canAfford = balance >= signingCost;
+  // salary is in pence; balance is in whole pounds — convert before comparing
+  const signingCostPounds = Math.round((scout.salary * 4) / 100);
+  const canAfford = balance >= signingCostPounds;
 
   // Tier restriction: scout tier must not exceed current academy tier
   const academyTierKey = (reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
@@ -246,6 +250,7 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
     try {
       await marketApi.assignEntity('scout', scout.id);
       const { defaultMoraleMin: scoutMoraleMin, defaultMoraleMax: scoutMoraleMax } = useGameConfigStore.getState().config;
+      useAcademyStore.getState().addBalance(-signingCostPounds);
       addScout({
         id: scout.id,
         name: `${scout.firstName} ${scout.lastName}`,
@@ -830,7 +835,7 @@ function CoachesPane({ onRefresh, refreshing }: { onRefresh: () => void; refresh
           data={filtered}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <MarketCoachCard coach={item} />}
-          contentContainerStyle={{ padding: 10 }}
+          contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={WK.yellow} />
           }
@@ -887,7 +892,7 @@ function ScoutsPane({ onRefresh, refreshing }: { onRefresh: () => void; refreshi
           data={filtered}
           keyExtractor={(s) => s.id}
           renderItem={({ item }) => <MarketScoutCard scout={item} />}
-          contentContainerStyle={{ padding: 10 }}
+          contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={WK.yellow} />
           }

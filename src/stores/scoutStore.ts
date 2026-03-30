@@ -24,7 +24,10 @@ export const useScoutStore = create<ScoutState>()(
     (set, get) => ({
       scouts: [],
       addScout: (scout) =>
-        set((state) => ({ scouts: [...state.scouts, scout] })),
+        set((state) => {
+          if (state.scouts.some((s) => s.id === scout.id)) return state;
+          return { scouts: [...state.scouts, scout] };
+        }),
       removeScout: (id) =>
         set((state) => ({ scouts: state.scouts.filter((s) => s.id !== id) })),
       updateScout: (id, changes) =>

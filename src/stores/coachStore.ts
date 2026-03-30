@@ -17,7 +17,10 @@ export const useCoachStore = create<CoachState>()(
     (set) => ({
       coaches: [],
       addCoach: (coach) =>
-        set((state) => ({ coaches: [...state.coaches, coach] })),
+        set((state) => {
+          if (state.coaches.some((c) => c.id === coach.id)) return state;
+          return { coaches: [...state.coaches, coach] };
+        }),
       removeCoach: (id) =>
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== id) })),
       updateCoach: (id, changes) =>

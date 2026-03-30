@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, FlatList, Pressable, ScrollView } from 'react-native';
+import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Trash2, Users, ArrowLeftRight, Building, TrendingUp, Bell, BookOpen, Gem, Award } from 'lucide-react-native';
@@ -126,7 +127,7 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: FAB_CLEARANCE }}>
       <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 4, alignSelf: 'flex-start' }} />
 
       {/* ── Player mini-profile ─────────────────────────────────────────── */}
@@ -981,7 +982,7 @@ function InboxMessageDetail({
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
       <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12, alignSelf: 'flex-start' }} />
 
       <View style={{
@@ -1160,7 +1161,7 @@ function NarrativeMessageDetail({
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
       <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12, alignSelf: 'flex-start' }} />
 
       <View style={{
@@ -1402,7 +1403,7 @@ export default function InboxScreen() {
               />
             )
           }
-          contentContainerStyle={{ padding: 10 }}
+          contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
         />
       )}
     </SafeAreaView>

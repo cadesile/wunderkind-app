@@ -1,12 +1,12 @@
 # wunderkind-app — Project Context
 
-> Generated: 2026-03-29 18:54:27 | Stack: unknown | Dev: bare
+> Generated: 2026-03-30 22:18:25 | Stack: unknown | Dev: bare
 
 ---
 
 ## Overview
 
-The Wunderkind Factory is a React Native mobile game where players manage a football academy — recruiting players, hiring coaches and scouts, handling finances, and developing talent through an 8-trait Personality Matrix engine. The app runs a client-authoritative "Weekly Tick" game loop entirely on-device, persisting all state offline via Zustand and AsyncStorage, then asynchronously syncing key metrics to a Symfony backend API. Built with Expo SDK 54, Expo Router, TanStack Query v5, and NativeWind, it features a retro pixel-art design system and supports seamless play with or without a network connection.
+The Wunderkind Factory is a React Native mobile game where players manage a football academy, developing young players through an 8-trait Personality Matrix engine and navigating finances, recruitment, and weekly progression ticks. The app is client-authoritative and offline-first, processing all game logic (attribute shifts, financial deductions, behavioral incidents) entirely on-device via a centralized GameLoop engine with Zustand + AsyncStorage persistence. High-level metrics sync asynchronously to a Symfony backend via TanStack Query offline mutations, ensuring seamless play regardless of connectivity.
 
 ---
 
@@ -14,7 +14,7 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 
 | Category | Count |
 |---|---|
-| TypeScript files  | 175 |
+| TypeScript files  | 174 |
 | Entities/Models   | 0 |
 | Controllers       | 0 |
 | Services          | 0 |
@@ -83,7 +83,8 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 │   │   ├── inbox.tsx
 │   │   ├── index.tsx
 │   │   ├── market.tsx
-│   │   └── squad.tsx
+│   │   ├── squad.tsx
+│   │   └── world.tsx
 │   ├── coach
 │   │   └── [id].tsx
 │   ├── market
@@ -153,7 +154,6 @@ The Wunderkind Factory is a React Native mobile game where players manage a foot
 │   │   ├── MoraleEngine.ts
 │   │   ├── personality.ts
 │   │   ├── ReactionHandler.ts
-│   │   ├── recruitment.ts
 │   │   ├── RelationshipService.ts
 │   │   ├── ScoutingService.ts
 │   │   ├── SimulationService.ts
@@ -282,6 +282,11 @@ composer install
 ## Recent Git Activity
 
 ```
+622ede2 token refresh flow
+6772297 token refresh
+5f3158b fixed layout table issue
+87ab21b fresh commit
+d409fd7 UI/UX amends
 2615bfb latest
 23ee143 update assets
 700331b added version to header
@@ -292,29 +297,28 @@ c04aded updated deployment
 efaa536 latest code + expo deploy
 62453f8 added ui-ux-pro
 363de47 frontend latest
-3e6d0cd latest project
-d9f2b8a updated latest context
-175602e latest
-250f9e7 Fix currency formatting, scout gem source, and major feature additions
-6e67f74 update docs
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Store/Repository Pattern** — `src/stores/` acts as a client-side data layer (academyStore, squadStore, marketStore, etc.), encapsulating state mutations and persistence behind a consistent interface, mirroring a repository pattern for local data.
-- **Service Layer** — `src/api/endpoints/` and `src/api/mutations/` separate API communication concerns from UI; endpoints expose typed fetch functions while mutations wrap TanStack Query hooks, forming a two-tier service layer.
-- **Engine/Domain Layer** — `src/engine/` (GameLoop, CoachPerception, CoachValuation, agentOffers) houses pure business logic isolated from UI and persistence, analogous to a domain/application layer in DDD.
-- **DTO / Transform Layer** — `src/types/` defines app-side types that diverge from backend shapes; `src/api/endpoints/market.ts` explicitly transforms raw API responses into app DTOs (e.g. `ATT→FWD`, string→number coercions), acting as an anti-corruption layer.
-- **Command/Event Separation (soft CQRS)** — reads flow through TanStack Query hooks (queries), while writes flow through Zustand store actions and `src/api/mutations/` (commands), keeping read and write paths distinct without full CQRS infrastructure.
+- **Layered API Client pattern** — `src/api/endpoints/` handles data fetching/transformation (DTO mapping), while `src/api/mutations/` separates write operations (commands), loosely resembling CQRS.
+- **Store-per-domain (vertical slice state)** — each domain (squad, coach, scout, market, loan, facility, inbox, auth) owns its own Zustand store, avoiding a single monolithic state tree.
+- **Engine/Service layer** — `src/engine/` encapsulates pure business logic (GameLoop, personality, recruitment, finance) decoupled from UI and stores, analogous to a domain service layer.
+- **Offline-first with optimistic sync** — TanStack Query mutations (in `src/api/mutations/`) apply changes locally first and sync to the backend asynchronously; stores act as the local source of truth.
+- **Component decomposition by concern** — `src/components/ui/` holds generic primitives, `src/components/radar/` holds domain-specific visualisation, and root-level components (`GlobalHeader`, `OnboardingScreen`) handle app-shell concerns — a presentational/container split without a formal pattern library.
 
 ---
 
 ## Current Development Focus
 
-- **Asset pipeline & branding** — Multiple asset updates (`android-icon-foreground/monochrome`, `splash-icon`, `logo_master`, `generate-assets.js`) suggest ongoing visual identity work; AI could automate asset variant generation and consistency checks across platforms.
-- **CI/CD & deployment workflows** — Active changes to `eas-update-prod.yml`, `eas-update-staging.yml`, and deployment commits indicate evolving release infrastructure; AI could help optimize workflow logic, add rollback gates, or validate EAS config diffs.
-- **Android bug resolution** — The explicit "looking to fix bugs on android" commit signals platform-specific issues; AI could assist with diagnosing NativeWind/Reanimated compatibility, safe-area quirks, or metro bundler anomalies on Android.
-- **GlobalHeader iteration** — `GlobalHeader.tsx` is among the most recently touched source files alongside the version display addition; AI could help with responsive layout, sync-state indicator logic, or accessibility improvements.
-- **App configuration drift** — `app.json`, `package.json`, and `package-lock.json` all modified recently alongside `_layout.tsx`; AI could audit dependency compatibility (especially with `--legacy-peer-deps` requirement) and flag risky version bumps before they reach production.
+- **Token refresh & auth resilience** — Multiple commits touching `src/api/client.ts`, `src/api/endpoints/auth.ts`, and `useAuthFlow.ts` suggest the auth flow is still being stabilised; AI could help design a robust retry/queue strategy that handles concurrent 401s and edge cases like expired refresh tokens during offline sync.
+
+- **Coach intelligence engine** — New files `CoachPerception.ts` and `CoachValuation.ts` indicate active work on coach AI logic; AI assistance could help model realistic valuation curves, perception biases, and decision weights that align with the 8-trait Personality Matrix.
+
+- **Data display & table UX** — `SortableTable.tsx` introduced alongside the "fixed layout table issue" commit points to ongoing work on tabular data; AI could help define consistent sort/filter patterns and accessible column layouts that work within the pixel-art design system.
+
+- **Squad & staff server reconciliation** — Recent changes to `squad.ts` and `staff.ts` endpoints suggest the backend sync logic is evolving; AI could help design a deterministic merge strategy that resolves conflicts between client-authoritative local state and server responses without data loss.
+
+- **Game loop & financial engine** — `GameLoop.ts` and `finances.tsx` both appear in recent changes; AI could assist in balancing weekly tick economics (reputation gain rates, loan limits, sponsor income scaling) so progression feels rewarding across all reputation tiers.
