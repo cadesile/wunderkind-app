@@ -4,6 +4,8 @@ import {
   RegisterResponse,
   LoginRequest,
   LoginResponse,
+  TokenRefreshRequest,
+  TokenRefreshResponse,
 } from '@/types/api';
 
 export function register(body: RegisterRequest): Promise<RegisterResponse> {
@@ -15,6 +17,13 @@ export function register(body: RegisterRequest): Promise<RegisterResponse> {
 
 export function login(body: LoginRequest): Promise<LoginResponse> {
   return apiRequest<LoginResponse>('/api/login', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function refreshTokenRequest(body: TokenRefreshRequest): Promise<TokenRefreshResponse> {
+  return apiRequest<TokenRefreshResponse>('/api/token/refresh', {
     method: 'POST',
     body: JSON.stringify(body),
   });

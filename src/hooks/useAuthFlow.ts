@@ -276,7 +276,7 @@ export interface AuthFlowResult {
  * Falls back to local generation for steps 5–6 if the network is unavailable.
  */
 export function useAuthFlow(): AuthFlowResult {
-  const { token, email, password, setToken, setCredentials, setUserId } =
+  const { token, email, password, setToken, setTokens, setCredentials, setUserId } =
     useAuthStore();
   const { setName: setAcademyName, addBalance, setCreatedAt, setSponsorIds, setInvestorId, setCountry, setManagerProfile, setReputation } =
     useAcademyStore();
@@ -336,8 +336,12 @@ export function useAuthFlow(): AuthFlowResult {
 
       if (email && password) {
         try {
-          const { token: newToken } = await login({ username: email, password });
-          setToken(newToken);
+          const loginResp = await login({ username: email, password });
+          if (loginResp.refresh_token) {
+            setTokens(loginResp.token, loginResp.refresh_token);
+          } else {
+            setToken(loginResp.token);
+          }
 
           // Same academy existence check after re-login
           try {
@@ -399,11 +403,15 @@ export function useAuthFlow(): AuthFlowResult {
       });
       setUserId(registered.id);
 
-      const { token: newToken } = await login({
+      const loginResp = await login({
         username: userEmail,
         password: userPassword,
       });
-      setToken(newToken);
+      if (loginResp.refresh_token) {
+        setTokens(loginResp.token, loginResp.refresh_token);
+      } else {
+        setToken(loginResp.token);
+      }
     } catch (err) {
       const status = err instanceof ApiError ? ` (HTTP ${err.status}: ${err.message})` : '';
       console.warn(`[useAuthFlow] Backend registration unavailable${status} — continuing offline`);

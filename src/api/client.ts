@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useAuthStore } from '@/stores/authStore';
-import { ApiError, LoginResponse } from '@/types/api';
+import { ApiError, LoginResponse, TokenRefreshResponse } from '@/types/api';
 
 /**
  * Resolves the API base URL (priority order):
@@ -40,8 +40,26 @@ const REQUEST_TIMEOUT_MS = 10_000;
 // ─── Token refresh ────────────────────────────────────────────────────────────
 
 async function refreshAuthToken(): Promise<void> {
-  const { email, password, setToken } = useAuthStore.getState();
-  if (!email || !password) throw new ApiError(401, 'No credentials stored for refresh');
+  const { refreshToken, email, password, setTokens, setToken } = useAuthStore.getState();
+
+  // Step 1: try the dedicated refresh-token endpoint (up to 30-day offline support)
+  if (refreshToken) {
+    const res = await fetch(`${BASE_URL}/api/token/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as TokenRefreshResponse;
+      setTokens(data.token, data.refresh_token);
+      return;
+    }
+    // Non-2xx means the refresh token itself has expired — fall through to re-login
+  }
+
+  // Step 2: fall back to full re-login with stored device credentials
+  if (!email || !password) throw new ApiError(401, 'No credentials stored for re-authentication');
 
   const res = await fetch(`${BASE_URL}/api/login`, {
     method: 'POST',
@@ -49,10 +67,14 @@ async function refreshAuthToken(): Promise<void> {
     body: JSON.stringify({ username: email, password }),
   });
 
-  if (!res.ok) throw new ApiError(res.status, 'Token refresh failed');
+  if (!res.ok) throw new ApiError(res.status, 'Re-authentication failed');
 
   const data = (await res.json()) as LoginResponse;
-  setToken(data.token);
+  if (data.refresh_token) {
+    setTokens(data.token, data.refresh_token);
+  } else {
+    setToken(data.token);
+  }
 }
 
 // ─── Core request ─────────────────────────────────────────────────────────────

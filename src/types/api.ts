@@ -199,6 +199,16 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
+  refresh_token?: string;
+}
+
+export interface TokenRefreshRequest {
+  refresh_token: string;
+}
+
+export interface TokenRefreshResponse {
+  token: string;
+  refresh_token: string;
 }
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────
