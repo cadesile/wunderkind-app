@@ -6,31 +6,34 @@ import { ApiError, LoginResponse } from '@/types/api';
 /**
  * Resolves the API base URL (priority order):
  *
- * 1. EXPO_PUBLIC_API_BASE_URL env var — set by eas.json build profiles for all
- *    EAS builds (dev/staging/production). Also set in .env for local web dev
- *    (pointing at Lando). Leave unset in .env for native Expo Go dev.
+ * 1. Browser (web) — always hits Lando directly; no proxy needed.
  *
- * 2. Native Expo Go dev — Metro sets hostUri at runtime to the bundler's LAN
- *    address, e.g. "192.168.1.10:8081" → "http://192.168.1.10:8080".
- *    Requires: npm run proxy  (bridges :8080 → 127.0.0.1:52100)
+ * 2. EXPO_PUBLIC_API_BASE_URL env var — used by EAS build profiles to
+ *    point at staging/production. Leave unset in .env for native Expo Go dev.
  *
- * 3. Fallback → production URL
+ * 3. Native Expo Go dev — falls straight through to the production URL.
+ *    The proxy is no longer needed for day-to-day device testing.
+ *
+ * 4. Fallback → production URL
  */
 function resolveBaseUrl(): string {
+  // Web/browser dev always targets Lando directly
+  if (Platform.OS === 'web') {
+    return 'http://wunderkind-backend.lndo.site';
+  }
+
+  // EAS build profiles (or manual override in .env)
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (envUrl) return envUrl;
 
-  // Native Expo Go dev — derive the correct LAN IP from Metro's hostUri
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    return `http://${host}:8080`;
-  }
-
+  // Native — use production
   return 'https://api.buildmyclub.co.uk';
 }
 
 const BASE_URL = resolveBaseUrl();
+
+// Log the resolved API base URL once at startup so it's visible in Metro logs
+console.log(`[API] Base URL: ${BASE_URL} (hostUri=${Constants.expoConfig?.hostUri ?? 'none'}, env=${process.env.EXPO_PUBLIC_API_BASE_URL ?? 'unset'})`);
 
 const REQUEST_TIMEOUT_MS = 10_000;
 

@@ -35,8 +35,8 @@ function FinanceRow({ label, value, accent }: { label: string; value: string; ac
       borderBottomWidth: 2,
       borderBottomColor: WK.border,
     }}>
-      <BodyText size={13} dim>{label}</BodyText>
-      <PixelText size={9} color={accent ?? WK.text}>{value}</PixelText>
+      <BodyText size={13} dim style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>{label}</BodyText>
+      <PixelText size={9} color={accent ?? WK.text} style={{ flexShrink: 0 }}>{value}</PixelText>
     </View>
   );
 }

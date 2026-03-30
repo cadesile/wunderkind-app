@@ -81,6 +81,7 @@ export function SortableTable<T extends { id: string }>({
               onPress={() => handleHeaderPress(col)}
               style={{
                 flex: col.flex,
+                minWidth: 0,
                 minHeight: 44,
                 justifyContent: 'center',
                 alignItems: cellAlign(col.align),
@@ -122,34 +123,41 @@ export function SortableTable<T extends { id: string }>({
             <Pressable
               key={item.id}
               onPress={() => onRowPress?.(item)}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                backgroundColor: pressed ? WK.tealMid : rowBg,
-                borderLeftWidth: 3,
-                borderRightWidth: 3,
-                borderBottomWidth: index === sorted.length - 1 ? 3 : 1,
-                borderColor: WK.border,
-                minHeight: 44,
-              })}
             >
-              {columns.map((col) => (
-                <View
-                  key={col.key}
-                  style={{
-                    flex: col.flex,
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    alignItems: cellAlign(col.align),
-                    paddingHorizontal: 6,
-                    paddingVertical: 6,
-                    borderRightWidth: 1,
-                    borderRightColor: WK.border,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {col.render(item)}
+              {/* Render-prop pattern: all styling lives on the View child.
+                  Pressable function-style props are unreliable on Android —
+                  both layout AND visual properties (bg, borders) may be ignored. */}
+              {({ pressed }) => (
+                <View style={{
+                  flexDirection: 'row',
+                  minHeight: 44,
+                  backgroundColor: pressed ? WK.tealMid : rowBg,
+                  borderLeftWidth: 3,
+                  borderRightWidth: 3,
+                  borderBottomWidth: index === sorted.length - 1 ? 3 : 1,
+                  borderColor: WK.border,
+                }}>
+                  {columns.map((col) => (
+                    <View
+                      key={col.key}
+                      style={{
+                        flex: col.flex,
+                        minWidth: 0,
+                        minHeight: 44,
+                        justifyContent: 'center',
+                        alignItems: cellAlign(col.align),
+                        paddingHorizontal: 6,
+                        paddingVertical: 6,
+                        borderRightWidth: 1,
+                        borderRightColor: WK.border,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {col.render(item)}
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
             </Pressable>
           );
         })

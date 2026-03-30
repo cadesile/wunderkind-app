@@ -128,7 +128,7 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
             </PixelText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
               <FlagText nationality={coach.nationality} size={10} />
-              <PixelText size={6} dim>{coach.nationality}</PixelText>
+              <PixelText size={6} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</PixelText>
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -297,7 +297,7 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
               <FlagText nationality={scout.nationality} size={10} />
-              <PixelText size={6} dim>{scout.nationality}</PixelText>
+              <PixelText size={6} dim numberOfLines={1} style={{ flex: 1 }}>{scout.nationality}</PixelText>
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>

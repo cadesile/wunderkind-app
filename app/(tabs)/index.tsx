@@ -110,7 +110,7 @@ function PlayerRow({ player }: { player: Player }) {
           {/* Flag + Nationality */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
             <FlagText nationality={player.nationality} size={11} />
-            <BodyText size={11} dim numberOfLines={1}>{player.nationality}</BodyText>
+            <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{player.nationality}</BodyText>
           </View>
 
           {/* 8 trait dots — single row */}
@@ -161,8 +161,8 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
           <FlagText nationality={coach.nationality} size={11} />
-          <BodyText size={11} dim numberOfLines={1}>{coach.nationality}</BodyText>
-          <BodyText size={11} dim>· £{Math.round(coach.salary / 100).toLocaleString()}/wk</BodyText>
+          <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</BodyText>
+          <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(coach.salary / 100).toLocaleString()}/wk</BodyText>
         </View>
 
         {/* Influence bar */}
@@ -209,7 +209,7 @@ function CoachProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () =
           <PixelText size={8} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
             <FlagText nationality={coach.nationality} size={12} />
-            <BodyText size={12} dim>{coach.nationality}</BodyText>
+            <BodyText size={12} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</BodyText>
           </View>
         </View>
         <Badge label={`INF ${coach.influence}`} color="green" />
@@ -262,8 +262,8 @@ function ScoutRow({ scout }: { scout: Scout }) {
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
             <FlagText nationality={scout.nationality} size={11} />
-            <BodyText size={11} dim numberOfLines={1}>{scout.nationality}</BodyText>
-            <BodyText size={11} dim>· £{Math.round(scout.salary / 100).toLocaleString()}/wk</BodyText>
+            <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{scout.nationality}</BodyText>
+            <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(scout.salary / 100).toLocaleString()}/wk</BodyText>
           </View>
 
           {/* Success rate bar */}
