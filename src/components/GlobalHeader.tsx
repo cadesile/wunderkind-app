@@ -17,11 +17,8 @@ import { ACADEMY_COUNTRIES } from '@/utils/nationality';
 /**
  * Persistent top header rendered above all tab screens.
  *
- * Row 1 — Identity bar (46px):
- *   Academy Name  🏳 | [Inbox 26px · 44×44]
- *
- * Row 2 — Context strip (~28px):
- *   Sync indicator | WK {n} · Date | Facility warning
+ * Single row:
+ *   [14px] Academy Name 🏳  ·  ■ LIVE  ·  DATE    [⚠][✉]
  */
 export function GlobalHeader() {
   const router = useRouter();
@@ -51,95 +48,82 @@ export function GlobalHeader() {
       borderBottomWidth: 3,
       borderBottomColor: WK.border,
       paddingTop: insets.top,
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: insets.top + 50,
+      paddingLeft: 14,
     }}>
 
-      {/* ── Row 1: Identity bar ─────────────────────────────────────────── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', height: 46 }}>
+      {/* Academy name + flag */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+        <PixelText size={9} upper numberOfLines={1} style={{ flexShrink: 1 }}>
+          {academy.name}
+        </PixelText>
+        {countryFlag && (
+          <PixelText size={14}>{countryFlag}</PixelText>
+        )}
+      </View>
 
-        {/* Academy name + flag */}
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <PixelText size={9} upper numberOfLines={1} style={{ flexShrink: 1 }}>
-            {academy.name}
-          </PixelText>
-          {countryFlag && (
-            <PixelText size={14}>{countryFlag}</PixelText>
-          )}
+      {/* Separator dot */}
+      <BodyText size={12} color={WK.border} style={{ marginHorizontal: 8 }}>·</BodyText>
+
+      {/* Sync + date */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+        <SyncStatusIndicator status={syncStatus} />
+        <BodyText size={11} color={WK.dim} numberOfLines={1}>{dateStr}</BodyText>
+      </View>
+
+      {/* Build SHA badge */}
+      {!!process.env.EXPO_PUBLIC_BUILD_SHA && (
+        <View style={{
+          backgroundColor: WK.border,
+          borderWidth: 1,
+          borderColor: WK.dim,
+          paddingHorizontal: 5,
+          paddingVertical: 2,
+          marginRight: 4,
+        }}>
+          <BodyText size={9} color={WK.dim}>
+            {process.env.EXPO_PUBLIC_BUILD_SHA.slice(0, 7)}
+          </BodyText>
         </View>
+      )}
 
-        {/* Build SHA badge */}
-        {!!process.env.EXPO_PUBLIC_BUILD_SHA && (
+      {/* Facility warning */}
+      {facilityWarning && (
+        <Pressable
+          onPress={() => router.push('/facilities')}
+          hitSlop={8}
+          style={{ width: 40, height: 50, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <AlertTriangle size={18} color={WK.red} />
+        </Pressable>
+      )}
+
+      {/* Inbox */}
+      <Pressable
+        onPress={() => router.push('/inbox')}
+        style={{ width: 50, height: 50, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Mail size={22} color={unreadCount > 0 ? WK.yellow : WK.dim} />
+        {unreadCount > 0 && (
           <View style={{
-            backgroundColor: WK.border,
-            borderWidth: 1,
-            borderColor: WK.dim,
-            paddingHorizontal: 5,
-            paddingVertical: 2,
-            marginRight: 4,
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            backgroundColor: WK.red,
+            minWidth: 16,
+            height: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 3,
           }}>
-            <BodyText size={9} color={WK.dim}>
-              {process.env.EXPO_PUBLIC_BUILD_SHA.slice(0, 7)}
+            <BodyText size={10} color={WK.text} style={{ lineHeight: 14 }}>
+              {unreadCount > 9 ? '9+' : unreadCount}
             </BodyText>
           </View>
         )}
-
-        {/* Inbox — 44×44 tap zone */}
-        <Pressable
-          onPress={() => router.push('/inbox')}
-          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Mail size={26} color={unreadCount > 0 ? WK.yellow : WK.dim} />
-          {unreadCount > 0 && (
-            <View style={{
-              position: 'absolute',
-              top: 6,
-              right: 6,
-              backgroundColor: WK.red,
-              borderRadius: 0,
-              minWidth: 16,
-              height: 16,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 3,
-            }}>
-              <BodyText size={10} color={WK.text} style={{ lineHeight: 14 }}>
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </BodyText>
-            </View>
-          )}
-        </Pressable>
-      </View>
-
-      {/* Divider between rows */}
-      <View style={{ height: 1, backgroundColor: WK.border }} />
-
-      {/* ── Row 2: Context strip ────────────────────────────────────────── */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-      }}>
-
-        {/* Left: sync status */}
-        <View style={{ flex: 1 }}>
-          <SyncStatusIndicator status={syncStatus} />
-        </View>
-
-        {/* Centre: week + date on one line */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <PixelText size={8} color={WK.yellow}>WK {weekNumber}</PixelText>
-          <BodyText size={11} color={WK.dim}>· {dateStr}</BodyText>
-        </View>
-
-        {/* Right: facility warning (or empty space to keep centre balanced) */}
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          {facilityWarning && (
-            <Pressable onPress={() => router.push('/facilities')} hitSlop={8}>
-              <AlertTriangle size={18} color={WK.red} />
-            </Pressable>
-          )}
-        </View>
-      </View>
+      </Pressable>
 
     </View>
   );
