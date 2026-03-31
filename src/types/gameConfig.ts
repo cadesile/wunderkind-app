@@ -42,6 +42,30 @@ export interface GameConfig {
   /** Upper bound of the random base morale range for newly assigned players/coaches/scouts. Default: 80 */
   defaultMoraleMax: number;
 
+  // ── Behavioural incident frequency ────────────────────────────────────────
+  /** Professionalism trait value below which a late-to-training incident can trigger. Default: 6 */
+  incidentLowProfessionalismThreshold: number;
+  /** Weekly probability of a late-to-training incident when professionalism is below threshold. Default: 0.3 */
+  incidentLowProfessionalismChance: number;
+  /** Determination trait value above which a bonus extra-effort incident can trigger. Default: 15 */
+  incidentHighDeterminationThreshold: number;
+  /** Weekly probability of an extra-effort bonus incident when determination is above threshold. Default: 0.25 */
+  incidentHighDeterminationChance: number;
+  /** Base weekly probability that any player pair has a training altercation. Default: 0.10 */
+  incidentAltercationBaseChance: number;
+  /**
+   * Floor probability of an altercation escalating to "serious" when the pair already has a negative relationship.
+   * Final chance = incidentAltercationSeriousBase + (avgTemperament / 20) × incidentAltercationSeriousTemperamentScale
+   * Default: 0.2
+   */
+  incidentAltercationSeriousBase: number;
+  /**
+   * Temperament scaling factor for serious altercation escalation.
+   * Higher = more volatile squads produce more serious incidents.
+   * Default: 0.5
+   */
+  incidentAltercationSeriousTemperamentScale: number;
+
   // ── Scouting ──────────────────────────────────────────────────────────
   /** Morale value below which a scout makes no weekly progress. Default: 40 */
   scoutMoraleThreshold: number;
@@ -57,6 +81,26 @@ export interface GameConfig {
    * Default: [0.25, 0.75, 0.85, 0.94]
    */
   missionGemRollThresholds: [number, number, number, number];
+
+  // ── Guardian Complaints ────────────────────────────────────────────────
+  /** Player morale boost when manager convinces a guardian. Default: 5 */
+  guardianConvinceMoraleBoost: number;
+  /** Guardian loyalty boost on convince. Default: 8 */
+  guardianConvinceGuardianLoyaltyBoost: number;
+  /** Guardian demand level increase on convince. Default: 1 */
+  guardianConvinceGuardianDemandIncrease: number;
+  /** Player morale penalty when manager ignores a complaint. Default: 8 */
+  guardianIgnoreMoralePenalty: number;
+  /** Player loyalty trait penalty on ignore. Default: 3 */
+  guardianIgnoreLoyaltyTraitPenalty: number;
+  /** Guardian loyalty penalty on ignore. Default: 12 */
+  guardianIgnoreGuardianLoyaltyPenalty: number;
+  /** Guardian demand level increase on ignore. Default: 2 */
+  guardianIgnoreGuardianDemandIncrease: number;
+  /** Sibling morale penalty on ignore. Default: 5 */
+  guardianIgnoreSiblingMoralePenalty: number;
+  /** Sibling loyalty trait penalty on ignore. Default: 2 */
+  guardianIgnoreSiblingLoyaltyTraitPenalty: number;
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -79,9 +123,27 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   defaultMoraleMin: 50,
   defaultMoraleMax: 80,
 
+  incidentLowProfessionalismThreshold: 6,
+  incidentLowProfessionalismChance: 0.3,
+  incidentHighDeterminationThreshold: 15,
+  incidentHighDeterminationChance: 0.25,
+  incidentAltercationBaseChance: 0.10,
+  incidentAltercationSeriousBase: 0.2,
+  incidentAltercationSeriousTemperamentScale: 0.5,
+
   scoutMoraleThreshold: 40,
   scoutRevealWeeks: 2,
   scoutAbilityErrorRange: 30,
   scoutMaxAssignments: 5,
   missionGemRollThresholds: [0.25, 0.75, 0.85, 0.94],
+
+  guardianConvinceMoraleBoost: 5,
+  guardianConvinceGuardianLoyaltyBoost: 8,
+  guardianConvinceGuardianDemandIncrease: 1,
+  guardianIgnoreMoralePenalty: 8,
+  guardianIgnoreLoyaltyTraitPenalty: 3,
+  guardianIgnoreGuardianLoyaltyPenalty: 12,
+  guardianIgnoreGuardianDemandIncrease: 2,
+  guardianIgnoreSiblingMoralePenalty: 5,
+  guardianIgnoreSiblingLoyaltyTraitPenalty: 2,
 };

@@ -4,6 +4,7 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useGuardianStore } from '@/stores/guardianStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { EventChoice, NarrativeMessage } from '@/types/narrative';
 import { InboxMessage } from '@/stores/inboxStore';
 
@@ -59,6 +60,8 @@ export function handleGuardianResponse(
   const worstGuardian = useGuardianStore.getState().guardians.find((g) => g.id === worstGuardianId);
   if (!worstGuardian) return;
 
+  const cfg = useGameConfigStore.getState().config;
+
   // Reset ignoredRequestCount for all guardians of this player on any response
   guardianIds.forEach((gId) => updateGuardian(gId, { ignoredRequestCount: 0 }));
 
@@ -69,14 +72,12 @@ export function handleGuardianResponse(
   );
 
   if (response === 'accepted') {
-    // Worst guardian: loyalty +8, demandLevel +1 (capped at 10)
     updateGuardian(worstGuardianId, {
-      loyaltyToAcademy: Math.min(100, worstGuardian.loyaltyToAcademy + 8),
-      demandLevel: Math.min(10, worstGuardian.demandLevel + 1),
+      loyaltyToAcademy: Math.min(100, worstGuardian.loyaltyToAcademy + cfg.guardianConvinceGuardianLoyaltyBoost),
+      demandLevel: Math.min(10, worstGuardian.demandLevel + cfg.guardianConvinceGuardianDemandIncrease),
     });
 
-    // Player morale boost
-    updateMorale(playerId, +5);
+    updateMorale(playerId, cfg.guardianConvinceMoraleBoost);
 
     // Deduct financial cost if applicable
     if (costPence !== undefined) {
@@ -92,21 +93,18 @@ export function handleGuardianResponse(
       });
     }
   } else {
-    // Worst guardian: loyalty −12, demandLevel +2 (capped at 10), ignoredRequestCount +1
     updateGuardian(worstGuardianId, {
-      loyaltyToAcademy: Math.max(0, worstGuardian.loyaltyToAcademy - 12),
-      demandLevel: Math.min(10, worstGuardian.demandLevel + 2),
+      loyaltyToAcademy: Math.max(0, worstGuardian.loyaltyToAcademy - cfg.guardianIgnoreGuardianLoyaltyPenalty),
+      demandLevel: Math.min(10, worstGuardian.demandLevel + cfg.guardianIgnoreGuardianDemandIncrease),
       ignoredRequestCount: worstGuardian.ignoredRequestCount + 1,
     });
 
-    // Player morale and loyalty trait penalty
-    updateMorale(playerId, -8);
-    updateTrait(playerId, 'loyalty', -3);
+    updateMorale(playerId, -cfg.guardianIgnoreMoralePenalty);
+    updateTrait(playerId, 'loyalty', -cfg.guardianIgnoreLoyaltyTraitPenalty);
 
-    // Siblings also suffer
     siblings.forEach((sibling) => {
-      updateMorale(sibling.id, -5);
-      updateTrait(sibling.id, 'loyalty', -2);
+      updateMorale(sibling.id, -cfg.guardianIgnoreSiblingMoralePenalty);
+      updateTrait(sibling.id, 'loyalty', -cfg.guardianIgnoreSiblingLoyaltyTraitPenalty);
     });
   }
 }

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 
 /**
- * Syncs the prospect pool from GET /api/market/prospects on app launch.
+ * Syncs the prospect pool from GET /api/market/data on app launch.
  * Respects the 1-hour TTL — no-ops when cache is warm.
  * Safe to mount at root layout. Silently no-ops offline.
  */

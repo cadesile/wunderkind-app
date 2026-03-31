@@ -1,6 +1,6 @@
 import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Mail, AlertTriangle, Home } from 'lucide-react-native';
+import { Mail, AlertTriangle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';

@@ -151,8 +151,8 @@ export const useMarketStore = create<MarketState>()(
 
         set({ isLoading: true, error: null });
         try {
-          const country = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.country;
-          const data = await marketApi.getMarketData(country);
+          const tier = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.reputationTier;
+          const data = await marketApi.getMarketData(null, tier);
           get().setMarketData(data);
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Failed to fetch market data' });
@@ -165,8 +165,8 @@ export const useMarketStore = create<MarketState>()(
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
-          const country = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.country;
-          const data = await marketApi.getMarketData(country);
+          const tier = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.reputationTier;
+          const data = await marketApi.getMarketData(null, tier);
           get().setMarketData(data);
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Failed to refresh market pool' });

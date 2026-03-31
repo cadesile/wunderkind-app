@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap, hapticPress, hapticConfirm, hapticWarning } from '@/utils/haptics';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
+import { useNavStore } from '@/stores/navStore';
 
 type NavTabDef = {
   name: string;
@@ -100,20 +101,72 @@ const TAB_BAR_HEIGHT = 60;
  */
 export const FAB_CLEARANCE = 72;
 
-function AdvanceFAB({ onPress }: { onPress: () => void }) {
+function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
   const insets = useSafeAreaInsets();
+  const backFabCallback = useNavStore((s) => s.backFabCallback);
+  const backActive = backFabCallback !== null;
+  const router = useRouter();
+
+  const fabBottom = TAB_BAR_HEIGHT + insets.bottom + 8;
+
   return (
     <View
       pointerEvents="box-none"
-      style={{ position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' }}
+      style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        flexDirection: 'row', justifyContent: 'center',
+        alignItems: 'center', gap: 10,
+      }}
     >
+      {/* BACK FAB */}
       <Pressable
-        onPress={() => { hapticPress(); onPress(); }}
+        onPress={() => { if (backActive) { hapticTap(); backFabCallback(); } }}
         style={[
           {
-            marginBottom: TAB_BAR_HEIGHT + insets.bottom + 8,
-            width: 56,
-            height: 56,
+            marginBottom: fabBottom,
+            width: 52,
+            height: 52,
+            backgroundColor: backActive ? WK.tealCard : WK.tealMid,
+            borderWidth: 3,
+            borderColor: backActive ? WK.border : WK.tealMid,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: backActive ? 1 : 0.4,
+          },
+          backActive ? pixelShadow : undefined,
+        ]}
+      >
+        <PixelText size={12} color={backActive ? WK.text : WK.dim}>{'←'}</PixelText>
+      </Pressable>
+
+      {/* HOME FAB */}
+      <Pressable
+        onPress={() => { hapticTap(); router.push('/home'); }}
+        style={[
+          {
+            marginBottom: fabBottom,
+            width: 52,
+            height: 52,
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          pixelShadow,
+        ]}
+      >
+        <Home size={20} color={WK.tealLight} />
+      </Pressable>
+
+      {/* ADVANCE FAB */}
+      <Pressable
+        onPress={() => { hapticPress(); onAdvance(); }}
+        style={[
+          {
+            marginBottom: fabBottom,
+            width: 52,
+            height: 52,
             backgroundColor: WK.yellow,
             borderWidth: 3,
             borderColor: WK.border,
@@ -322,7 +375,7 @@ export default function TabLayout() {
         <Tabs.Screen name="inbox"   options={{ href: null }} />
       </Tabs>
 
-      <AdvanceFAB onPress={handleAdvanceButton} />
+      <BottomFABRow onAdvance={handleAdvanceButton} />
 
       {/* Weekly tick processing overlay */}
       <WeeklyTickOverlay />

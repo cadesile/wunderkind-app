@@ -137,7 +137,7 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 4. Behavioral incidents ───────────────────────────────────────────────────
   const incidents = players.flatMap((p) =>
-    generateIncidents(p, weekNumber, players.filter((m) => m.id !== p.id)),
+    generateIncidents(p, weekNumber, players.filter((m) => m.id !== p.id), config),
   );
   incidents.forEach(addIncident);
 

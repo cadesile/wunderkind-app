@@ -40,10 +40,11 @@ export function getAvailableRegions(
   tier: ReputationTier,
   scoutRange: 'local' | 'national' | 'international',
 ): ScoutingRegion[] | null {
-  if (tier === 'Local' || scoutRange === 'local') return null;
+  if (scoutRange === 'local') return null;
   if (scoutRange === 'national') return REGIONAL_POOL;
-  if (tier === 'Regional') return REGIONAL_POOL;
-  if (tier === 'National')  return NATIONAL_POOL;
+  // International scout — pool depth scales with academy tier
+  if (tier === 'Local' || tier === 'Regional') return NATIONAL_POOL;
+  if (tier === 'National') return NATIONAL_POOL;
   return ELITE_POOL;
 }
 

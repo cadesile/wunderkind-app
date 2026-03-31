@@ -149,27 +149,22 @@ export function processMissions(): void {
         ...poolNationalities,
       ];
 
+      const byPosition = prospects.filter((p) => p.position === mission.position);
+
       let candidates: MarketPlayer[];
       if (allowedNationalities.length === 0) {
-        // Academy country unknown — fall back to position-only filter
-        candidates = prospects.filter((p) => p.position === mission.position);
+        candidates = byPosition;
       } else if (mission.targetNationality && allowedNationalities.includes(mission.targetNationality)) {
-        // Targeted mission: prefer target nationality, fall back to other allowed nationalities
-        const natMatch = prospects.filter(
-          (p) => p.position === mission.position && p.nationality === mission.targetNationality,
+        // Targeted mission: prefer target nationality, then other allowed, then any position match
+        const natMatch = byPosition.filter((p) => p.nationality === mission.targetNationality);
+        const otherAllowed = byPosition.filter(
+          (p) => allowedNationalities.includes(p.nationality) && p.nationality !== mission.targetNationality,
         );
-        const posOnly = prospects.filter(
-          (p) => p.position === mission.position &&
-                 allowedNationalities.includes(p.nationality) &&
-                 p.nationality !== mission.targetNationality,
-        );
-        candidates = [...natMatch, ...posOnly];
+        candidates = natMatch.length > 0 ? [...natMatch, ...otherAllowed] : byPosition;
       } else {
-        // Domestic/unspecified search or target not in allowed regions —
-        // restrict to the full allowed nationality set
-        candidates = prospects.filter(
-          (p) => p.position === mission.position && allowedNationalities.includes(p.nationality),
-        );
+        // Filter by allowed nationalities — fall back to full position pool if none match
+        const natFiltered = byPosition.filter((p) => allowedNationalities.includes(p.nationality));
+        candidates = natFiltered.length > 0 ? natFiltered : byPosition;
       }
 
       const actualCount = Math.min(count, candidates.length);

@@ -34,6 +34,8 @@ import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
 import { ArchetypeBadge } from '@/components/ArchetypeBadge';
+import { TIER_ORDER } from '@/types/academy';
+import type { AcademyTier } from '@/types/academy';
 
 const ACADEMY_TABS = ['SQUAD', 'COACHES', 'SCOUTS', 'DRESSING ROOM'] as const;
 type AcademyTab = typeof ACADEMY_TABS[number];
@@ -458,8 +460,16 @@ function CoachesPane() {
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
   const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
 
-  // Show up to 3 available market coaches in the recruit modal
-  const prospectCoaches = marketCoaches.slice(0, 3);
+  // Show up to 3 signable market coaches (hide tier-restricted or unaffordable)
+  const academyTierKey = (academy.reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
+  const prospectCoaches = marketCoaches
+    .filter((mc) => {
+      const coachTierKey = (mc.tier ?? 'local') as AcademyTier;
+      const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[academyTierKey];
+      const canAfford = (academy.balance ?? 0) >= Math.round((mc.salary * 4) / 100);
+      return !isTierRestricted && canAfford;
+    })
+    .slice(0, 3);
 
   function openScout() {
     setSignError(null);
@@ -467,13 +477,13 @@ function CoachesPane() {
   }
 
   function signCoach(mc: MarketCoach) {
-    const signingFee = mc.salary * 4;
-    if (academy.balance < signingFee * 100) {
-      setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
+    const signingFeePounds = Math.round((mc.salary * 4) / 100);
+    if (academy.balance < signingFeePounds) {
+      setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addBalance(-signingFee * 100);
+    addBalance(-signingFeePounds);
     hireCoach(mc.id, weekNumber);
   }
 
@@ -651,8 +661,16 @@ function ScoutsPane() {
   const weekNumber = academy.weekNumber ?? 1;
   const totalSalary = scouts.reduce((s, sc) => s + sc.salary, 0);
 
-  // Show up to 3 available market scouts in the recruit modal
-  const prospectScouts = marketScouts.slice(0, 3);
+  // Show up to 3 signable market scouts (hide tier-restricted or unaffordable)
+  const scoutAcademyTierKey = (academy.reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
+  const prospectScouts = marketScouts
+    .filter((ms) => {
+      const scoutTierKey = (ms.tier ?? 'local') as AcademyTier;
+      const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[scoutAcademyTierKey];
+      const canAfford = (academy.balance ?? 0) >= Math.round((ms.salary * 4) / 100);
+      return !isTierRestricted && canAfford;
+    })
+    .slice(0, 3);
 
   function openRecruit() {
     setSignError(null);
@@ -660,13 +678,13 @@ function ScoutsPane() {
   }
 
   function signScout(ms: MarketScout) {
-    const signingFee = ms.salary * 4;
-    if (academy.balance < signingFee * 100) {
-      setSignError(`INSUFFICIENT FUNDS — need £${signingFee.toLocaleString()}`);
+    const signingFeePounds = Math.round((ms.salary * 4) / 100);
+    if (academy.balance < signingFeePounds) {
+      setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
       return;
     }
     setSignError(null);
-    addBalance(-signingFee * 100);
+    addBalance(-signingFeePounds);
     hireScout(ms.id, weekNumber);
   }
 

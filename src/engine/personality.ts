@@ -1,6 +1,7 @@
 import { PersonalityMatrix, Player, PlayerAttributes, TraitName } from '@/types/player';
 import { BehavioralIncident } from '@/types/game';
 import { getRelationshipValue } from '@/engine/RelationshipService';
+import { GameConfig, DEFAULT_GAME_CONFIG } from '@/types/gameConfig';
 
 export const TRAIT_NAMES: TraitName[] = [
   'determination',
@@ -73,10 +74,11 @@ export function generateIncidents(
   player: Player,
   week: number,
   squadMates?: Player[],
+  config: GameConfig = DEFAULT_GAME_CONFIG,
 ): BehavioralIncident[] {
   const incidents: BehavioralIncident[] = [];
 
-  if (player.personality.professionalism < 6 && Math.random() < 0.3) {
+  if (player.personality.professionalism < config.incidentLowProfessionalismThreshold && Math.random() < config.incidentLowProfessionalismChance) {
     incidents.push({
       id: `${player.id}-${week}-professionalism`,
       playerId: player.id,
@@ -88,7 +90,7 @@ export function generateIncidents(
     });
   }
 
-  if (player.personality.determination > 15 && Math.random() < 0.25) {
+  if (player.personality.determination > config.incidentHighDeterminationThreshold && Math.random() < config.incidentHighDeterminationChance) {
     incidents.push({
       id: `${player.id}-${week}-determination`,
       playerId: player.id,
@@ -101,7 +103,7 @@ export function generateIncidents(
   }
 
   // Player-on-player altercation (only when squad context is available)
-  if (squadMates && squadMates.length > 0 && Math.random() < 0.10) {
+  if (squadMates && squadMates.length > 0 && Math.random() < config.incidentAltercationBaseChance) {
     const partner = squadMates[Math.floor(Math.random() * squadMates.length)];
     // Deduplicate: only generate once per pair (lower UUID initiates)
     if (player.id < partner.id) {
@@ -112,7 +114,7 @@ export function generateIncidents(
         const avgTemperament =
           (player.personality.temperament + partner.personality.temperament) / 2;
         // temperament is 1–20; higher = more volatile
-        const seriousChance = 0.2 + (avgTemperament / 20) * 0.5;
+        const seriousChance = config.incidentAltercationSeriousBase + (avgTemperament / 20) * config.incidentAltercationSeriousTemperamentScale;
         if (Math.random() < seriousChance) {
           severity = 'serious';
         }

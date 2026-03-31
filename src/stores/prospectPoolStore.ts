@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { MarketPlayer } from '@/types/market';
 import { zustandStorage } from '@/utils/storage';
-import { getProspects } from '@/api/endpoints/prospects';
+import { marketApi } from '@/api/endpoints/market';
 
 /** 1-hour TTL — prospects change slowly vs. the 5-min market cache. */
 const PROSPECT_TTL_MS = 60 * 60 * 1000;
@@ -28,9 +28,9 @@ interface ProspectPoolState {
   setProspects: (incoming: MarketPlayer[]) => void;
 
   /**
-   * Fetch from GET /api/market/prospects, respecting the 1-hour TTL.
+   * Fetch from GET /api/market/data, respecting the 1-hour TTL.
    * Safe to call on every app resume — no-ops when cache is warm.
-   * Silently ignores network/404 errors so offline play is unaffected.
+   * Silently ignores network errors so offline play is unaffected.
    */
   fetchProspects: () => Promise<void>;
 
@@ -76,12 +76,11 @@ export const useProspectPoolStore = create<ProspectPoolState>()(
 
         set({ isLoading: true });
         try {
-          const incoming = await getProspects();
-          get().setProspects(incoming);
+          const tier = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.reputationTier;
+          const data = await marketApi.getMarketData(null, tier);
+          get().setProspects(data.players);
         } catch {
           // Non-fatal — pool may already be seeded from a prior session.
-          // checkGemDiscovery() skips gem events when the pool is empty; run
-          // app:seed-prospect-pool on the backend to replenish.
           console.warn('[prospectPoolStore] Failed to refresh prospect pool — using cached data');
         } finally {
           set({ isLoading: false });

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View, FlatList, Pressable, ScrollView } from 'react-native';
+import { useEffect, useCallback, useState } from 'react';
+import { View, FlatList, Pressable, ScrollView, TouchableOpacity } from 'react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -29,6 +29,7 @@ import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { formatCurrencyCompact, formatCurrencyWhole, getPlayerAskingPrice } from '@/utils/currency';
 import { WK, pixelShadow } from '@/constants/theme';
+import { useNavStore } from '@/stores/navStore';
 import { hapticTap, hapticWarning, hapticError } from '@/utils/haptics';
 import { moraleLabel } from '@/utils/morale';
 
@@ -76,6 +77,12 @@ function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer
 // ─── Agent offer detail screen ────────────────────────────────────────────────
 
 function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => void }) {
+  const stableOnBack = useCallback(onBack, []);
+  useEffect(() => {
+    useNavStore.getState().setBackFab(stableOnBack);
+    return () => useNavStore.getState().setBackFab(null);
+  }, [stableOnBack]);
+
   const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
   const investorId  = useAcademyStore((s) => s.academy.investorId);
   const investor    = useMarketStore((s) => s.investors.find((inv) => inv.id === investorId));
@@ -128,7 +135,6 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: FAB_CLEARANCE }}>
-      <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 4, alignSelf: 'flex-start' }} />
 
       {/* ── Player mini-profile ─────────────────────────────────────────── */}
       {player && (
@@ -944,6 +950,12 @@ function InboxMessageDetail({
   const { markRead, respond } = useInboxStore();
   const { setInvestorId, setSponsorIds, addBalance, academy } = useAcademyStore();
 
+  const stableOnBack = useCallback(onBack, []);
+  useEffect(() => {
+    useNavStore.getState().setBackFab(stableOnBack);
+    return () => useNavStore.getState().setBackFab(null);
+  }, [stableOnBack]);
+
   useEffect(() => {
     if (!message.isRead) markRead(message.id);
   }, [message.id]);
@@ -983,7 +995,6 @@ function InboxMessageDetail({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
-      <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12, alignSelf: 'flex-start' }} />
 
       <View style={{
         backgroundColor: WK.tealCard,
@@ -1029,7 +1040,7 @@ function InboxMessageDetail({
 
         {guardianMeta?.costPence !== undefined && guardianMeta.costPence > 0 && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
-            <OfferRow label="COST IF ACCEPTED" value={formatCurrencyWhole(guardianMeta.costPence)} />
+            <OfferRow label="COST IF CONVINCED" value={formatCurrencyWhole(guardianMeta.costPence)} />
           </View>
         )}
 
@@ -1039,7 +1050,7 @@ function InboxMessageDetail({
             borderWidth: 2, borderColor: message.response === 'accepted' ? WK.green : WK.red,
           }}>
             <PixelText size={16} variant="vt323" color={message.response === 'accepted' ? WK.green : WK.red}>
-              {message.response === 'accepted' ? '✓ ACCEPTED' : '✗ REJECTED'}
+              {message.response === 'accepted' ? '✓ CONVINCED' : '✗ IGNORED'}
             </PixelText>
           </View>
         )}
@@ -1108,7 +1119,7 @@ function InboxMessageDetail({
       {canRespond && message.type === 'guardian' && (
         <View style={{ marginTop: 12, gap: 8 }}>
           <Button
-            label="✓ ACCEPT"
+            label="✓ CONVINCE"
             variant="yellow"
             fullWidth
             onPress={() => {
@@ -1118,7 +1129,7 @@ function InboxMessageDetail({
             }}
           />
           <Button
-            label="✗ DECLINE"
+            label="✗ IGNORE"
             variant="teal"
             fullWidth
             onPress={() => {
@@ -1152,6 +1163,12 @@ function NarrativeMessageDetail({
   const { markAsRead } = useNarrativeStore();
   const isPending = message.isActionable && !message.respondedAt;
 
+  const stableOnBack = useCallback(onBack, []);
+  useEffect(() => {
+    useNavStore.getState().setBackFab(stableOnBack);
+    return () => useNavStore.getState().setBackFab(null);
+  }, [stableOnBack]);
+
   useEffect(() => {
     if (!message.readAt) markAsRead(message.id);
   }, [message.id]);
@@ -1162,7 +1179,6 @@ function NarrativeMessageDetail({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
-      <Button label="← BACK" variant="teal" onPress={() => { hapticTap(); onBack(); }} style={{ marginBottom: 12, alignSelf: 'flex-start' }} />
 
       <View style={{
         backgroundColor: WK.tealCard,
@@ -1251,6 +1267,8 @@ export default function InboxScreen() {
   const [selectedNarrative, setSelectedNarrative] = useState<NarrativeMessage | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<AgentOffer | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [unreadOnly, setUnreadOnly] = useState(false);
 
   // Keep selections in sync with live store updates
   const selectedInboxLive = selectedInbox
@@ -1264,7 +1282,7 @@ export default function InboxScreen() {
   const headerLabel = totalUnread > 0 ? `INBOX (${totalUnread})` : 'INBOX';
 
   // Priority order: pending agent offers → actionable narrative → narrative → inbox
-  const listItems: ListItem[] = [
+  const allListItems: ListItem[] = [
     ...pendingOffers.map((o): ListItem => ({ kind: 'agent_offer', offer: o })),
     ...narrativeMessages
       .filter((m) => m.isActionable && !m.respondedAt)
@@ -1274,6 +1292,18 @@ export default function InboxScreen() {
       .map((m): ListItem => ({ kind: 'narrative', message: m })),
     ...inboxMessages.map((m): ListItem => ({ kind: 'inbox', message: m })),
   ];
+
+  const listItems = allListItems.filter((item) => {
+    if (unreadOnly) {
+      if (item.kind === 'narrative' && item.message.readAt) return false;
+      if (item.kind === 'inbox' && item.message.isRead) return false;
+    }
+    if (typeFilter === null) return true;
+    if (typeFilter === 'offer') return item.kind === 'agent_offer';
+    if (typeFilter === 'story') return item.kind === 'narrative';
+    if (item.kind === 'inbox') return item.message.type === typeFilter;
+    return false;
+  });
 
   function handleBack() {
     setSelectedInbox(null);
@@ -1318,6 +1348,78 @@ export default function InboxScreen() {
         paddingVertical: 10,
       }}>
         <PixelText size={10} upper>{headerLabel}</PixelText>
+
+        {isListView && (
+          <>
+            {/* ── Filter row ──────────────────────────────────────────────── */}
+            {allListItems.length > 0 && (() => {
+              const FILTERS: { key: string | null; label: string }[] = [
+                { key: null,          label: 'ALL' },
+                { key: 'offer',       label: 'OFFERS' },
+                { key: 'guardian',    label: 'GUARDIAN' },
+                { key: 'story',       label: 'STORY' },
+                { key: 'sponsor',     label: 'SPONSOR' },
+                { key: 'investor',    label: 'INVESTOR' },
+                { key: 'scout',       label: 'SCOUT' },
+                { key: 'development', label: 'DEV' },
+                { key: 'system',      label: 'SYSTEM' },
+              ];
+              const countFor = (key: string | null) => {
+                if (key === null) return allListItems.length;
+                if (key === 'offer') return allListItems.filter((i) => i.kind === 'agent_offer').length;
+                if (key === 'story') return allListItems.filter((i) => i.kind === 'narrative').length;
+                return allListItems.filter((i) => i.kind === 'inbox' && i.message.type === key).length;
+              };
+              return (
+                <View style={{ marginTop: 8, gap: 6 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -14 }} contentContainerStyle={{ paddingHorizontal: 14, gap: 6 }}>
+                    {FILTERS.filter((f) => countFor(f.key) > 0 || f.key === null).map((f) => {
+                      const isActive = typeFilter === f.key;
+                      const count = countFor(f.key);
+                      return (
+                        <Pressable
+                          key={String(f.key)}
+                          onPress={() => { hapticTap(); setTypeFilter(f.key); }}
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            backgroundColor: isActive ? WK.yellow : WK.tealCard,
+                            borderWidth: 2,
+                            borderColor: isActive ? WK.border : WK.tealMid,
+                          }}
+                        >
+                          <PixelText size={6} color={isActive ? WK.border : WK.dim}>
+                            {f.label}{count > 0 && f.key !== null ? ` ${count}` : ''}
+                          </PixelText>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Unread toggle */}
+                  <TouchableOpacity
+                    onPress={() => { hapticTap(); setUnreadOnly((v) => !v); }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{
+                      width: 14,
+                      height: 14,
+                      borderWidth: 2,
+                      borderColor: unreadOnly ? WK.yellow : WK.dim,
+                      backgroundColor: unreadOnly ? WK.yellow : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      {unreadOnly && <PixelText size={8} color={WK.border}>✓</PixelText>}
+                    </View>
+                    <PixelText size={6} color={unreadOnly ? WK.yellow : WK.dim}>UNREAD ONLY</PixelText>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+          </>
+        )}
 
         {isListView && listItems.length > 0 && (
           confirmingClear ? (
@@ -1378,7 +1480,9 @@ export default function InboxScreen() {
       ) : listItems.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <PixelText size={16}>📭</PixelText>
-          <PixelText size={8} dim>NO MESSAGES YET</PixelText>
+          <PixelText size={8} dim>
+            {allListItems.length > 0 ? 'NO MATCHING MESSAGES' : 'NO MESSAGES YET'}
+          </PixelText>
         </View>
       ) : (
         <FlatList

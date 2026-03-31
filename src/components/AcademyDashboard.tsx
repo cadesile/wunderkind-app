@@ -7,7 +7,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
+import { ChevronRight, Trophy, UserPlus } from 'lucide-react-native';
 import useAcademyMetrics from '@/hooks/useAcademyMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useAcademyStore } from '@/stores/academyStore';
@@ -18,6 +19,7 @@ import { useFacilityStore } from '@/stores/facilityStore';
 import { FACILITY_DEFS } from '@/types/facility';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
+import { getLeaderboard } from '@/api/endpoints/leaderboard';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
@@ -78,6 +80,86 @@ function StatRow({ label, value, valueColor }: {
     }}>
       <BodyText size={12} dim>{label}</BodyText>
       <PixelText size={8} color={valueColor ?? WK.tealLight}>{value}</PixelText>
+    </View>
+  );
+}
+
+// ─── Position groups for squad development chart ──────────────────────────────
+
+const POS_GROUPS: { label: string; positions: string[] }[] = [
+  { label: 'GK',  positions: ['GK'] },
+  { label: 'DEF', positions: ['CB','LB','RB','LWB','RWB','SW','DC','DL','DR'] },
+  { label: 'MID', positions: ['CM','CAM','CDM','RM','LM','DM','AM','MC','ML','MR'] },
+  { label: 'FWD', positions: ['ST','CF','LW','RW','SS','FW','FC','ATT','WL','WR'] },
+];
+
+function SquadDevelopmentChart({ players }: { players: import('@/types/player').Player[] }) {
+  const active = players.filter((p) => p.isActive);
+  if (active.length === 0) {
+    return <PixelText size={7} dim>No players enrolled yet.</PixelText>;
+  }
+
+  const groups = POS_GROUPS.map((g) => {
+    const inGroup = active.filter((p) =>
+      g.positions.some((pos) => p.position?.toUpperCase().startsWith(pos)),
+    );
+    const avg = inGroup.length > 0
+      ? inGroup.reduce((s, p) => s + p.overallRating, 0) / inGroup.length
+      : 0;
+    const avgPot = inGroup.length > 0
+      ? inGroup.reduce((s, p) => s + p.potential, 0) / inGroup.length
+      : 0;
+    return { label: g.label, count: inGroup.length, avg, avgPot };
+  }).filter((g) => g.count > 0);
+
+  const MAX_OVR = 20;
+
+  return (
+    <View style={{ gap: 8 }}>
+      {/* Legend */}
+      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ width: 8, height: 8, backgroundColor: WK.tealLight, borderWidth: 1, borderColor: WK.border }} />
+          <BodyText size={10} dim>OVR</BodyText>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ width: 8, height: 8, backgroundColor: WK.yellow + '60', borderWidth: 1, borderColor: WK.yellow }} />
+          <BodyText size={10} dim>POT</BodyText>
+        </View>
+      </View>
+
+      {groups.map((g) => (
+        <View key={g.label}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <View style={{ width: 28 }}>
+              <PixelText size={7} color={WK.yellow}>{g.label}</PixelText>
+            </View>
+            {/* OVR bar */}
+            <View style={{ flex: 1 }}>
+              <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: WK.border, overflow: 'hidden' }}>
+                {/* Potential backing bar */}
+                <View style={{
+                  position: 'absolute', top: 0, left: 0, bottom: 0,
+                  width: `${(g.avgPot / MAX_OVR) * 100}%`,
+                  backgroundColor: WK.yellow + '40',
+                }} />
+                {/* OVR bar */}
+                <View style={{
+                  height: '100%',
+                  width: `${(g.avg / MAX_OVR) * 100}%`,
+                  backgroundColor: WK.tealLight,
+                }} />
+              </View>
+            </View>
+            <View style={{ width: 36, alignItems: 'flex-end' }}>
+              <BodyText size={10} color={WK.tealLight}>{g.avg.toFixed(1)}</BodyText>
+            </View>
+            <View style={{ width: 22, alignItems: 'flex-end' }}>
+              <BodyText size={10} dim>×{g.count}</BodyText>
+            </View>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -152,8 +234,25 @@ export function AcademyDashboard() {
   // Most-recent 3 messages (store is newest-first)
   const recentMessages = messages.slice(0, 3);
 
+  // ── Leaderboard position ─────────────────────────────────────────────────────
+  const { data: lbData } = useQuery({
+    queryKey: ['leaderboard', 'academy_reputation', 'dashboard'],
+    queryFn: () => getLeaderboard('academy_reputation', { page: 1, pageSize: 100 }),
+    staleTime: 10 * 60 * 1000,
+    retry: 0,
+    // @ts-ignore – gcTime is tanstack v5
+    gcTime: 10 * 60 * 1000,
+  });
+  const myRank = lbData?.entries.findIndex((e) => e.academyName === academy.name);
+  const rankDisplay = (myRank !== undefined && myRank >= 0) ? `#${myRank + 1}` : '–';
+
   // ── Squad potential breakdown ────────────────────────────────────────────────
   const activePlayers = players.filter((p) => p.isActive);
+
+  // ── Latest signing ───────────────────────────────────────────────────────────
+  const latestSigning = activePlayers.length > 0
+    ? activePlayers.reduce((best, p) => (p.joinedWeek ?? 0) > (best.joinedWeek ?? 0) ? p : best)
+    : null;
   const avgPotential = activePlayers.length > 0
     ? activePlayers.reduce((sum, p) => sum + p.potential, 0) / activePlayers.length
     : 0;
@@ -279,6 +378,64 @@ export function AcademyDashboard() {
         </View>
       </View>
 
+      {/* ── Cards 2b: Latest Signing | Leaderboard Position ──────────────── */}
+      <View style={{
+        flexDirection: 'row',
+        marginHorizontal: 10,
+        marginBottom: 10,
+        gap: 10,
+      }}>
+        {/* Latest Signing */}
+        <View style={{
+          flex: 1,
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 12,
+          gap: 6,
+          ...pixelShadow,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+            <UserPlus size={12} color={WK.dim} />
+            <BodyText size={10} dim>LATEST SIGNING</BodyText>
+          </View>
+          {latestSigning ? (
+            <>
+              <PixelText size={8} numberOfLines={1}>{latestSigning.name}</PixelText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <BodyText size={10} color={WK.tealLight}>{latestSigning.position}</BodyText>
+                <BodyText size={10} dim>·</BodyText>
+                <BodyText size={10} color={WK.yellow}>OVR {latestSigning.overallRating}</BodyText>
+              </View>
+              <BodyText size={10} dim>WK {latestSigning.joinedWeek ?? '–'}</BodyText>
+            </>
+          ) : (
+            <BodyText size={10} dim>No signings yet</BodyText>
+          )}
+        </View>
+
+        {/* Leaderboard Position */}
+        <View style={{
+          flex: 1,
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          padding: 12,
+          gap: 6,
+          ...pixelShadow,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+            <Trophy size={12} color={WK.dim} />
+            <BodyText size={10} dim>LEADERBOARD</BodyText>
+          </View>
+          <PixelText size={16} color={rankDisplay !== '–' ? WK.yellow : WK.dim} variant="vt323">
+            {rankDisplay}
+          </PixelText>
+          <BodyText size={10} dim>REP {academy.reputation.toFixed(1)}</BodyText>
+          <BodyText size={10} color={WK.tealLight}>{(academy.reputationTier ?? 'LOCAL').toUpperCase()}</BodyText>
+        </View>
+      </View>
+
       {/* ── Negative balance warning ──────────────────────────────────────── */}
       {willGoNegative && (
         <Animated.View style={[
@@ -362,6 +519,12 @@ export function AcademyDashboard() {
           <PixelText size={7} dim>No players enrolled yet.</PixelText>
         </SectionCard>
       )}
+
+      {/* ── Card 3b: Squad Development chart ─────────────────────────────── */}
+      <SectionCard>
+        <PixelText size={7} dim upper style={{ marginBottom: 10 }}>Squad Development</PixelText>
+        <SquadDevelopmentChart players={players} />
+      </SectionCard>
 
       {/* ── Card 4: Medical Report ───────────────────────────────────────── */}
       <SectionCard>
@@ -557,10 +720,10 @@ export function AcademyDashboard() {
                 <Badge label="ACTION" color="yellow" />
               )}
               {msg.response === 'accepted' && (
-                <Badge label="ACCEPTED" color="green" />
+                <Badge label="CONVINCED" color="green" />
               )}
               {msg.response === 'rejected' && (
-                <Badge label="DECLINED" color="red" />
+                <Badge label="IGNORED" color="red" />
               )}
             </View>
           ))
