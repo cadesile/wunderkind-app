@@ -256,7 +256,7 @@ export function AcademyDashboard() {
   const avgPotential = activePlayers.length > 0
     ? activePlayers.reduce((sum, p) => sum + p.potential, 0) / activePlayers.length
     : 0;
-  const highCeilingCount = activePlayers.filter((p) => p.potential >= 15).length;
+  const highCeilingCount = activePlayers.filter((p) => p.potential >= 70).length;
 
   // ── Medical report ───────────────────────────────────────────────────────────
   const injuredPlayers = players.filter((p) => p.injury && p.injury.weeksRemaining > 0);
@@ -642,7 +642,7 @@ export function AcademyDashboard() {
             <BodyText size={12} dim style={{ marginBottom: 6 }}>SQUAD POTENTIAL</BodyText>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
               <PixelText size={11} color={WK.yellow}>{avgPotential.toFixed(1)}</PixelText>
-              <BodyText size={11} dim>/ 20 AVG</BodyText>
+              <BodyText size={11} dim>/ 100 AVG</BodyText>
             </View>
             <View style={{
               height: 6,
@@ -650,10 +650,11 @@ export function AcademyDashboard() {
               borderWidth: 1,
               borderColor: WK.border,
               marginBottom: 6,
+              overflow: 'hidden',
             }}>
               <View style={{
                 height: '100%',
-                width: `${(avgPotential / 20) * 100}%`,
+                width: `${Math.min(avgPotential, 100)}%`,
                 backgroundColor: WK.yellow,
               }} />
             </View>

@@ -18,7 +18,7 @@ import { ACADEMY_COUNTRIES } from '@/utils/nationality';
  * Persistent top header rendered above all tab screens.
  *
  * Row 1 — Identity bar (46px):
- *   [Home 26px · 44×44] | Academy Name  🏳 | [Inbox 26px · 44×44]
+ *   Academy Name  🏳 | [Inbox 26px · 44×44]
  *
  * Row 2 — Context strip (~28px):
  *   Sync indicator | WK {n} · Date | Facility warning
@@ -55,14 +55,6 @@ export function GlobalHeader() {
 
       {/* ── Row 1: Identity bar ─────────────────────────────────────────── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', height: 46 }}>
-
-        {/* Home — 44×44 tap zone */}
-        <Pressable
-          onPress={() => router.push('/home')}
-          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Home size={26} color={WK.dim} />
-        </Pressable>
 
         {/* Academy name + flag */}
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
