@@ -2,6 +2,8 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useAuthStore } from '@/stores/authStore';
 import { ApiError, LoginResponse, TokenRefreshResponse } from '@/types/api';
+import { useDebugLogStore } from '@/stores/debugLogStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 
 /**
  * Resolves the API base URL (priority order):
@@ -79,12 +81,40 @@ async function refreshAuthToken(): Promise<void> {
 
 // ─── Core request ─────────────────────────────────────────────────────────────
 
+function isDebugEnabled(): boolean {
+  return useGameConfigStore.getState().config.debugLoggingEnabled === true;
+}
+
+function logId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
   _isRetry = false,
 ): Promise<T> {
   const token = useAuthStore.getState().token;
+  const method = (options.method ?? 'GET').toUpperCase();
+  const debug = isDebugEnabled() && !_isRetry; // only log the first attempt
+
+  let requestBody: unknown;
+  if (debug && options.body) {
+    try { requestBody = JSON.parse(options.body as string); } catch { requestBody = options.body; }
+  }
+
+  const startMs = Date.now();
+
+  if (debug) {
+    useDebugLogStore.getState().addEntry({
+      id: logId(),
+      timestamp: new Date().toISOString(),
+      level: 'request',
+      method,
+      path,
+      requestBody,
+    });
+  }
 
   // Enforce a strict 10-second timeout so background syncs never hang indefinitely
   const controller = new AbortController();
@@ -111,12 +141,64 @@ export async function apiRequest<T>(
   }
 
   if (response.status === 403) {
+    if (debug) {
+      useDebugLogStore.getState().addEntry({
+        id: logId(),
+        timestamp: new Date().toISOString(),
+        level: 'response_error',
+        method,
+        path,
+        statusCode: 403,
+        durationMs: Date.now() - startMs,
+        errorMessage: 'Forbidden — contact support',
+      });
+    }
     throw new ApiError(403, 'Forbidden — contact support');
   }
 
   if (!response.ok) {
+    if (debug) {
+      useDebugLogStore.getState().addEntry({
+        id: logId(),
+        timestamp: new Date().toISOString(),
+        level: 'response_error',
+        method,
+        path,
+        statusCode: response.status,
+        durationMs: Date.now() - startMs,
+        errorMessage: response.statusText,
+      });
+    }
     throw new ApiError(response.status, response.statusText);
   }
 
-  return response.json() as Promise<T>;
+  const data = await response.json() as T;
+
+  if (debug) {
+    useDebugLogStore.getState().addEntry({
+      id: logId(),
+      timestamp: new Date().toISOString(),
+      level: 'response_ok',
+      method,
+      path,
+      statusCode: response.status,
+      durationMs: Date.now() - startMs,
+      responseBody: data,
+    });
+  }
+
+  return data;
+}
+
+/** Log an app-level error to the debug store (no-op when debug is off). */
+export function logAppError(message: string, detail?: unknown): void {
+  if (!isDebugEnabled()) return;
+  useDebugLogStore.getState().addEntry({
+    id: logId(),
+    timestamp: new Date().toISOString(),
+    level: 'app_error',
+    path: '(app)',
+    errorMessage: message,
+    responseBody: detail,
+  });
 }

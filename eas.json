@@ -13,6 +13,7 @@
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "http://localhost:8080"
       }
@@ -20,6 +21,7 @@
     "staging": {
       "extends": "base",
       "distribution": "internal",
+      "channel": "staging",
       "android": {
         "buildType": "apk"
       },
@@ -30,6 +32,7 @@
     "production": {
       "extends": "base",
       "distribution": "store",
+      "channel": "production",
       "android": {
         "buildType": "apk"
       },

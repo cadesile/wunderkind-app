@@ -102,7 +102,7 @@ export function GlobalHeader() {
 
       {/* Inbox */}
       <Pressable
-        onPress={() => router.push('/inbox')}
+        onPress={() => router.navigate('/inbox')}
         style={{ width: 50, height: 50, alignItems: 'center', justifyContent: 'center' }}
       >
         <Mail size={22} color={unreadCount > 0 ? WK.yellow : WK.dim} />

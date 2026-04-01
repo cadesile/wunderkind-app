@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { View, FlatList, Pressable, ScrollView, TouchableOpacity } from 'react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1310,6 +1311,12 @@ export default function InboxScreen() {
     setSelectedNarrative(null);
     setSelectedOffer(null);
   }
+
+  // Always return to list view when the screen gains focus (e.g. tapping the inbox icon)
+  useFocusEffect(useCallback(() => {
+    handleBack();
+    useNavStore.getState().setBackFab(null);
+  }, []));
 
   function handleMarkAllRead() {
     inboxMarkAllRead();

@@ -101,6 +101,10 @@ export interface GameConfig {
   guardianIgnoreSiblingMoralePenalty: number;
   /** Sibling loyalty trait penalty on ignore. Default: 2 */
   guardianIgnoreSiblingLoyaltyTraitPenalty: number;
+
+  // ── Developer / Debug ────────────────────────────────────────────────
+  /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
+  debugLoggingEnabled: boolean;
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -146,4 +150,6 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   guardianIgnoreGuardianDemandIncrease: 2,
   guardianIgnoreSiblingMoralePenalty: 5,
   guardianIgnoreSiblingLoyaltyTraitPenalty: 2,
+
+  debugLoggingEnabled: false,
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Pressable, Modal } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, LayoutGrid, Building2, DollarSign, Store, Globe } from 'lucide-react-native';
+import { Home, LayoutGrid, Building2, DollarSign, Store, Globe, Settings } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
@@ -31,7 +31,7 @@ type NavTabDef = {
   Icon: React.ComponentType<{ size?: number; color?: string }>;
 };
 
-const NAV_TABS: NavTabDef[] = [
+const NAV_TABS_BASE: NavTabDef[] = [
   { name: 'index',      Icon: LayoutGrid },
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
@@ -75,6 +75,10 @@ function NavTabButton({ name, Icon, state, navigation }: NavTabDef & { state: Bo
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
+  const tabs = debugEnabled
+    ? [...NAV_TABS_BASE, { name: 'debug', Icon: Settings }]
+    : NAV_TABS_BASE;
 
   return (
     <View style={{
@@ -85,7 +89,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       height: 60 + insets.bottom,
       paddingBottom: insets.bottom,
     }}>
-      {NAV_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <NavTabButton key={tab.name} {...tab} state={state} navigation={navigation} />
       ))}
     </View>
@@ -373,6 +377,7 @@ export default function TabLayout() {
         <Tabs.Screen name="squad"   options={{ href: null }} />
         <Tabs.Screen name="coaches" options={{ href: null }} />
         <Tabs.Screen name="inbox"   options={{ href: null }} />
+        <Tabs.Screen name="debug"   options={{ href: null, title: 'DEBUG' }} />
       </Tabs>
 
       <BottomFABRow onAdvance={handleAdvanceButton} />
