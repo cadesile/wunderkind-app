@@ -10,10 +10,12 @@ import {
 } from '@/types/facility';
 import { zustandStorage } from '@/utils/storage';
 import { calculateFacilityUpkeep, calculateTotalUpkeep } from '@/utils/facilityUpkeep';
+import { computeFacilityTier } from '@/utils/tierGate';
+import type { AcademyTier } from '@/types/academy';
 
 export { calculateFacilityUpkeep };
 
-const MAX_LEVEL = 10;
+const MAX_LEVEL = 5;
 
 const ALL_TYPES: FacilityType[] = [
   'technicalZone', 'strengthSuite', 'tacticalRoom',
@@ -61,6 +63,8 @@ interface FacilityState {
   analyticsUnlocked: () => boolean;
   /** Total weekly maintenance cost across all facilities (pence) */
   totalWeeklyMaintenance: () => number;
+  /** Highest tier unlocked by current facility levels (all must meet minimum). */
+  facilityTier: () => AcademyTier;
 }
 
 export const useFacilityStore = create<FacilityState>()(
@@ -131,17 +135,21 @@ export const useFacilityStore = create<FacilityState>()(
 
       analyticsUnlocked: () => get().levels.scoutingCenter > 0,
 
+      facilityTier: () => computeFacilityTier(get().levels),
+
       totalWeeklyMaintenance: () => calculateTotalUpkeep(get().levels),
     }),
     {
       name: 'facility-store',
       storage: zustandStorage,
-      version: 2,
+      version: 3,
       migrate: (persistedState: any, version: number) => {
+        let state = persistedState;
+
         if (version < 2) {
-          const old = (persistedState?.levels ?? {}) as Record<string, number>;
-          return {
-            ...persistedState,
+          const old = (state?.levels ?? {}) as Record<string, number>;
+          state = {
+            ...state,
             levels: {
               technicalZone:  old.trainingPitch  ?? 0,
               strengthSuite:  0,
@@ -153,7 +161,19 @@ export const useFacilityStore = create<FacilityState>()(
             conditions: DEFAULT_CONDITIONS,
           };
         }
-        return persistedState as FacilityState;
+
+        if (version < 3) {
+          // Clamp any facility levels above the new MAX_LEVEL of 5
+          const lvl = (state?.levels ?? {}) as Record<string, number>;
+          state = {
+            ...state,
+            levels: Object.fromEntries(
+              Object.entries(lvl).map(([k, v]) => [k, Math.min(v, 5)]),
+            ),
+          };
+        }
+
+        return state as FacilityState;
       },
     }
   )

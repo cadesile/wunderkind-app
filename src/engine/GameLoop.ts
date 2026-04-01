@@ -29,6 +29,8 @@ import { WeeklyTick, AltercationBlock } from '@/types/game';
 import { FacilityType } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
+import { TIER_OVR_CEILING } from '@/types/academy';
+import { getEffectiveTier } from '@/utils/tierGate';
 import { calculateAcademyValuation } from '@/hooks/useAcademyMetrics';
 
 type InjuryTier = {
@@ -66,7 +68,10 @@ export function processWeeklyTick(): WeeklyTick {
     { severity: 'serious',  minWeeks: 8, maxWeeks: 12, weight: config.injurySeriousWeight },
   ];
 
-  const { players, applyWeeklyPlayerUpdates, setPlayerInjury, tickInjuries } = useSquadStore.getState();
+  const { players: allPlayers, applyWeeklyPlayerUpdates, setPlayerInjury, tickInjuries } = useSquadStore.getState();
+  // Only process active players — inactive players (guardian withdrawals, etc.) must not
+  // generate new incidents, injuries, or trait shifts.
+  const players = allPlayers.filter((p) => p.isActive !== false);
   const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
   const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
@@ -315,7 +320,9 @@ export function processWeeklyTick(): WeeklyTick {
   const effectiveLevels = Object.fromEntries(
     (Object.keys(levels) as FacilityType[]).map((type) => [type, eff(type)]),
   ) as typeof levels;
-  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber);
+  const effectiveTier = getEffectiveTier(academy.reputationTier, levels);
+  const tierOvrCap = TIER_OVR_CEILING[effectiveTier];
+  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber, tierOvrCap);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
 
   // Decrement all active injury timers (clears expired injuries automatically)

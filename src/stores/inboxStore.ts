@@ -59,6 +59,8 @@ interface InboxState {
   markAllRead: () => void;
   /** Remove all messages that don't require a pending decision. */
   clearDeletable: () => void;
+  /** Remove all messages and agent offers associated with a departed player. */
+  purgeForPlayer: (playerId: string) => void;
   unreadCount: () => number;
 }
 
@@ -133,6 +135,22 @@ export const useInboxStore = create<InboxState>()(
         set((state) => ({
           messages: state.messages.filter((m) => m.requiresResponse && !m.response),
         })),
+
+      purgeForPlayer: (playerId) =>
+        set((state) => {
+          const keepMessage = (m: InboxMessage): boolean => {
+            // Direct entity link (guardian complaints, injury notices)
+            if (m.entityId === playerId) return false;
+            // Digest messages listing multiple players
+            const ids = m.metadata?.playerIds;
+            if (Array.isArray(ids) && ids.includes(playerId)) return false;
+            return true;
+          };
+          return {
+            messages:    state.messages.filter(keepMessage),
+            agentOffers: state.agentOffers.filter((o) => o.playerId !== playerId),
+          };
+        }),
 
       unreadCount: () => {
         const state = get();

@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 import { Player, PersonalityMatrix, PlayerAttributes, AttributeName, Position, TraitName, DevelopmentSnapshot } from '@/types/player';
 import { zustandStorage } from '@/utils/storage';
 import { releasePlayer as releasePlayerApi } from '@/api/endpoints/squad';
+import { useInboxStore } from '@/stores/inboxStore';
+import { useNarrativeStore } from '@/stores/narrativeStore';
 
 /** Per-player development update (attributes + recalculated overallRating). */
 export interface PlayerDevelopmentUpdate {
@@ -206,6 +208,10 @@ export const useSquadStore = create<SquadState>()(
 
         // Remove locally — local state is authoritative
         set((state) => ({ players: state.players.filter((p) => p.id !== playerId) }));
+
+        // Clean up any inbox/narrative messages referencing this player
+        useInboxStore.getState().purgeForPlayer(playerId);
+        useNarrativeStore.getState().purgeForPlayer(playerId);
 
         // Best-effort backend sync
         try {

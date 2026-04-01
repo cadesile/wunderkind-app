@@ -213,7 +213,7 @@ export default function PlayerDetailScreen() {
   async function confirmRelease() {
     const result = await releasePlayer(player.id);
     if (result.success) {
-      setReleaseResultDialog({ title: 'Player Released', message: `${result.playerName} has been returned to the market pool.` });
+      router.replace('/squad');
     } else {
       setReleaseResultDialog({ title: 'Error', message: result.error ?? 'Failed to release player.' });
     }

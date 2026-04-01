@@ -15,6 +15,8 @@ interface NarrativeState {
   markAllRead: () => void;
   /** Remove all messages that don't require a pending decision. */
   clearDeletable: () => void;
+  /** Remove non-actionable narrative messages referencing a departed player. */
+  purgeForPlayer: (playerId: string) => void;
   unreadCount: () => number;
   getActionableMessages: () => NarrativeMessage[];
   clearAll: () => void;
@@ -61,6 +63,16 @@ export const useNarrativeStore = create<NarrativeState>()(
       clearDeletable: () =>
         set((state) => ({
           messages: state.messages.filter((m) => m.isActionable && !m.respondedAt),
+        })),
+
+      purgeForPlayer: (playerId) =>
+        set((state) => ({
+          messages: state.messages.filter((m) => {
+            // Keep actionable messages pending a response even if the player has left
+            // (the manager still needs to make a decision)
+            if (m.isActionable && !m.respondedAt) return true;
+            return !m.affectedEntities?.includes(playerId);
+          }),
         })),
 
       unreadCount: () =>

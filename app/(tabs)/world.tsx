@@ -12,6 +12,29 @@ import { formatCurrencyCompact } from '@/utils/currency';
 import type { LeaderboardEntry } from '@/types/api';
 import { useState } from 'react';
 
+type RepTier = 'Local' | 'Regional' | 'National' | 'Elite';
+
+function tierFromRep(reputation: number): RepTier {
+  if (reputation >= 75) return 'Elite';
+  if (reputation >= 40) return 'National';
+  if (reputation >= 15) return 'Regional';
+  return 'Local';
+}
+
+const TIER_ABBR: Record<RepTier, string> = {
+  Local:    'LOC',
+  Regional: 'REG',
+  National: 'NAT',
+  Elite:    'ELT',
+};
+
+const TIER_COLOR: Record<RepTier, string> = {
+  Local:    WK.dim,
+  Regional: '#4CAF50',
+  National: '#42A5F5',
+  Elite:    WK.yellow,
+};
+
 const WORLD_TABS = ['LEADERBOARD'] as const;
 type WorldTab = typeof WORLD_TABS[number];
 
@@ -144,6 +167,7 @@ function TableHeader() {
     }}>
       <PixelText size={7} color={WK.dim} style={{ width: 36 }}>#</PixelText>
       <PixelText size={7} color={WK.dim} style={{ flex: 1 }}>ACADEMY</PixelText>
+      <PixelText size={7} color={WK.dim} style={{ width: 36, textAlign: 'right' }}>TIER</PixelText>
       <PixelText size={7} color={WK.dim} style={{ width: 36, textAlign: 'right' }}>REP</PixelText>
       <PixelText size={7} color={WK.dim} style={{ width: 64, textAlign: 'right' }}>EARN</PixelText>
       <PixelText size={7} color={WK.dim} style={{ width: 32, textAlign: 'right' }}>WK</PixelText>
@@ -153,6 +177,8 @@ function TableHeader() {
 
 function LeaderboardRow({ entry, isOwn }: { entry: LeaderboardEntry; isOwn: boolean }) {
   const rankColor = RANK_COLORS[entry.rank] ?? WK.text;
+  const tier = tierFromRep(entry.reputation);
+  const tierColor = TIER_COLOR[tier];
 
   return (
     <View style={[
@@ -183,6 +209,10 @@ function LeaderboardRow({ entry, isOwn }: { entry: LeaderboardEntry; isOwn: bool
         {entry.academyName}
         {isOwn ? ' ★' : ''}
       </BodyText>
+
+      <VT323Text size={16} color={tierColor} style={{ width: 36, textAlign: 'right' }}>
+        {TIER_ABBR[tier]}
+      </VT323Text>
 
       <VT323Text size={18} color={WK.text} style={{ width: 36, textAlign: 'right' }}>
         {entry.reputation}

@@ -30,6 +30,30 @@ export const TIER_ORDER: Record<AcademyTier, number> = {
   elite: 3,
 };
 
+/**
+ * Maximum overallRating a player can achieve while the academy is at this tier.
+ * Matches the backend Tier.scoreRange() max values.
+ */
+export const TIER_OVR_CEILING: Record<AcademyTier, number> = {
+  local:    14,
+  regional: 39,
+  national: 74,
+  elite:    100,
+};
+
+/**
+ * Minimum level ALL facilities must reach to unlock each tier.
+ * Local → Regional: all ≥ 1
+ * Regional → National: all ≥ 2
+ * National → Elite: all ≥ 5
+ */
+export const TIER_FACILITY_REQUIREMENTS: Record<AcademyTier, number> = {
+  local:    0,
+  regional: 1,
+  national: 2,
+  elite:    5,
+};
+
 export interface ManagerPersonality {
   paName: string;
   temperament: number; // 0–100
