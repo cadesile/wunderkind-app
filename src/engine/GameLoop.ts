@@ -140,6 +140,78 @@ export function processWeeklyTick(): WeeklyTick {
     newInjuries.push({ playerId: id, severity: tier.severity, weeksRemaining });
   });
 
+  // ── 3c. Contract expiry ───────────────────────────────────────────────────
+  // Check every active player's enrollment. Fires inbox warnings at 12 and 4
+  // weeks remaining, applies morale decay during the critical window (1–11w),
+  // and removes the player when the contract expires (weeksRemaining <= 0).
+  {
+    const { updateMorale, removePlayer: removeExpiredPlayer } = useSquadStore.getState();
+    const { addTransfer } = useFinanceStore.getState();
+
+    players.forEach((player) => {
+      if (player.enrollmentEndWeek === undefined) return;
+      const weeksRemaining = player.enrollmentEndWeek - weekNumber;
+
+      if (weeksRemaining <= 0) {
+        // Contract expired — player leaves the academy
+        removeExpiredPlayer(player.id);
+        useInboxStore.getState().purgeForPlayer(player.id);
+        addTransfer({
+          playerId: player.id,
+          playerName: player.name,
+          destinationClub: 'Contract Expired',
+          grossFee: 0,
+          agentCommission: 0,
+          netProceeds: 0,
+          type: 'free_release',
+          week: weekNumber,
+        });
+        addMessage({
+          id: `contract-expired-${player.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: `${player.name} Has Left`,
+          body: `${player.name}'s enrollment has expired and they have left the academy. Renew contracts before they reach zero to keep your best players.`,
+          isRead: false,
+          entityId: player.id,
+        });
+        setReputation(-0.5);
+        return;
+      }
+
+      // Morale decay during critical window (1–11 weeks remaining)
+      if (weeksRemaining <= 11) {
+        updateMorale(player.id, -2);
+      }
+
+      // 12-week warning (fires exactly once)
+      if (weeksRemaining === 12) {
+        addMessage({
+          id: `contract-warn-12-${player.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Enrollment Expiring Soon',
+          body: `${player.name}'s enrollment ends in 12 weeks. Renew their contract from their player page or they will leave the academy.`,
+          isRead: false,
+          entityId: player.id,
+        });
+      }
+
+      // 4-week final warning (fires exactly once)
+      if (weeksRemaining === 4) {
+        addMessage({
+          id: `contract-warn-4-${player.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Enrollment Ending — Final Notice',
+          body: `${player.name}'s enrollment ends in 4 weeks. Their morale is suffering. Act now or they will leave.`,
+          isRead: false,
+          entityId: player.id,
+        });
+      }
+    });
+  }
+
   // ── 4. Behavioral incidents ───────────────────────────────────────────────────
   const incidents = players.flatMap((p) =>
     generateIncidents(p, weekNumber, players.filter((m) => m.id !== p.id), config),

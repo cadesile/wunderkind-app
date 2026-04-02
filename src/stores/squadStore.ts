@@ -36,6 +36,11 @@ interface SquadState {
   ) => void;
   /** @deprecated Use applyWeeklyPlayerUpdates instead */
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
+  /**
+   * Extend a player's enrollment by 52 weeks and increment extensionCount.
+   * Caller is responsible for deducting the extension fee from the academy balance.
+   */
+  extendContract: (playerId: string) => void;
   /** Set or clear a development focus on a player. Pass null to clear. */
   setDevelopmentFocus: (
     playerId: string,
@@ -168,6 +173,19 @@ export const useSquadStore = create<SquadState>()(
             }
             return { ...p, injury: { ...p.injury, weeksRemaining: p.injury.weeksRemaining - 1 } };
           }),
+        })),
+
+      extendContract: (playerId) =>
+        set((state) => ({
+          players: state.players.map((p) =>
+            p.id === playerId
+              ? {
+                  ...p,
+                  enrollmentEndWeek: (p.enrollmentEndWeek ?? 0) + 52,
+                  extensionCount: (p.extensionCount ?? 0) + 1,
+                }
+              : p,
+          ),
         })),
 
       setDevelopmentFocus: (playerId, focus) =>

@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
 import { useAcademyStore } from '@/stores/academyStore';
+import { useFinanceStore } from '@/stores/financeStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useGuardianStore } from '@/stores/guardianStore';
@@ -98,7 +99,11 @@ export default function PlayerDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const player = useSquadStore((s) => s.players.find((p) => p.id === id));
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
+  const extendContract = useSquadStore((s) => s.extendContract);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const academyBalance = useAcademyStore((s) => s.academy.balance);
+  const addBalance = useAcademyStore((s) => s.addBalance);
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
   const analyticsUnlocked = useFacilityStore((s) => s.levels.scoutingCenter > 0);
   const academyName = useAcademyStore((s) => s.academy.name ?? 'the academy');
   const allGuardians = useGuardianStore((s) => s.guardians);
@@ -127,9 +132,16 @@ export default function PlayerDetailScreen() {
     contractPct >= 85 ? WK.red :
     contractPct >= 60 ? WK.orange : WK.tealLight;
 
+  // Contract extension cost: OVR × £100 × (extensionCount + 1), in pounds
+  const extensionCostPounds = player
+    ? player.overallRating * 100 * ((player.extensionCount ?? 0) + 1)
+    : 0;
+  const canAffordExtension = academyBalance >= extensionCostPounds * 100; // balance stored in pence
+
   const [attrsExpanded, setAttrsExpanded]   = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
   const [releaseResultDialog, setReleaseResultDialog] = useState<{ title: string; message: string } | null>(null);
+  const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [lastAction, setLastAction] = useState<'SUPPORTED' | 'DISCIPLINED' | null>(null);
 
   const updatePlayer   = useSquadStore((s) => s.updatePlayer);
@@ -208,6 +220,18 @@ export default function PlayerDetailScreen() {
     });
     setLastAction('DISCIPLINED');
     setTimeout(() => setLastAction(null), 2000);
+  }
+
+  function handleExtend() {
+    addBalance(-(extensionCostPounds * 100)); // pence
+    addTransaction({
+      amount: -extensionCostPounds,
+      category: 'wages',
+      description: `${player!.name} enrollment extension`,
+      weekNumber,
+    });
+    extendContract(player!.id);
+    setShowExtendDialog(false);
   }
 
   async function confirmRelease() {
@@ -584,6 +608,25 @@ export default function PlayerDetailScreen() {
                 </View>
               )}
             </View>
+
+            {/* Extension button — visible when EXPIRING or CRITICAL */}
+            {(contractStatus === 'EXPIRING' || contractStatus === 'CRITICAL') && (
+              <Pressable
+                onPress={() => setShowExtendDialog(true)}
+                style={{
+                  marginTop: 12,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  backgroundColor: canAffordExtension ? WK.tealMid : 'rgba(0,0,0,0.3)',
+                  borderWidth: 2,
+                  borderColor: canAffordExtension ? WK.tealLight : WK.dim,
+                }}
+              >
+                <PixelText size={8} color={canAffordExtension ? WK.tealLight : WK.dim}>
+                  EXTEND CONTRACT  £{extensionCostPounds.toLocaleString()}
+                </PixelText>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -679,6 +722,19 @@ export default function PlayerDetailScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* ── Contract extension dialog ────────────────────────────────────────── */}
+      <PixelDialog
+        visible={showExtendDialog}
+        title="Extend Enrollment?"
+        message={
+          canAffordExtension
+            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${extensionCostPounds.toLocaleString()}. This is extension #${(player?.extensionCount ?? 0) + 1} — costs increase with each renewal.`
+            : `You cannot afford this extension. You need £${extensionCostPounds.toLocaleString()} but your balance is insufficient.`
+        }
+        onClose={() => setShowExtendDialog(false)}
+        {...(canAffordExtension ? { onConfirm: handleExtend, confirmLabel: 'EXTEND' } : {})}
+      />
 
       {/* ── Release result dialog ───────────────────────────────────────────── */}
       <PixelDialog
