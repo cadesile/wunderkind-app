@@ -32,7 +32,8 @@ type NavTabDef = {
 };
 
 const NAV_TABS_BASE: NavTabDef[] = [
-  { name: 'index',      Icon: LayoutGrid },
+  { name: 'index',      Icon: Home },
+  { name: 'hub',        Icon: LayoutGrid },
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
   { name: 'market',     Icon: Store },
@@ -145,7 +146,7 @@ function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
 
       {/* HOME FAB */}
       <Pressable
-        onPress={() => { hapticTap(); router.push('/home'); }}
+        onPress={() => { hapticTap(); router.push('/'); }}
         style={[
           {
             marginBottom: fabBottom,
@@ -365,8 +366,8 @@ export default function TabLayout() {
         screenOptions={{ headerShown: false }}
       >
         {/* Primary tabs */}
-        <Tabs.Screen name="home"       options={{ title: 'HOME' }} />
-        <Tabs.Screen name="index"      options={{ title: 'HUB' }} />
+        <Tabs.Screen name="index"      options={{ title: 'HOME' }} />
+        <Tabs.Screen name="hub"        options={{ title: 'HUB' }} />
         <Tabs.Screen name="facilities" options={{ title: 'BUILD' }} />
         <Tabs.Screen name="finances"   options={{ title: 'FINANCE' }} />
         <Tabs.Screen name="market"     options={{ title: 'MARKET' }} />
