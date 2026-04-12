@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './authStore';
+import { useEventChainStore } from './eventChainStore';
 import { useAcademyStore } from './academyStore';
 import { useSquadStore } from './squadStore';
 import { useCoachStore } from './coachStore';
@@ -31,6 +32,7 @@ const ALL_STORE_KEYS = [
   'archetype-store',
   'loss-condition-store',
   'guardian-store',
+  'event-chain-store',
 ];
 
 /**
@@ -69,6 +71,7 @@ export function resetInMemoryStores(): void {
   useCoachStore.setState({ coaches: [] });
   useScoutStore.setState({ scouts: [] });
   useGuardianStore.getState().clearAll();
+  useEventChainStore.getState().clearAll();
 }
 
 /**
