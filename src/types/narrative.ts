@@ -97,6 +97,15 @@ export interface NpcFiringConditions {
   subjectTraitRequirements?: TraitRequirement[];
 }
 
+export interface ChainLink {
+  /** Slug of the event whose weight is boosted when this event fires */
+  nextEventSlug: string;
+  /** Multiplier applied to nextEventSlug's weight during selection (e.g. 4.0 = 4×) */
+  boostMultiplier: number;
+  /** Number of weeks the boost remains active after this event fires */
+  windowWeeks: number;
+}
+
 export interface GameEventTemplate {
   id: string;
   slug: string;
@@ -107,6 +116,7 @@ export interface GameEventTemplate {
   impacts: EventImpacts;
   firingConditions?: NpcFiringConditions | null;
   severity?: 'minor' | 'major' | null;
+  chainedEvents?: ChainLink[] | null;
 }
 
 export interface ActiveEffect {
