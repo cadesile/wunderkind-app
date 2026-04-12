@@ -24,9 +24,10 @@ import { useLoanStore } from '@/stores/loanStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useAltercationStore } from '@/stores/altercationStore';
+import { useEventChainStore } from '@/stores/eventChainStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { WeeklyTick, AltercationBlock } from '@/types/game';
-import { FacilityType } from '@/types/facility';
+import { FacilityLevels } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
 import { TIER_OVR_CEILING } from '@/types/academy';
@@ -75,14 +76,17 @@ export function processWeeklyTick(): WeeklyTick {
   const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
   const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
-  const { levels, conditions } = useFacilityStore.getState();
+  const { levels, conditions, templates: facilityTemplates } = useFacilityStore.getState();
 
   // Effective level = level × (condition / 100), used to scale all facility benefits
-  const eff = (type: FacilityType) => levels[type] * (conditions[type] / 100);
+  const eff = (slug: string) => (levels[slug] ?? 0) * ((conditions[slug] ?? 100) / 100);
   const { processWeeklyRepayments, totalWeeklyRepayment } = useLoanStore.getState();
   const { sponsors: allSponsors, investors: allInvestors } = useMarketStore.getState();
 
   const weekNumber = academy.weekNumber ?? 1;
+
+  // Expire stale chain boosts before evaluating any events this tick
+  useEventChainStore.getState().expireChains(weekNumber);
 
   // ── 0. Narrative simulation tick ──────────────────────────────────────────────
   // Processes active multi-week effects and potentially fires a story event.
@@ -92,14 +96,14 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
   // Tactical Room boosts coach performance; conditions scale all benefits
-  const tacticalBoost = 1 + eff('tacticalRoom') * 0.05;
+  const tacticalBoost = 1 + eff('tactical_room') * 0.05;
   const totalCoachPerformance = coaches.reduce(
     (sum, c) => sum + computeCoachPerformanceScore(c), 0,
   ) * tacticalBoost;
-  const weeklyXP = calculateWeeklyXP(eff('technicalZone'), totalCoachPerformance, config.baseXP);
+  const weeklyXP = calculateWeeklyXP(eff('technical_zone'), totalCoachPerformance, config.baseXP);
 
   // ── 2. Injury Probability ─────────────────────────────────────────────────────
-  const injuryProb = calculateInjuryProbability(eff('physioClinic'), config.baseInjuryProbability);
+  const injuryProb = calculateInjuryProbability(eff('physio_clinic'), config.baseInjuryProbability);
 
   // ── 3. Personality shifts ─────────────────────────────────────────────────────
   const traitShifts: Record<string, Partial<PersonalityMatrix>> = {};
@@ -135,7 +139,7 @@ export function processWeeklyTick(): WeeklyTick {
   const newInjuries: NewInjury[] = [];
   injuredPlayerIds.forEach((id) => {
     const tier = pickInjurySeverity(INJURY_TIERS);
-    const weeksRemaining = calculateInjuryDuration(tier, eff('physioClinic'), eff('hydroPool'));
+    const weeksRemaining = calculateInjuryDuration(tier, eff('physio_clinic'), eff('hydro_pool'));
     setPlayerInjury(id, { severity: tier.severity, weeksRemaining, injuredWeek: weekNumber });
     newInjuries.push({ playerId: id, severity: tier.severity, weeksRemaining });
   });
@@ -340,7 +344,7 @@ export function processWeeklyTick(): WeeklyTick {
   const sponsorIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
   const financialSummary = calculateWeeklyFinances(
-    weekNumber, academy, players, coaches, levels, activeSponsors, weeklyLoanRepayment,
+    weekNumber, academy, players, coaches, levels, activeSponsors, weeklyLoanRepayment, facilityTemplates,
   );
 
   // Balance tracks spendable cash — net is in pence, stored directly in pence
@@ -389,9 +393,9 @@ export function processWeeklyTick(): WeeklyTick {
   // inside computePlayerDevelopment sees the current state.
   const playersWithInjuries = useSquadStore.getState().players;
   // Pass effective levels (scaled by condition) so development benefits degrade with facility wear
-  const effectiveLevels = Object.fromEntries(
-    (Object.keys(levels) as FacilityType[]).map((type) => [type, eff(type)]),
-  ) as typeof levels;
+  const effectiveLevels: FacilityLevels = Object.fromEntries(
+    Object.keys(levels).map((slug) => [slug, eff(slug)]),
+  );
   const effectiveTier = getEffectiveTier(academy.reputationTier, levels);
   const tierOvrCap = TIER_OVR_CEILING[effectiveTier];
   const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber, tierOvrCap);
@@ -762,7 +766,7 @@ export function processWeeklyTick(): WeeklyTick {
   // Scouting Center adds to this on top.
   const rep = academy.reputation;
   const passiveRepDelta = calculateReputationDelta(
-    eff('scoutingCenter'),
+    eff('scouting_center'),
     config.reputationDeltaBase,
     config.reputationDeltaFacilityMultiplier,
   );
