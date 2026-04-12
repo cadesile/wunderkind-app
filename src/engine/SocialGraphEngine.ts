@@ -3,9 +3,10 @@ import { useAcademyStore } from '@/stores/academyStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { useEventChainStore } from '@/stores/eventChainStore';
 import { simulationService } from './SimulationService';
 import { getRelationshipValue } from './RelationshipService';
-import { EventCategory } from '@/types/narrative';
+import { EventCategory, GameEventTemplate } from '@/types/narrative';
 import { Clique, DressingRoomHealth, CliquePaletteColor, NpcTrainingIncidentSubtype } from '@/types/interaction';
 import { Player } from '@/types/player';
 import { uuidv7 } from '@/utils/uuidv7';
@@ -14,6 +15,44 @@ const BASE_INCIDENT_PROBABILITY = 0.08;
 const INCIDENT_COOLDOWN_WEEKS = 3;
 const MIN_CLIQUE_SIZE = 3;
 const CLIQUE_COLORS: CliquePaletteColor[] = ['coral', 'sky', 'lilac', 'amber'];
+
+// ─── Chain helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Returns a new array of templates with chain-boosted weights applied for the given pair.
+ * Original template objects are not mutated.
+ */
+export function applyChainBoosts(
+  templates: GameEventTemplate[],
+  playerAId: string,
+  playerBId: string,
+): GameEventTemplate[] {
+  const boosts = useEventChainStore.getState().getBoostsForPair(playerAId, playerBId);
+  if (boosts.length === 0) return templates;
+
+  return templates.map((t) => {
+    const boost = boosts.find((b) => b.boostedSlug === t.slug);
+    if (!boost) return t;
+    return { ...t, weight: t.weight * boost.multiplier };
+  });
+}
+
+/**
+ * Reads the fired template's chainedEvents and writes boost entries to eventChainStore.
+ */
+export function extractChainedSlugsAndActivate(
+  template: GameEventTemplate,
+  playerAId: string,
+  playerBId: string,
+  currentWeek: number,
+): void {
+  if (!template.chainedEvents?.length) return;
+
+  const { activateChain } = useEventChainStore.getState();
+  for (const link of template.chainedEvents) {
+    activateChain(template.slug, playerAId, playerBId, link, currentWeek);
+  }
+}
 
 // ─── Subtype derivation ────────────────────────────────────────────────────────
 
@@ -380,7 +419,8 @@ export function processSocialGraph(): void {
       if (eligible.length === 0) continue;
       if (Math.random() > BASE_INCIDENT_PROBABILITY) continue;
 
-      const template = eligible.reduce((best, t) =>
+      const boosted = applyChainBoosts(eligible, actor.id, subject.id);
+      const template = boosted.reduce((best, t) =>
         t.weight > best.weight ? t : best,
       );
 
@@ -391,6 +431,8 @@ export function processSocialGraph(): void {
         { player_1: actor.id, player_2: subject.id },
         isMajor,
       );
+
+      extractChainedSlugsAndActivate(template, actor.id, subject.id, weekNumber);
 
       const subtype = deriveSubtype(template.slug);
 
