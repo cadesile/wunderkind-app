@@ -7,7 +7,7 @@ import type { AcademyTier } from './academy';
 export interface ScoutingMission {
   id: string;
   scoutId: string;
-  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  position: 'GK' | 'DEF' | 'MID' | 'FWD' | null;
   targetNationality: string | null;
   weeksTotal: number;
   weeksElapsed: number;

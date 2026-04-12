@@ -159,14 +159,18 @@ export default function ScoutDetailScreen() {
           }}>
             <PixelText size={9} upper style={{ marginBottom: 14 }}>Active Mission</PixelText>
             <View style={{ gap: 4 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                <PixelText size={14} variant="vt323" dim>POSITION</PixelText>
-                <PixelText size={18} variant="vt323" color={WK.text}>{scout.activeMission.position}</PixelText>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                <PixelText size={14} variant="vt323" dim>REGION</PixelText>
-                <PixelText size={18} variant="vt323" color={WK.text}>{scout.activeMission.targetNationality ?? 'Domestic'}</PixelText>
-              </View>
+              {scout.activeMission.position && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                  <PixelText size={14} variant="vt323" dim>POSITION</PixelText>
+                  <PixelText size={18} variant="vt323" color={WK.text}>{scout.activeMission.position}</PixelText>
+                </View>
+              )}
+              {scout.activeMission.targetNationality && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                  <PixelText size={14} variant="vt323" dim>REGION</PixelText>
+                  <PixelText size={18} variant="vt323" color={WK.text}>{scout.activeMission.targetNationality}</PixelText>
+                </View>
+              )}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
                 <PixelText size={14} variant="vt323" dim>PROGRESS</PixelText>
                 <PixelText size={18} variant="vt323" color={WK.yellow}>

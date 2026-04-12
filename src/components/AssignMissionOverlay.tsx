@@ -24,7 +24,11 @@ interface Props {
 const POSITIONS = ['GK', 'DEF', 'MID', 'FWD'] as const;
 type PositionType = typeof POSITIONS[number];
 
-const WEEK_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+const DURATION_OPTIONS = [
+  { label: '1 MONTH',  weeks: 4  },
+  { label: '3 MONTHS', weeks: 12 },
+  { label: '6 MONTHS', weeks: 24 },
+] as const;
 
 export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
   const [selectedPosition, setSelectedPosition] = useState<PositionType | null>(null);
@@ -40,33 +44,26 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
   const metrics = useAcademyMetrics();
   const academyValuePounds = penceToPounds(metrics.totalValuation);
 
-  const costPence = selectedPosition
-    ? calcMissionCost(academyValuePounds, selectedWeeks)
-    : 0;
+  const costPence = calcMissionCost(academyValuePounds, selectedWeeks);
 
   // academy.balance is in pence — compare directly with costPence
   const canAfford = academy.balance >= costPence;
 
   const reputationTier = academy.reputationTier;
   const availableRegions = getAvailableRegions(reputationTier, scout.scoutingRange);
-  const requiresNationality = availableRegions !== null;
 
-  const isConfirmDisabled =
-    !selectedPosition ||
-    (requiresNationality && !selectedNationality) ||
-    !canAfford;
+  const isConfirmDisabled = !canAfford;
 
   function handleConfirm() {
-    if (!selectedPosition) return;
-
     // Deduct balance (addBalance takes pence)
     addBalance(-costPence);
 
     // Log transaction (amount in pence per FinancialTransaction spec)
+    const positionLabel = selectedPosition ? ` (${selectedPosition})` : '';
     addTransaction({
       amount: -costPence,
       category: 'upkeep',
-      description: `Scouting mission — ${scout.name} (${selectedPosition})`,
+      description: `Scouting mission — ${scout.name}${positionLabel}`,
       weekNumber: academy.weekNumber ?? 1,
     });
 
@@ -147,14 +144,14 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
               </View>
             </View>
 
-            {/* Position selector */}
+            {/* Position selector (optional) */}
             <View>
-              <PixelText size={7} dim style={{ marginBottom: 8 }}>SELECT POSITION</PixelText>
+              <PixelText size={7} dim style={{ marginBottom: 8 }}>POSITION (OPTIONAL)</PixelText>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {POSITIONS.map((pos) => (
                   <Pressable
                     key={pos}
-                    onPress={() => setSelectedPosition(pos)}
+                    onPress={() => setSelectedPosition(selectedPosition === pos ? null : pos)}
                     style={{
                       flex: 1,
                       paddingVertical: 10,
@@ -173,10 +170,10 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
               </View>
             </View>
 
-            {/* Region selector */}
+            {/* Region selector (optional) */}
             {availableRegions !== null ? (
               <View>
-                <PixelText size={7} dim style={{ marginBottom: 8 }}>SELECT REGION</PixelText>
+                <PixelText size={7} dim style={{ marginBottom: 8 }}>REGION (OPTIONAL)</PixelText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {availableRegions.map((region) => {
@@ -224,31 +221,28 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
 
             {/* Duration selector */}
             <View>
-              <PixelText size={7} dim style={{ marginBottom: 8 }}>DURATION (WEEKS)</PixelText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {WEEK_OPTIONS.map((w) => (
-                    <Pressable
-                      key={w}
-                      onPress={() => setSelectedWeeks(w)}
-                      style={{
-                        width: 44,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: selectedWeeks === w ? WK.yellow : WK.tealCard,
-                        borderWidth: 3,
-                        borderColor: WK.border,
-                        ...pixelShadow,
-                      }}
-                    >
-                      <PixelText size={8} color={selectedWeeks === w ? '#3a2000' : WK.text}>
-                        {w}
-                      </PixelText>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
+              <PixelText size={7} dim style={{ marginBottom: 8 }}>DURATION</PixelText>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {DURATION_OPTIONS.map(({ label, weeks }) => (
+                  <Pressable
+                    key={weeks}
+                    onPress={() => setSelectedWeeks(weeks)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      backgroundColor: selectedWeeks === weeks ? WK.yellow : WK.tealCard,
+                      borderWidth: 3,
+                      borderColor: WK.border,
+                      ...pixelShadow,
+                    }}
+                  >
+                    <PixelText size={7} color={selectedWeeks === weeks ? '#3a2000' : WK.text}>
+                      {label}
+                    </PixelText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
 
             {/* Cost summary */}
