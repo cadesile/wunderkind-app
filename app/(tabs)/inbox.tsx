@@ -1312,7 +1312,15 @@ export default function InboxScreen() {
     setSelectedOffer(null);
   }
 
-  // Always return to list view when the screen gains focus (e.g. tapping the inbox icon)
+  // Reset to list view whenever the inbox icon is tapped (even if already on this screen)
+  const inboxResetKey = useNavStore((s) => s.inboxResetKey);
+  useEffect(() => {
+    if (inboxResetKey === 0) return;
+    handleBack();
+    useNavStore.getState().setBackFab(null);
+  }, [inboxResetKey]);
+
+  // Also reset on focus (e.g. navigating here from another tab)
   useFocusEffect(useCallback(() => {
     handleBack();
     useNavStore.getState().setBackFab(null);

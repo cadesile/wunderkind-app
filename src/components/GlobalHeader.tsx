@@ -4,6 +4,7 @@ import { Mail, AlertTriangle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
+import { useNavStore } from '@/stores/navStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { FacilityType } from '@/types/facility';
@@ -102,7 +103,10 @@ export function GlobalHeader() {
 
       {/* Inbox */}
       <Pressable
-        onPress={() => router.navigate('/inbox')}
+        onPress={() => {
+          useNavStore.getState().requestInboxReset();
+          router.navigate('/inbox');
+        }}
         style={{ width: 50, height: 50, alignItems: 'center', justifyContent: 'center' }}
       >
         <Mail size={22} color={unreadCount > 0 ? WK.yellow : WK.dim} />
