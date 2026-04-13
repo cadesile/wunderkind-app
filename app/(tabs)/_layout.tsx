@@ -32,7 +32,6 @@ type NavTabDef = {
 };
 
 const NAV_TABS_BASE: NavTabDef[] = [
-  { name: 'index',      Icon: Home },
   { name: 'hub',        Icon: LayoutGrid },
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
