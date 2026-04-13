@@ -5,9 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { repairFacilityCost } from '@/types/facility';
+import type { FacilityTemplate } from '@/types/facility';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useFinanceStore } from '@/stores/financeStore';
-import { FACILITY_DEFS, FacilityMeta, FacilityType } from '@/types/facility';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
@@ -25,23 +25,20 @@ const CATEGORIES: { id: FacilityCategory; label: string }[] = [
   { id: 'SCOUTING',  label: 'SCOUTING'  },
 ];
 
-const FACILITY_CATEGORY: Record<FacilityType, FacilityCategory> = {
-  technicalZone:  'TRAINING',
-  strengthSuite:  'TRAINING',
-  tacticalRoom:   'SCOUTING',
-  physioClinic:   'MEDICAL',
-  hydroPool:      'MEDICAL',
-  scoutingCenter: 'SCOUTING',
+// ─── Benefit labels (client-side game logic) ──────────────────────────────────
+
+const LEVEL_BENEFIT_LABELS: Record<string, (level: number) => string> = {
+  technical_zone:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% XP BOOST`,
+  strength_suite:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 2).toFixed(0)}% POWER/STAM XP`,
+  tactical_room:   (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% COACH PERF`,
+  physio_clinic:   (l) => l === 0 ? 'INACTIVE' : `-${(l * 8).toFixed(0)}% INJURY PROB · MAX ${10 + l * 3} PLAYERS`,
+  hydro_pool:      (l) => l === 0 ? 'INACTIVE' : `-${(l * 10).toFixed(0)}% RECOVERY TIME`,
+  scouting_center: (l) => l === 0 ? 'INACTIVE' : `SCOUTING ACTIVE · +${(l * 0.8).toFixed(1)} REP/WK`,
 };
 
-const LEVEL_BENEFIT_LABELS: Record<FacilityType, (level: number) => string> = {
-  technicalZone:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% XP BOOST`,
-  strengthSuite:  (l) => l === 0 ? 'INACTIVE' : `+${(l * 2).toFixed(0)}% POWER/STAM XP`,
-  tacticalRoom:   (l) => l === 0 ? 'INACTIVE' : `+${(l * 5).toFixed(0)}% COACH PERF`,
-  physioClinic:   (l) => l === 0 ? 'INACTIVE' : `-${(l * 8).toFixed(0)}% INJURY PROB · MAX ${10 + l * 3} PLAYERS`,
-  hydroPool:      (l) => l === 0 ? 'INACTIVE' : `-${(l * 10).toFixed(0)}% RECOVERY TIME`,
-  scoutingCenter: (l) => l === 0 ? 'INACTIVE' : `SCOUTING ACTIVE · +${(l * 0.8).toFixed(1)} REP/WK`,
-};
+function benefitLabel(slug: string, level: number): string {
+  return LEVEL_BENEFIT_LABELS[slug]?.(level) ?? (level === 0 ? 'INACTIVE' : `LEVEL ${level} ACTIVE`);
+}
 
 /** Condition bar colour: ≥60 teal, ≥30 orange, <30 red */
 function conditionColor(pct: number): string {
@@ -53,12 +50,12 @@ function conditionColor(pct: number): string {
 // ─── Facility card ────────────────────────────────────────────────────────────
 
 function FacilityCard({
-  def,
+  template,
   level,
   condition,
   balance,
 }: {
-  def: FacilityMeta;
+  template: FacilityTemplate;
   level: number;
   condition: number;
   balance: number;
@@ -68,36 +65,35 @@ function FacilityCard({
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [repairModalVisible, setRepairModalVisible] = useState(false);
 
-  const upgradeCost    = facilityUpgradeCost(def.type, level);
-  const maintenance    = calculateFacilityUpkeep(def.type, level);
-  const nextMaintenance = calculateFacilityUpkeep(def.type, level + 1);
-  const repairCost     = repairFacilityCost(def.type, level, condition);
+  const upgradeCost     = facilityUpgradeCost(template, level);
+  const maintenance     = calculateFacilityUpkeep(template, level);
+  const nextMaintenance = calculateFacilityUpkeep(template, level + 1);
+  const repairCost      = repairFacilityCost(level, condition, template.baseCost);
 
   const canAffordUpgrade = balance >= upgradeCost;
   const canAffordRepair  = balance >= repairCost;
-  const atMax      = level >= 10;
-  const levelPct   = (level / 10) * 100;
-  const effectiveLevel = (level * (condition / 100)).toFixed(1);
+  const atMax      = level >= template.maxLevel;
+  const levelPct   = (level / template.maxLevel) * 100;
   const needsRepair = level > 0 && condition < 100;
 
   function confirmUpgrade() {
     setUpgradeModalVisible(false);
-    upgradeLevel(def.type);
+    upgradeLevel(template.slug);
     addBalance(-upgradeCost * 100); // pounds → pence
     useFinanceStore.getState().addTransaction({
-      amount: -upgradeCost,
-      category: 'facility_upgrade',
-      description: `Upgraded ${def.label} to level ${level + 1}`,
-      weekNumber: academy.weekNumber ?? 1,
+      amount:      -upgradeCost,
+      category:    'facility_upgrade',
+      description: `Upgraded ${template.label} to level ${level + 1}`,
+      weekNumber:  academy.weekNumber ?? 1,
     });
   }
 
   function confirmRepair() {
     setRepairModalVisible(false);
-    repairFacility(def.type);
+    repairFacility(template.slug);
   }
 
-  const condColor = conditionColor(condition);
+  const condColor  = conditionColor(condition);
   const cardBorder = level > 0
     ? (condition < 30 ? WK.red : WK.tealLight)
     : WK.border;
@@ -113,7 +109,7 @@ function FacilityCard({
     }}>
       {/* Title row */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <BodyText size={15} upper style={{ flex: 1 }}>{def.label}</BodyText>
+        <BodyText size={15} upper style={{ flex: 1 }}>{template.label}</BodyText>
         <View style={{
           borderWidth: 2,
           borderColor: level > 0 ? WK.yellow : WK.border,
@@ -126,19 +122,19 @@ function FacilityCard({
 
       {/* Active benefit */}
       <BodyText size={13} color={WK.tealLight} style={{ marginBottom: 2 }}>
-        ◆ {LEVEL_BENEFIT_LABELS[def.type](level)}
+        ◆ {benefitLabel(template.slug, level)}
       </BodyText>
 
       {/* Description */}
-      <BodyText size={12} dim style={{ marginBottom: 10 }}>{def.description}</BodyText>
+      <BodyText size={12} dim style={{ marginBottom: 10 }}>{template.description}</BodyText>
 
-      {/* Dual progress bars — side by side */}
+      {/* Dual progress bars */}
       <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
         {/* Level bar */}
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
             <BodyText size={11} dim>LEVEL</BodyText>
-            <BodyText size={11} dim>{level}/10</BodyText>
+            <BodyText size={11} dim>{level}/{template.maxLevel}</BodyText>
           </View>
           <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
             <View style={{ height: '100%', width: `${levelPct}%`, backgroundColor: WK.tealLight }} />
@@ -159,7 +155,7 @@ function FacilityCard({
         )}
       </View>
 
-      {/* Maintenance — single line */}
+      {/* Maintenance */}
       <BodyText size={12} dim style={{ marginBottom: 12 }}>
         MAINT: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/wk`}
         {!atMax ? `  ·  LV${level + 1}: £${(nextMaintenance / 100).toFixed(2)}/wk` : ''}
@@ -213,7 +209,7 @@ function FacilityCard({
               maxWidth: 340,
               ...pixelShadow,
             }}>
-              <PixelText size={9} upper style={{ marginBottom: 12 }}>Upgrade {def.label}</PixelText>
+              <PixelText size={9} upper style={{ marginBottom: 12 }}>Upgrade {template.label}</PixelText>
               {!canAffordUpgrade ? (
                 <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
                   INSUFFICIENT FUNDS — need £{upgradeCost.toLocaleString()}
@@ -258,7 +254,7 @@ function FacilityCard({
               maxWidth: 340,
               ...pixelShadow,
             }}>
-              <PixelText size={9} upper style={{ marginBottom: 12 }}>Repair {def.label}</PixelText>
+              <PixelText size={9} upper style={{ marginBottom: 12 }}>Repair {template.label}</PixelText>
               {!canAffordRepair ? (
                 <BodyText size={13} color={WK.red} style={{ marginBottom: 20 }}>
                   INSUFFICIENT FUNDS — need £{repairCost.toLocaleString()}
@@ -290,7 +286,7 @@ function FacilityCard({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function FacilitiesScreen() {
-  const { levels, conditions } = useFacilityStore();
+  const { templates, levels, conditions } = useFacilityStore();
   const academy = useAcademyStore((s) => s.academy);
   const [activeCategory, setActiveCategory] = useState<FacilityCategory>('TRAINING');
 
@@ -300,9 +296,7 @@ export default function FacilitiesScreen() {
       : academy.totalCareerEarnings * 100,
   );
 
-  const visibleDefs = FACILITY_DEFS.filter(
-    (def) => FACILITY_CATEGORY[def.type] === activeCategory,
-  );
+  const visibleTemplates = templates.filter((t) => t.category === activeCategory);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
@@ -330,12 +324,12 @@ export default function FacilitiesScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
-        {visibleDefs.map((def) => (
+        {visibleTemplates.map((template) => (
           <FacilityCard
-            key={def.type}
-            def={def}
-            level={levels[def.type]}
-            condition={conditions[def.type]}
+            key={template.slug}
+            template={template}
+            level={levels[template.slug] ?? 0}
+            condition={conditions[template.slug] ?? 100}
             balance={balance}
           />
         ))}
@@ -354,7 +348,7 @@ export default function FacilitiesScreen() {
         }}>
           <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
           <PixelText size={12} color={WK.orange}>
-            £{(calculateTotalUpkeep(levels) / 100).toFixed(2)}
+            £{(calculateTotalUpkeep(templates, levels) / 100).toFixed(2)}
           </PixelText>
         </View>
       </ScrollView>

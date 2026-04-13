@@ -17,6 +17,7 @@ import { syncWeek } from '@/api/endpoints/sync';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { useFacilityStore } from '@/stores/facilityStore';
 import { SyncRequest } from '@/types/api';
 
 const QUEUE_STORAGE_KEY = 'wk-sync-queue';
@@ -119,6 +120,10 @@ class SyncQueue {
         // Piggyback: update engine config if the server sent a newer version
         if (res.gameConfig) {
           useGameConfigStore.getState().setConfig(res.gameConfig);
+        }
+        // Piggyback: hydrate facility templates from the server catalogue
+        if (res.facilityTemplates && res.facilityTemplates.length > 0) {
+          useFacilityStore.getState().setTemplates(res.facilityTemplates);
         }
         this.queue.shift();
         await this.persist();

@@ -104,7 +104,7 @@ export default function PlayerDetailScreen() {
   const academyBalance = useAcademyStore((s) => s.academy.balance);
   const addBalance = useAcademyStore((s) => s.addBalance);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
-  const analyticsUnlocked = useFacilityStore((s) => s.levels.scoutingCenter > 0);
+  const analyticsUnlocked = useFacilityStore((s) => (s.levels['scouting_center'] ?? 0) > 0);
   const academyName = useAcademyStore((s) => s.academy.name ?? 'the academy');
   const allGuardians = useGuardianStore((s) => s.guardians);
   const guardians = useMemo(

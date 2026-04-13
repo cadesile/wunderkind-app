@@ -210,8 +210,8 @@ export function computePlayerDevelopment(
   weekNumber: number,
   tierOvrCap: number = 100,
 ): Record<string, PlayerDevelopmentUpdate> {
-  const trainingLevel = facilityLevels.technicalZone ?? 1;
-  const strengthLevel = facilityLevels.strengthSuite ?? 0;
+  const trainingLevel = facilityLevels['technical_zone'] ?? 1;
+  const strengthLevel = facilityLevels['strength_suite'] ?? 0;
   const devUpdates: Record<string, PlayerDevelopmentUpdate> = {};
   const highlights: { id: string; name: string; attr: string; newVal: number }[] = [];
 

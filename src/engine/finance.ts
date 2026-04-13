@@ -2,18 +2,9 @@ import { FinancialRecord, ExpenseItem } from '@/types/game';
 import { Academy } from '@/types/academy';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
-import { FacilityLevels, FacilityType } from '@/types/facility';
+import { FacilityTemplate, FacilityLevels } from '@/types/facility';
 import { Sponsor } from '@/types/market';
 import { calculateFacilityUpkeep } from '@/utils/facilityUpkeep';
-
-const FACILITY_TYPES = [
-  'technicalZone',
-  'strengthSuite',
-  'tacticalRoom',
-  'physioClinic',
-  'hydroPool',
-  'scoutingCenter',
-] as const;
 
 /**
  * Net sale price after deducting agent commission and investor equity.
@@ -44,6 +35,7 @@ export function calculateWeeklyFinances(
   facilityLevels: FacilityLevels,
   sponsors: Sponsor[] = [],
   weeklyLoanRepayment: number = 0,
+  facilityTemplates: FacilityTemplate[] = [],
 ): FinancialRecord {
   const breakdown: ExpenseItem[] = [];
 
@@ -65,12 +57,12 @@ export function calculateWeeklyFinances(
     breakdown.push({ label: 'Staff wages', amount: staffWages });
   }
 
-  // Facility maintenance: exponential scaling (baseCost × 1.5^level)
-  FACILITY_TYPES.forEach((type) => {
-    const level = facilityLevels[type];
+  // Facility maintenance: exponential scaling (weeklyUpkeepBase × 1.5^level)
+  facilityTemplates.forEach((template) => {
+    const level = facilityLevels[template.slug] ?? 0;
     if (level > 0) {
-      const cost = calculateFacilityUpkeep(type as FacilityType, level);
-      breakdown.push({ label: `${type} maintenance`, amount: cost });
+      const cost = calculateFacilityUpkeep(template, level);
+      breakdown.push({ label: `${template.label} maintenance`, amount: cost });
     }
   });
 

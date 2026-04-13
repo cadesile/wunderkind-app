@@ -6,17 +6,14 @@ import {
 } from '@/types/academy';
 import { FacilityLevels } from '@/types/facility';
 
-const FACILITY_KEYS: (keyof FacilityLevels)[] = [
-  'technicalZone', 'strengthSuite', 'tacticalRoom',
-  'physioClinic', 'hydroPool', 'scoutingCenter',
-];
-
 /**
  * Returns the highest AcademyTier unlocked by the given facility levels.
- * All 6 facilities must meet the minimum level requirement for each tier.
+ * All built facilities must meet the minimum level requirement for each tier.
  */
 export function computeFacilityTier(levels: FacilityLevels): AcademyTier {
-  const minLevel = Math.min(...FACILITY_KEYS.map((k) => levels[k]));
+  const values = Object.values(levels);
+  if (values.length === 0) return 'local';
+  const minLevel = Math.min(...values);
 
   if (minLevel >= TIER_FACILITY_REQUIREMENTS.elite)    return 'elite';
   if (minLevel >= TIER_FACILITY_REQUIREMENTS.national) return 'national';

@@ -1,32 +1,22 @@
-import type { FacilityType, FacilityLevels } from '../types/facility';
-
-/** Base weekly upkeep costs per facility type (in pence). Level 0 = free. */
-const BASE_UPKEEP_COSTS: Record<FacilityType, number> = {
-  technicalZone:  500, // £5/wk base
-  strengthSuite:  400, // £4/wk base
-  tacticalRoom:   350, // £3.50/wk base
-  physioClinic:   600, // £6/wk base
-  hydroPool:      700, // £7/wk base
-  scoutingCenter: 300, // £3/wk base
-};
+import type { FacilityTemplate, FacilityLevels } from '../types/facility';
 
 /**
  * Calculate weekly upkeep cost for a facility.
- * Formula: baseCost × (1.5 ^ level). Level 0 = free.
+ * Formula: weeklyUpkeepBase × 1.5^level. Level 0 = free.
  * @returns Weekly upkeep in pence.
  */
-export function calculateFacilityUpkeep(type: FacilityType, level: number): number {
+export function calculateFacilityUpkeep(template: FacilityTemplate, level: number): number {
   if (level === 0) return 0;
-  return Math.floor(BASE_UPKEEP_COSTS[type] * Math.pow(1.5, level));
+  return Math.floor(template.weeklyUpkeepBase * Math.pow(1.5, level));
 }
 
 /**
  * Calculate total weekly upkeep across all facilities.
  * @returns Total weekly upkeep in pence.
  */
-export function calculateTotalUpkeep(levels: FacilityLevels): number {
-  return (Object.entries(levels) as [FacilityType, number][]).reduce(
-    (total, [type, level]) => total + calculateFacilityUpkeep(type, level),
+export function calculateTotalUpkeep(templates: FacilityTemplate[], levels: FacilityLevels): number {
+  return templates.reduce(
+    (total, t) => total + calculateFacilityUpkeep(t, levels[t.slug] ?? 0),
     0,
   );
 }

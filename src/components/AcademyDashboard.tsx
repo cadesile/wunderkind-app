@@ -16,7 +16,6 @@ import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
-import { FACILITY_DEFS } from '@/types/facility';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
 import { getLeaderboard } from '@/api/endpoints/leaderboard';
@@ -226,7 +225,7 @@ export function AcademyDashboard() {
   const archetypes = useArchetypeStore((s) => s.archetypes);
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
-  const { levels, conditions } = useFacilityStore();
+  const { levels, conditions, templates: facilityTemplates } = useFacilityStore();
   const crownJewelArchetype = crownJewel
     ? getArchetypeForPlayer(crownJewel, archetypes)
     : null;
@@ -265,7 +264,7 @@ export function AcademyDashboard() {
   const seriousCount  = injuredPlayers.filter((p) => p.injury!.severity === 'serious').length;
 
   // ── Facilities summary ───────────────────────────────────────────────────────
-  const builtFacilities = FACILITY_DEFS.filter((def) => levels[def.type] > 0);
+  const builtFacilities = facilityTemplates.filter((t) => (levels[t.slug] ?? 0) > 0);
 
   // ── Derived display values ───────────────────────────────────────────────────
   const cashPounds        = penceToPounds(cashBalance);
@@ -596,12 +595,12 @@ export function AcademyDashboard() {
               </View>
             </View>
             {builtFacilities.map((def) => {
-              const lvl  = levels[def.type];
-              const cond = Math.round(conditions[def.type]);
+              const lvl  = levels[def.slug] ?? 0;
+              const cond = Math.round(conditions[def.slug] ?? 100);
               const condColor = cond >= 60 ? WK.tealLight : cond >= 30 ? WK.orange : WK.red;
               return (
                 <View
-                  key={def.type}
+                  key={def.slug}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
                     paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border,

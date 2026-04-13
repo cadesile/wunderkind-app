@@ -97,7 +97,8 @@ export default function useAcademyMetrics(): AcademyMetrics {
   const academy = useAcademyStore((s) => s.academy);
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
-  const levels = useFacilityStore((s) => s.levels);
+  const levels            = useFacilityStore((s) => s.levels);
+  const facilityTemplates = useFacilityStore((s) => s.templates);
 
   const { reputation } = academy;
 
@@ -150,6 +151,9 @@ export default function useAcademyMetrics(): AcademyMetrics {
     players,
     coaches,
     levels,
+    [],
+    0,
+    facilityTemplates,
   ).net;
 
   // ── Reputation Tier Progress ───────────────────────────────────────────────

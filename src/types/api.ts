@@ -1,6 +1,7 @@
 export type { MarketDataResponse } from './market';
 import type { FinancialCategory } from './finance';
 import type { GameConfig } from './gameConfig';
+import type { FacilityTemplate } from './facility';
 
 // ─── Starter Config ───────────────────────────────────────────────────────────
 
@@ -120,35 +121,9 @@ export interface ApiStaffScout {
 }
 
 // ─── Facilities ───────────────────────────────────────────────────────────────
-
-export interface FacilitiesResponse {
-  /** Academy balance in pence */
-  balance: number;
-  facilities: ApiFacilityData[];
-}
-
-export interface ApiFacilityData {
-  type: 'training_pitch' | 'medical_centre' | 'medical_network' | 'scouting_network';
-  level: number;
-  currentEffect: string;
-  /** Upgrade cost in pence */
-  upgradeCost: number;
-  nextLevelEffect: string | null;
-  canUpgrade: boolean;
-}
-
-export interface FacilityUpgradeResponse {
-  success: boolean;
-  facility: {
-    type: string;
-    level: number;
-    currentEffect: string;
-  };
-  /** New balance in pence after upgrade */
-  newBalance: number;
-  /** Cost paid in pence */
-  upgradeCost: number;
-}
+// Facility state is client-authoritative. The backend delivers FacilityTemplate
+// catalogue entries via the sync response; see SyncAcceptedResponse below.
+export type { FacilityTemplate };
 
 // ─── Inbox ────────────────────────────────────────────────────────────────────
 
@@ -265,8 +240,10 @@ export interface SyncAcceptedResponse {
   accepted: true;
   weekNumber: number;
   syncedAt: string;
-  /** Server may piggyback updated engine constants on any sync response */
+  /** Updated engine constants piggybacked on every sync response */
   gameConfig?: GameConfig;
+  /** Active facility templates — replaces local fallback on receipt */
+  facilityTemplates?: FacilityTemplate[];
   academy: {
     reputation: number;
     totalCareerEarnings: number;
