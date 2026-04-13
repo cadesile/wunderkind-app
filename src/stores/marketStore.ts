@@ -102,12 +102,19 @@ export const useMarketStore = create<MarketState>()(
         const existingPlayers = get().players;
         const { playerFeeMultiplier } = useGameConfigStore.getState().config;
 
+        // Build signed-ID sets so already-hired staff are excluded from the market
+        const signedPlayerIds = new Set(useSquadStore.getState().players.map((p) => p.id));
+        const signedCoachIds  = new Set(useCoachStore.getState().coaches.map((c) => c.id));
+        const signedScoutIds  = new Set(useScoutStore.getState().scouts.map((s) => s.id));
+
         // Preserve locally-added gem players that the backend doesn't know about
         const localGems = existingPlayers.filter(
           (p) => p.isLocalGem && !data.players.some((bp) => bp.id === p.id),
         );
 
-        const playersWithScouting = data.players.map((p) => {
+        const playersWithScouting = data.players
+          .filter((p) => !signedPlayerIds.has(p.id))
+          .map((p) => {
           const existing = existingPlayers.find((e) => e.id === p.id);
           if (existing?.scoutingStatus) {
             return {
@@ -130,8 +137,8 @@ export const useMarketStore = create<MarketState>()(
         });
         set({
           players: [...playersWithScouting, ...localGems],
-          coaches: data.coaches,
-          marketScouts: data.scouts,
+          coaches: data.coaches.filter((c) => !signedCoachIds.has(c.id)),
+          marketScouts: data.scouts.filter((s) => !signedScoutIds.has(s.id)),
           agents: data.agents,
           sponsors: data.sponsors,
           investors: data.investors,
