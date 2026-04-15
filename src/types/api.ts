@@ -186,6 +186,34 @@ export interface TokenRefreshResponse {
   refresh_token: string;
 }
 
+// ─── Competition ─────────────────────────────────────────────────────────────
+
+export interface ClubSnapshot {
+  id: string;
+  name: string;
+  reputation: number;
+  tier: number;
+  primaryColor: string;
+  secondaryColor: string;
+  stadiumName: string | null;
+}
+
+export interface LeagueSnapshot {
+  id: string;
+  tier: number;
+  name: string;
+  country: string;
+  season: number;
+  promotionSpots: number | null;
+  reputationTier: 'local' | 'regional' | 'national' | 'elite' | null;
+  tvDeal: number | null;
+  sponsorPot: number;
+  prizeMoney: number | null;
+  leaguePositionPot: number | null;
+  leaguePositionDecreasePercent: number;
+  clubs: ClubSnapshot[];
+}
+
 // ─── Sync ─────────────────────────────────────────────────────────────────────
 
 export interface SyncTransfer {
@@ -245,12 +273,15 @@ export interface SyncAcceptedResponse {
   /** Active facility templates — replaces local fallback on receipt */
   facilityTemplates?: FacilityTemplate[];
   academy: {
+    id: string;                  // academy UUID — used as the AMP's club ID in fixtures
     reputation: number;
     totalCareerEarnings: number;
     hallOfFamePoints: number;
     /** Academy balance in pence — included when backend supports it */
     balance?: number;
   };
+  /** League the academy is currently assigned to. null = not yet assigned or no match found. */
+  league: LeagueSnapshot | null;
 }
 
 export interface SyncRejectedResponse {
