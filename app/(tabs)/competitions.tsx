@@ -57,14 +57,12 @@ type CompTab = typeof COMP_TABS[number];
 export default function CompetitionsScreen() {
   const [activeTab, setActiveTab] = useState<CompTab>('LEAGUE');
 
-  const academy         = useAcademyStore((s) => s.academy);
+  const ampClubId       = useAcademyStore((s) => s.academy.id);
+  const ampName         = useAcademyStore((s) => s.academy.name);
   const league          = useLeagueStore((s) => s.league);
   const clubs           = useLeagueStore((s) => s.clubs);
   const fixtures        = useFixtureStore((s) => s.fixtures);
   const currentMatchday = useFixtureStore((s) => s.currentMatchday);
-
-  const ampClubId = academy.id;
-  const ampName   = academy.name;
 
   return (
     <View style={{ flex: 1, backgroundColor: WK.greenDark }}>
