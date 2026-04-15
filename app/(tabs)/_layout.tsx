@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Pressable, Modal } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, LayoutGrid, Building2, DollarSign, Store, Globe, Settings } from 'lucide-react-native';
+import { Home, LayoutGrid, Building2, DollarSign, Store, Trophy, Settings } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
@@ -36,7 +36,7 @@ const NAV_TABS_BASE: NavTabDef[] = [
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
   { name: 'market',     Icon: Store },
-  { name: 'world',      Icon: Globe },
+  { name: 'competitions', Icon: Trophy },
 ];
 
 function NavTabButton({ name, Icon, state, navigation }: NavTabDef & { state: BottomTabBarProps['state']; navigation: BottomTabBarProps['navigation'] }) {
@@ -370,7 +370,7 @@ export default function TabLayout() {
         <Tabs.Screen name="facilities" options={{ title: 'BUILD' }} />
         <Tabs.Screen name="finances"   options={{ title: 'FINANCE' }} />
         <Tabs.Screen name="market"     options={{ title: 'MARKET' }} />
-        <Tabs.Screen name="world"      options={{ title: 'WORLD' }} />
+        <Tabs.Screen name="competitions" options={{ title: 'COMPETITIONS' }} />
 
         {/* Hidden routes — no tab button, deep-link suppressed */}
         <Tabs.Screen name="advance" options={{ href: null }} />
