@@ -8,7 +8,8 @@ export type FinancialCategory =
   | 'earnings'
   | 'contract_termination'
   | 'investor_buyout'
-  | 'guardian_payment';
+  | 'guardian_payment'
+  | 'matchday_income';
 
 export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   wages:                'WAGES',
@@ -21,6 +22,7 @@ export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   contract_termination: 'TERMINATION',
   investor_buyout:      'BUYOUT',
   guardian_payment:     'GUARDIAN',
+  matchday_income:      'MATCHDAY',
 };
 
 export interface FinancialTransaction {
