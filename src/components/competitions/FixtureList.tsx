@@ -46,13 +46,16 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, currentMatchd
     if (currentMatchday < 1 || sections.length === 0) return;
     const sectionIndex = sections.findIndex((s) => s.round === currentMatchday);
     if (sectionIndex < 0) return;
-    listRef.current?.scrollToLocation({
-      sectionIndex,
-      itemIndex: 0,
-      animated: true,
-      viewOffset: 8,
-    });
-  }, [currentMatchday, sections]);
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToLocation({
+        sectionIndex,
+        itemIndex: 0,
+        animated: true,
+        viewOffset: 8,
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [currentMatchday, sections.length]);
 
   if (sections.length === 0) {
     return (
