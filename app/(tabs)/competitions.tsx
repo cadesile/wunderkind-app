@@ -177,7 +177,7 @@ function RankingsPane() {
       <RankingsHeader />
       {entries.map((entry) => (
         <RankingsRow
-          key={`${entry.rank}-${entry.academyName}`}
+          key={entry.academyName}
           entry={entry}
           isOwn={entry.academyName === academyName}
         />

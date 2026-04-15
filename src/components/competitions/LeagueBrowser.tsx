@@ -40,7 +40,7 @@ export function LeagueBrowser({ league, fixtures, ampClubId, ampName }: LeagueBr
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
       {leagues.map((lg) => {
         const isExpanded = expandedLeagueId === lg.id;
-        const isAmpLeague = lg.clubs.some((c) => c.id === ampClubId);
+        const isAmpLeague = lg.id === league.id;
 
         return (
           <View key={lg.id} style={{ marginBottom: 4 }}>

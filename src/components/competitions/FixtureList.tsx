@@ -47,12 +47,16 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, currentMatchd
     const sectionIndex = sections.findIndex((s) => s.round === currentMatchday);
     if (sectionIndex < 0) return;
     const timer = setTimeout(() => {
-      listRef.current?.scrollToLocation({
-        sectionIndex,
-        itemIndex: 0,
-        animated: true,
-        viewOffset: 8,
-      });
+      try {
+        listRef.current?.scrollToLocation({
+          sectionIndex,
+          itemIndex: 0,
+          animated: true,
+          viewOffset: 8,
+        });
+      } catch {
+        // SectionList may not be fully laid out yet; scroll will be attempted on next matchday change
+      }
     }, 100);
     return () => clearTimeout(timer);
   }, [currentMatchday, sections.length]);
