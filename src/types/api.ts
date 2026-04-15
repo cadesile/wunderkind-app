@@ -196,6 +196,7 @@ export interface ClubSnapshot {
   primaryColor: string;
   secondaryColor: string;
   stadiumName: string | null;
+  facilities: Record<string, number>;
 }
 
 export interface LeagueSnapshot {

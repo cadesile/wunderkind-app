@@ -147,6 +147,7 @@ export const useAcademyStore = create<AcademyState>()(
         set((state) => ({
           academy: {
             ...state.academy,
+            id: data.id,
             reputation: data.reputation,
             reputationTier: computeTier(data.reputation),
             totalCareerEarnings: Math.max(state.academy.totalCareerEarnings, data.totalCareerEarnings),

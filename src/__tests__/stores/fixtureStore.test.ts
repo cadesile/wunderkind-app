@@ -6,7 +6,7 @@ beforeEach(() => {
 });
 
 function makeClub(id: string): ClubSnapshot {
-  return { id, name: `Club ${id}`, reputation: 50, tier: 8, primaryColor: '#ff0000', secondaryColor: '#ffffff', stadiumName: null };
+  return { id, name: `Club ${id}`, reputation: 50, tier: 8, primaryColor: '#ff0000', secondaryColor: '#ffffff', stadiumName: null, facilities: {} };
 }
 
 function makeLeague(season = 1, clubCount = 3): LeagueSnapshot {

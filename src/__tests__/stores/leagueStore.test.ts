@@ -14,6 +14,7 @@ function makeClub(id: string): ClubSnapshot {
     primaryColor: '#ff0000',
     secondaryColor: '#ffffff',
     stadiumName: null,
+    facilities: {},
   };
 }
 
