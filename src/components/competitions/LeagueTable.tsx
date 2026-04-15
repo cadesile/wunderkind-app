@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { View, ScrollView } from 'react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
@@ -5,7 +6,9 @@ import { computeStandings } from '@/utils/standingsCalculator';
 import type { Fixture } from '@/stores/fixtureStore';
 import type { ClubSnapshot } from '@/types/api';
 
-interface Props {
+const PROMOTION_GREEN = '#4CAF50';
+
+export interface LeagueTableProps {
   fixtures: Fixture[];
   clubs: ClubSnapshot[];
   ampClubId: string;
@@ -13,11 +16,14 @@ interface Props {
   promotionSpots?: number | null;
 }
 
-export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots }: Props) {
-  const rows = computeStandings(fixtures, clubs, ampClubId);
+export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots }: LeagueTableProps) {
+  const rows = useMemo(() => computeStandings(fixtures, clubs, ampClubId), [fixtures, clubs, ampClubId]);
 
-  const clubNameMap = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
-  clubNameMap.set(ampClubId, ampName);
+  const clubNameMap = useMemo(() => {
+    const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
+    map.set(ampClubId, ampName);
+    return map;
+  }, [clubs, ampClubId, ampName]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -57,7 +63,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
                 paddingVertical: 10,
                 backgroundColor: isAmp ? WK.tealCard : 'transparent',
                 borderLeftWidth: isPromotion ? 3 : 0,
-                borderLeftColor: '#4CAF50',
+                borderLeftColor: PROMOTION_GREEN,
                 borderBottomWidth: 1,
                 borderBottomColor: WK.border,
                 borderTopWidth: isAmp ? 2 : 0,
@@ -80,7 +86,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
               <VT323Text size={16} color={WK.dim} style={{ width: 24, textAlign: 'right' }}>{row.lost}</VT323Text>
               <VT323Text
                 size={16}
-                color={row.goalDifference >= 0 ? '#4CAF50' : WK.red}
+                color={row.goalDifference >= 0 ? PROMOTION_GREEN : WK.red}
                 style={{ width: 32, textAlign: 'right' }}
               >
                 {row.goalDifference >= 0 ? `+${row.goalDifference}` : `${row.goalDifference}`}
