@@ -30,7 +30,7 @@ export function computeStandings(
       lost: 0,
       goalsFor: 0,
       goalsAgainst: 0,
-      goalDifference: 0,
+      goalDifference: 0, // overwritten after accumulation loop
       points: 0,
     });
   }
@@ -39,6 +39,8 @@ export function computeStandings(
     if (fixture.result === null) continue;
     const { homeGoals, awayGoals } = fixture.result;
 
+    // Invariant: all fixture club IDs should be present in allIds.
+    // If not, that club's stats are silently skipped (caller's responsibility).
     const home = rows.get(fixture.homeClubId);
     if (home) {
       home.played++;
