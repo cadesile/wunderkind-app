@@ -24,6 +24,7 @@ import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useSquadStore } from '@/stores/squadStore';
+import { useWorldStore } from '@/stores/worldStore';
 import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 
@@ -76,6 +77,12 @@ function AppNavigator() {
         }
       }
       setStoresHydrated(true);
+
+      // Clubs are NOT persisted by Zustand (stored per-league in AsyncStorage).
+      // For returning users, reload them into memory once the meta store has rehydrated.
+      if (useWorldStore.getState().isInitialized) {
+        void useWorldStore.getState().loadClubs();
+      }
     }
     void waitForHydration();
   }, []);
