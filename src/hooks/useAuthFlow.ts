@@ -10,10 +10,7 @@ import { register, login } from '@/api/endpoints/auth';
 import { checkAcademy } from '@/api/endpoints/academy';
 import { fetchStarterConfig } from '@/api/endpoints/starterConfig';
 import { ApiError, ApiPlayerDetail, ApiStaffCoach, ApiStaffScout } from '@/types/api';
-import { marketApi, assignMarketEntity } from '@/api/endpoints/market';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
-import { getSquad } from '@/api/endpoints/squad';
-import { getStaff } from '@/api/endpoints/staff';
 import { generatePersonality } from '@/engine/personality';
 import { useGuardianStore } from '@/stores/guardianStore';
 import type { ApiGuardian } from '@/types/api';
@@ -22,14 +19,16 @@ import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import { randomBaseMorale } from '@/utils/morale';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
-import type { MarketData, MarketPlayer, MarketCoach, MarketScout, Scout } from '@/types/market';
+import type { MarketPlayer, MarketCoach, MarketScout, Scout } from '@/types/market';
 import type { Player, Position } from '@/types/player';
 import type { Coach, CoachRole } from '@/types/coach';
 import type { AcademyCountryCode } from '@/utils/nationality';
-import { ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
 import type { ManagerProfileInput } from '@/types/api';
 import type { ManagerProfile, AcademyTier } from '@/types/academy';
 import { TIER_REPUTATION_BASELINE } from '@/types/academy';
+import { initializeWorld } from '@/api/endpoints/initialize';
+import { useWorldStore } from '@/stores/worldStore';
+import type { WorldPlayer, WorldStaff } from '@/types/world';
 
 function generateDeviceEmail(): string {
   const chars = 'abcdef0123456789';
@@ -247,6 +246,89 @@ function apiStaffToScout(s: ApiStaffScout, weekNumber: number): Scout {
   };
 }
 
+/** Build a Player from a WorldPlayer delivered in the ampStarter pack. */
+function worldPlayerToPlayer(wp: WorldPlayer, weekNumber: number): Player {
+  const personality = generatePersonality();
+  const pos: Position = wp.position === 'ATT' ? 'FWD' : wp.position as Position;
+  const gameDate = getGameDate(weekNumber);
+  const ageRaw = wp.dateOfBirth ? computePlayerAge(wp.dateOfBirth, gameDate) : 14;
+  const age = typeof ageRaw === 'number' ? ageRaw : 14;
+  const overallRating = Math.round(
+    (wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6,
+  );
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
+  return {
+    id: wp.id,
+    name: `${wp.firstName} ${wp.lastName}`,
+    dateOfBirth: wp.dateOfBirth,
+    age,
+    position: pos,
+    nationality: wp.nationality,
+    overallRating,
+    potential: overallRating,
+    wage: overallRating * 100,
+    personality,
+    appearance: generateAppearance(wp.id, 'PLAYER', age, personality),
+    agentId: null,
+    joinedWeek: weekNumber,
+    isActive: true,
+    morale: randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
+    relationships: [],
+    enrollmentEndWeek: weekNumber + 52,
+    extensionCount: 0,
+    attributes: {
+      pace:      wp.pace,
+      technical: wp.technical,
+      vision:    wp.vision,
+      power:     wp.power,
+      stamina:   wp.stamina,
+      heart:     wp.heart,
+    },
+  } as Player;
+}
+
+/** Build a Coach from a WorldStaff entry in the ampStarter pack. */
+function worldStaffToCoach(ws: WorldStaff, weekNumber: number): Coach {
+  const personality = generatePersonality();
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
+  return {
+    id: ws.id,
+    name: `${ws.firstName} ${ws.lastName}`,
+    role: STAFF_ROLE_MAP[ws.role] ?? 'Youth Coach',
+    salary: ws.coachingAbility * 100,
+    influence: Math.max(1, Math.min(20, Math.round(ws.coachingAbility / 5))),
+    personality,
+    appearance: generateAppearance(ws.id, 'COACH', 35, personality),
+    nationality: ws.nationality ?? '',
+    joinedWeek: weekNumber,
+    morale: randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
+    specialisms: undefined,
+    relationships: [],
+  };
+}
+
+/** Build a Scout from a WorldStaff entry in the ampStarter pack. */
+function worldStaffToScout(ws: WorldStaff, weekNumber: number): Scout {
+  const scoutingRange: Scout['scoutingRange'] =
+    ws.coachingAbility >= 80 ? 'international' : ws.coachingAbility >= 40 ? 'national' : 'local';
+  const successRate = Math.min(90, Math.round(40 + (ws.coachingAbility / 100) * 50));
+  const salary = ws.coachingAbility > 0 ? ws.coachingAbility * 300 : successRate * 300;
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
+  return {
+    id: ws.id,
+    name: `${ws.firstName} ${ws.lastName}`,
+    salary,
+    scoutingRange,
+    successRate,
+    nationality: ws.nationality,
+    joinedWeek: weekNumber,
+    appearance: generateAppearance(ws.id, 'SCOUT', 35),
+    morale: randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
+    relationships: [],
+    assignedPlayerIds: [],
+  };
+}
+
 export interface AuthFlowResult {
   isReady: boolean;
   isOnboarding: boolean;
@@ -284,7 +366,8 @@ export function useAuthFlow(): AuthFlowResult {
   const { addCoach } = useCoachStore();
   const { addScout } = useScoutStore();
   const { initAllLevels } = useFacilityStore();
-  const { setMarketData, fetchMarketData, removeFromMarket } = useMarketStore();
+  const { fetchMarketData } = useMarketStore();
+  const setFromWorldPack = useWorldStore((s) => s.setFromWorldPack);
 
   const [isReady, setIsReady] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
@@ -417,49 +500,11 @@ export function useAuthFlow(): AuthFlowResult {
       console.warn(`[useAuthFlow] Backend registration unavailable${status} — continuing offline`);
     }
 
-    // 2. Fetch market data — primary pool source.
-    let marketData: MarketData = { players: [], coaches: [], scouts: [], agents: [], investors: [], sponsors: [] };
-    try {
-      const fetched = await marketApi.getMarketData(country, starterConfig.starterAcademyTier);
-      marketData = fetched;
-      setMarketData(fetched);
-    } catch (err) {
-      console.warn('[useAuthFlow] Market data fetch failed — continuing offline:', err);
-    }
-
-    // 2b. ensurePool is an edge-case fallback — only called when the pool is empty.
-    // If the primary fetch returned players, skip this entirely.
-    if (marketData.players.length === 0) {
-      console.warn('[useAuthFlow] Pool empty — calling ensurePool as fallback');
-      try {
-        await marketApi.ensurePool(country, 10);
-        const fetched = await marketApi.getMarketData(country, starterConfig.starterAcademyTier);
-        marketData = fetched;
-        setMarketData(fetched);
-      } catch (err) {
-        console.warn('[useAuthFlow] ensurePool fallback failed — continuing offline:', err);
-      }
-    }
-
-    // 3. Register academy server-side — backend assigns players/staff from pool
-    let initResponse: Awaited<ReturnType<typeof marketApi.initializeAcademy>> | null = null;
-    try {
-      initResponse = await marketApi.initializeAcademy(academyName, country, managerInput);
-    } catch (err) {
-      console.warn('[useAuthFlow] Academy init failed — continuing offline:', err);
-    }
-
     // Use config values everywhere previously hardcoded
     const startingBalance = starterConfig.startingBalance;
-    const STARTER_PLAYER_COUNT = starterConfig.starterPlayerCount;
-    const STARTER_COACH_COUNT = starterConfig.starterCoachCount;
-    const STARTER_SCOUT_COUNT = starterConfig.starterScoutCount;
     const academyTier = starterConfig.starterAcademyTier;
 
-    const matchingSponsors = marketData.sponsors.filter(
-      (s) => s.companySize === starterConfig.starterSponsorTier,
-    );
-    const sponsorIds = matchingSponsors.slice(0, 1).map((s) => s.id);
+    const sponsorIds: string[] = [];
     const investorId = null;
 
     // 4. Academy setup
@@ -470,93 +515,38 @@ export function useAuthFlow(): AuthFlowResult {
     setReputation(tierBaseline);
     initAllLevels();
 
-    // 5. Select starter entities from market data according to starter-config counts.
-    //    Players: prefer home nationality; fall back to full pool if not enough.
-    //    Coaches and scouts: no nationality restriction at starter tier.
     const weekNumber = 1;
-    const gameDate = getGameDate(weekNumber);
-    const homeNationality = ACADEMY_CODE_TO_NATIONALITY[country];
 
-    const homePlayerPool = marketData.players.filter((p) => p.nationality === homeNationality);
-    const playerPool = homePlayerPool.length >= STARTER_PLAYER_COUNT ? homePlayerPool : marketData.players;
-    const selectedPlayers = [...playerPool].sort(() => Math.random() - 0.5).slice(0, STARTER_PLAYER_COUNT);
-    const selectedCoaches = [...marketData.coaches].sort(() => Math.random() - 0.5).slice(0, STARTER_COACH_COUNT);
-    const selectedScouts  = [...marketData.scouts].sort(() => Math.random() - 0.5).slice(0, STARTER_SCOUT_COUNT);
-
-    // 6. Assign selected entities to the academy via /api/market/assign.
-    //    Fire all assignments in parallel; log individual failures without aborting.
-    await Promise.all([
-      ...selectedPlayers.map((p) =>
-        assignMarketEntity({ entityType: 'player', entityId: p.id })
-          .catch((err) => console.warn(`[useAuthFlow] Failed to assign player ${p.id}:`, err)),
-      ),
-      ...selectedCoaches.map((c) =>
-        assignMarketEntity({ entityType: 'coach', entityId: c.id })
-          .catch((err) => console.warn(`[useAuthFlow] Failed to assign coach ${c.id}:`, err)),
-      ),
-      ...selectedScouts.map((s) =>
-        assignMarketEntity({ entityType: 'scout', entityId: s.id })
-          .catch((err) => console.warn(`[useAuthFlow] Failed to assign scout ${s.id}:`, err)),
-      ),
-    ]);
-
-    // 7. Confirm assignments via /api/squad and /api/staff.
-    //    Filter strictly to the IDs we selected — the backend's initializeAcademy may
-    //    also auto-assign entities server-side, which would otherwise inflate the squad.
-    //    All selected entities are in marketData (fetched before assignment), so every
-    //    cross-reference is guaranteed to succeed via marketPlayerToPlayer (full data).
-    //    Fall back to building directly from selected market entities if endpoints fail.
-    const selectedPlayerIds = new Set(selectedPlayers.map((p) => p.id));
-    const selectedCoachIds  = new Set(selectedCoaches.map((c) => c.id));
-    const selectedScoutIds  = new Set(selectedScouts.map((s) => s.id));
-
-    let players: Player[] = [];
-    let assignedCoaches: Coach[] = [];
-    let assignedScouts: Scout[] = [];
+    // World initialization — single call replaces fetchMarketData + assignMarketEntity loop
+    let players:         Player[] = [];
+    let assignedCoaches: Coach[]  = [];
+    let assignedScouts:  Scout[]  = [];
 
     try {
-      const [squadResp, staffResp] = await Promise.all([getSquad(), getStaff()]);
+      const initResp = await initializeWorld();
+      const { ampStarter } = initResp.worldPack;
 
-      players = squadResp.players
-        .filter((ap) => selectedPlayerIds.has(ap.id))
-        .map((ap) => {
-          const mp = marketData.players.find((p) => p.id === ap.id);
-          return mp ? marketPlayerToPlayer(mp, weekNumber, gameDate) : apiPlayerToPlayer(ap, weekNumber);
-        });
+      // Store NPC world in worldStore
+      await setFromWorldPack(initResp.worldPack);
 
-      assignedCoaches = staffResp.coaches
-        .filter((c) => selectedCoachIds.has(c.id))
-        .map((c) => {
-          const mc = marketData.coaches.find((m) => m.id === c.id);
-          return mc ? marketCoachToCoach(mc, weekNumber) : apiStaffToCoach(c, weekNumber);
-        });
+      // Map AMP starter entities to local types
+      players         = ampStarter.players.map((wp) => worldPlayerToPlayer(wp, weekNumber));
+      assignedCoaches = ampStarter.staff
+        .filter((s) => s.role !== 'scout')
+        .map((ws) => worldStaffToCoach(ws, weekNumber));
+      assignedScouts  = ampStarter.staff
+        .filter((s) => s.role === 'scout')
+        .map((ws) => worldStaffToScout(ws, weekNumber));
 
-      assignedScouts = staffResp.scouts
-        .filter((s) => selectedScoutIds.has(s.id))
-        .map((s) => {
-          const ms = marketData.scouts.find((m) => m.id === s.id);
-          return ms ? marketScoutToScout(ms, weekNumber, gameDate) : apiStaffToScout(s, weekNumber);
-        });
-
-      console.log(`[useAuthFlow] Confirmed: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s`);
+      console.log(`[useAuthFlow] World initialized: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s`);
     } catch (err) {
-      console.warn('[useAuthFlow] Squad/staff confirmation failed — using market selection:', err);
-      players         = selectedPlayers.map((mp) => marketPlayerToPlayer(mp, weekNumber, gameDate));
-      assignedCoaches = selectedCoaches.map((mc) => marketCoachToCoach(mc, weekNumber));
-      assignedScouts  = selectedScouts.map((ms) => marketScoutToScout(ms, weekNumber, gameDate));
+      console.warn('[useAuthFlow] World initialization failed — squad will be empty:', err);
     }
 
     setPlayers(players);
     backfillGuardians(players);
     for (const coach of assignedCoaches) { addCoach(coach); }
     for (const scout of assignedScouts) { addScout(scout); }
-
-    // Purge assigned entities from the market store — the market snapshot was
-    // fetched (step 2) before the backend assigned them (step 3), so they would
-    // otherwise appear as available in the market UI.
-    for (const player of players) { removeFromMarket('player', player.id); }
-    for (const coach of assignedCoaches) { removeFromMarket('coach', coach.id); }
-    for (const scout of assignedScouts) { removeFromMarket('scout', scout.id); }
 
     // 7. Apply sponsor/investor assignments
     setSponsorIds(sponsorIds);
