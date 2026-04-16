@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
 import { computeStandings } from '@/utils/standingsCalculator';
@@ -14,9 +14,10 @@ export interface LeagueTableProps {
   ampClubId: string;
   ampName: string;
   promotionSpots?: number | null;
+  onClubPress?: (clubId: string) => void;
 }
 
-export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots }: LeagueTableProps) {
+export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots, onClubPress }: LeagueTableProps) {
   const rows = useMemo(() => computeStandings(fixtures, clubs, ampClubId), [fixtures, clubs, ampClubId]);
 
   const clubNameMap = useMemo(() => {
@@ -54,47 +55,52 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
           const name = clubNameMap.get(row.clubId) ?? row.clubId;
 
           return (
-            <View
+            <Pressable
               key={row.clubId}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 10,
-                paddingVertical: 10,
-                backgroundColor: isAmp ? WK.tealCard : 'transparent',
-                borderLeftWidth: isPromotion ? 3 : 0,
-                borderLeftColor: PROMOTION_GREEN,
-                borderBottomWidth: 1,
-                borderBottomColor: WK.border,
-                borderTopWidth: isAmp ? 2 : 0,
-                borderRightWidth: isAmp ? 2 : 0,
-                borderTopColor: WK.border,
-                borderRightColor: WK.border,
-              }}
+              onPress={() => onClubPress?.(row.clubId)}
+              disabled={!onClubPress}
             >
-              <VT323Text size={16} color={WK.dim} style={{ width: 28 }}>{pos}</VT323Text>
-              <BodyText
-                size={13}
-                style={{ flex: 1, color: isAmp ? WK.yellow : WK.text }}
-                numberOfLines={1}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 10,
+                  paddingVertical: 10,
+                  backgroundColor: isAmp ? WK.tealCard : 'transparent',
+                  borderLeftWidth: isPromotion ? 3 : 0,
+                  borderLeftColor: PROMOTION_GREEN,
+                  borderBottomWidth: 1,
+                  borderBottomColor: WK.border,
+                  borderTopWidth: isAmp ? 2 : 0,
+                  borderRightWidth: isAmp ? 2 : 0,
+                  borderTopColor: WK.border,
+                  borderRightColor: WK.border,
+                }}
               >
-                {name}{isAmp ? ' ★' : ''}
-              </BodyText>
-              <VT323Text size={16} color={WK.text} style={{ width: 24, textAlign: 'right' }}>{row.played}</VT323Text>
-              <VT323Text size={16} color={WK.text} style={{ width: 24, textAlign: 'right' }}>{row.won}</VT323Text>
-              <VT323Text size={16} color={WK.dim} style={{ width: 24, textAlign: 'right' }}>{row.drawn}</VT323Text>
-              <VT323Text size={16} color={WK.dim} style={{ width: 24, textAlign: 'right' }}>{row.lost}</VT323Text>
-              <VT323Text
-                size={16}
-                color={row.goalDifference >= 0 ? PROMOTION_GREEN : WK.red}
-                style={{ width: 32, textAlign: 'right' }}
-              >
-                {row.goalDifference >= 0 ? `+${row.goalDifference}` : `${row.goalDifference}`}
-              </VT323Text>
-              <VT323Text size={18} color={isAmp ? WK.yellow : WK.text} style={{ width: 32, textAlign: 'right' }}>
-                {row.points}
-              </VT323Text>
-            </View>
+                <VT323Text size={16} color={WK.dim} style={{ width: 28 }}>{pos}</VT323Text>
+                <BodyText
+                  size={13}
+                  style={{ flex: 1, color: isAmp ? WK.yellow : WK.text }}
+                  numberOfLines={1}
+                >
+                  {name}{isAmp ? ' ★' : ''}
+                </BodyText>
+                <VT323Text size={16} color={WK.text} style={{ width: 24, textAlign: 'right' }}>{row.played}</VT323Text>
+                <VT323Text size={16} color={WK.text} style={{ width: 24, textAlign: 'right' }}>{row.won}</VT323Text>
+                <VT323Text size={16} color={WK.dim} style={{ width: 24, textAlign: 'right' }}>{row.drawn}</VT323Text>
+                <VT323Text size={16} color={WK.dim} style={{ width: 24, textAlign: 'right' }}>{row.lost}</VT323Text>
+                <VT323Text
+                  size={16}
+                  color={row.goalDifference >= 0 ? PROMOTION_GREEN : WK.red}
+                  style={{ width: 32, textAlign: 'right' }}
+                >
+                  {row.goalDifference >= 0 ? `+${row.goalDifference}` : `${row.goalDifference}`}
+                </VT323Text>
+                <VT323Text size={18} color={isAmp ? WK.yellow : WK.text} style={{ width: 32, textAlign: 'right' }}>
+                  {row.points}
+                </VT323Text>
+              </View>
+            </Pressable>
           );
         })}
       </ScrollView>
