@@ -46,10 +46,6 @@ function generateDevicePassword(): string {
   ).join('');
 }
 
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
 /** Map backend ApiGuardian array to Guardian objects and store them for a player. */
 function storeBackendGuardians(playerId: string, apiGuardians: ApiGuardian[]): void {
   if (!apiGuardians || apiGuardians.length === 0) return;
