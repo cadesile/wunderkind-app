@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { BodyText, VT323Text } from '@/components/ui/PixelText';
@@ -10,7 +11,7 @@ export interface WorldClubListProps {
 }
 
 export function WorldClubList({ clubs, onClubPress }: WorldClubListProps) {
-  const sorted = [...clubs].sort((a, b) => b.reputation - a.reputation);
+  const sorted = useMemo(() => [...clubs].sort((a, b) => b.reputation - a.reputation), [clubs]);
 
   if (sorted.length === 0) {
     return (
@@ -41,7 +42,7 @@ export function WorldClubList({ clubs, onClubPress }: WorldClubListProps) {
           <View style={{
             width: 12,
             height: 12,
-            backgroundColor: club.primaryColor,
+            backgroundColor: club.primaryColor ?? WK.border,
             borderWidth: 1,
             borderColor: WK.border,
           }} />
