@@ -8,6 +8,7 @@ import { useFacilityStore } from '@/stores/facilityStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { register, login } from '@/api/endpoints/auth';
 import { checkAcademy } from '@/api/endpoints/academy';
+import { marketApi } from '@/api/endpoints/market';
 import { fetchStarterConfig } from '@/api/endpoints/starterConfig';
 import { ApiError } from '@/types/api';
 import { clearAllAcademyData } from '@/stores/resetAllStores';
@@ -358,7 +359,15 @@ export function useAuthFlow(): AuthFlowResult {
 
     const weekNumber = 1;
 
-    // World initialization — single call replaces fetchMarketData + assignMarketEntity loop
+    // 2. Create the academy on the backend (sets name + country, required before /api/initialize)
+    try {
+      await marketApi.initializeAcademy(academyName, country, managerInput);
+    } catch (err) {
+      const status = err instanceof ApiError ? ` (HTTP ${err.status}: ${err.message})` : '';
+      console.warn(`[useAuthFlow] Academy creation failed${status} — world init will be skipped`);
+    }
+
+    // 3. World initialization — single call replaces fetchMarketData + assignMarketEntity loop
     let players:         Player[] = [];
     let assignedCoaches: Coach[]  = [];
     let assignedScouts:  Scout[]  = [];
