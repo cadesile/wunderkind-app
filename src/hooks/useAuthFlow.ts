@@ -91,6 +91,9 @@ const STAFF_ROLE_MAP: Record<string, CoachRole> = {
 
 /** Build a Player from a WorldPlayer delivered in the ampStarter pack. */
 function worldPlayerToPlayer(wp: WorldPlayer, weekNumber: number): Player {
+  // Personality is generated client-side (not from backend values) because
+  // the game's personality system is client-authoritative. Backend personality
+  // data is used only for NPC club display, not for AMP squad mechanics.
   const personality = generatePersonality();
   const pos: Position = wp.position === 'ATT' ? 'FWD' : wp.position as Position;
   const gameDate = getGameDate(weekNumber);
