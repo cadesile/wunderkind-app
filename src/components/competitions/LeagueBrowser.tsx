@@ -1,21 +1,34 @@
 import { useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 import { LeagueTable } from './LeagueTable';
+import { WorldClubList } from './WorldClubList';
 import type { LeagueSnapshot } from '@/types/api';
 import type { Fixture } from '@/stores/fixtureStore';
+import type { WorldLeague, WorldClub } from '@/types/world';
 
 export interface LeagueBrowserProps {
   league: LeagueSnapshot | null;
   fixtures: Fixture[];
   ampClubId: string;
   ampName: string;
+  worldLeagues: WorldLeague[];
+  worldClubs: Record<string, WorldClub>;
 }
 
-export function LeagueBrowser({ league, fixtures, ampClubId, ampName }: LeagueBrowserProps) {
+export function LeagueBrowser({
+  league,
+  fixtures,
+  ampClubId,
+  ampName,
+  worldLeagues,
+  worldClubs,
+}: LeagueBrowserProps) {
   const [expandedLeagueId, setExpandedLeagueId] = useState<string | null>(null);
+  const router = useRouter();
 
   if (league === null) {
     return (
@@ -28,19 +41,43 @@ export function LeagueBrowser({ league, fixtures, ampClubId, ampName }: LeagueBr
     );
   }
 
-  // Future: this will be an array of LeagueSnapshot from the store.
-  // For now we render the single known league as a one-entry pyramid.
-  const leagues = [league];
+  // Full pyramid sorted by tier (T1 first).
+  // Falls back to the single AMP league if worldStore hasn't loaded yet.
+  const displayLeagues: WorldLeague[] = worldLeagues.length > 0
+    ? [...worldLeagues].sort((a, b) => a.tier - b.tier)
+    : [{
+        id:             league.id,
+        tier:           league.tier,
+        name:           league.name,
+        country:        '',
+        promotionSpots: league.promotionSpots,
+        reputationTier: null,
+        clubIds:        [],
+      }];
 
   const toggleLeague = (id: string) => {
     setExpandedLeagueId((prev) => (prev === id ? null : id));
   };
 
+  const handleClubPress = (clubId: string) => {
+    if (clubId === ampClubId) {
+      router.push('/(tabs)/squad');
+    } else {
+      router.push(`/club/${clubId}`);
+    }
+  };
+
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
-      {leagues.map((lg) => {
-        const isExpanded = expandedLeagueId === lg.id;
+      {displayLeagues.map((lg) => {
+        const isExpanded  = expandedLeagueId === lg.id;
         const isAmpLeague = lg.id === league.id;
+
+        const npcClubs: WorldClub[] = lg.clubIds
+          .map((id) => worldClubs[id])
+          .filter((c): c is WorldClub => c !== undefined);
+
+        const clubCount = isAmpLeague ? league.clubs.length : npcClubs.length;
 
         return (
           <View key={lg.id} style={{ marginBottom: 4 }}>
@@ -78,7 +115,7 @@ export function LeagueBrowser({ league, fixtures, ampClubId, ampName }: LeagueBr
                   {lg.name}
                 </PixelText>
                 <BodyText size={12} dim style={{ marginTop: 2 }}>
-                  {lg.clubs.length} clubs
+                  {clubCount} clubs
                 </BodyText>
               </View>
 
@@ -105,13 +142,21 @@ export function LeagueBrowser({ league, fixtures, ampClubId, ampName }: LeagueBr
                 borderColor: isAmpLeague ? WK.yellow : WK.border,
                 minHeight: 200,
               }}>
-                <LeagueTable
-                  fixtures={fixtures}
-                  clubs={lg.clubs}
-                  ampClubId={ampClubId}
-                  ampName={ampName}
-                  promotionSpots={lg.promotionSpots}
-                />
+                {isAmpLeague ? (
+                  <LeagueTable
+                    fixtures={fixtures}
+                    clubs={league.clubs}
+                    ampClubId={ampClubId}
+                    ampName={ampName}
+                    promotionSpots={league.promotionSpots}
+                    onClubPress={handleClubPress}
+                  />
+                ) : (
+                  <WorldClubList
+                    clubs={npcClubs}
+                    onClubPress={handleClubPress}
+                  />
+                )}
               </View>
             )}
           </View>
