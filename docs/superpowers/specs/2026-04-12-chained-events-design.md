@@ -177,3 +177,4 @@ export interface GameEventTemplate {
 - **Frontend store**: Unit test `activateChain` (upsert behaviour, window refresh), `expireChains` (removes expired, keeps active), `getBoostsForPair` (canonical pair key normalisation).
 - **Engine**: Unit test weighted selection in `SocialGraphEngine` — verify boost multiplier is applied to the correct template and original weights are unchanged.
 - **Admin forms**: Manual QA — create a chain in the admin, verify the JSON written to DB matches the expected schema.
+wo

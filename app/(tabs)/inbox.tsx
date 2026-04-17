@@ -1279,12 +1279,11 @@ export default function InboxScreen() {
     ? (narrativeMessages.find((m) => m.id === selectedNarrative.id) ?? null)
     : null;
 
-  const totalUnread = inboxUnread + narrativeUnread + pendingOffers.length;
+  const totalUnread = inboxUnread + narrativeUnread;
   const headerLabel = totalUnread > 0 ? `INBOX (${totalUnread})` : 'INBOX';
 
-  // Priority order: pending agent offers → actionable narrative → narrative → inbox
+  // Priority order: actionable narrative → narrative → inbox (agent offers disabled)
   const allListItems: ListItem[] = [
-    ...pendingOffers.map((o): ListItem => ({ kind: 'agent_offer', offer: o })),
     ...narrativeMessages
       .filter((m) => m.isActionable && !m.respondedAt)
       .map((m): ListItem => ({ kind: 'narrative', message: m })),

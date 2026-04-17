@@ -27,7 +27,6 @@ export function GlobalHeader() {
   const club = useClubStore((s) => s.club);
   const unreadCount =
     useInboxStore((s) => s.messages.filter((m) => !m.isRead).length) +
-    useInboxStore((s) => s.agentOffers.filter((o) => o.status === 'pending').length) +
     useNarrativeStore((s) => s.messages.filter((m) => !m.readAt).length);
   const syncStatus = useSyncStatus();
 

@@ -149,7 +149,9 @@ export function processMissions(): void {
         ...poolNationalities,
       ];
 
-      const byPosition = prospects.filter((p) => p.position === mission.position);
+      const byPosition = mission.position
+        ? prospects.filter((p) => p.position === mission.position)
+        : [...prospects];
 
       let candidates: MarketPlayer[];
       if (allowedNationalities.length === 0) {
@@ -222,7 +224,8 @@ export function processMissions(): void {
     if (isComplete) {
       completeMission(scout.id);
       const finalGems = useScoutStore.getState().scouts.find(s => s.id === scout.id)?.activeMission?.gemsFound ?? 0;
-      let completionBody = `Your scout has returned from a ${mission.weeksTotal}-week search for a ${mission.position}.`;
+      const positionLabel = mission.position ? `a ${mission.position}` : 'any position';
+      let completionBody = `Your scout has returned from a ${mission.weeksTotal}-week search for ${positionLabel}.`;
       if (finalGems > 0) {
         completionBody += ` They identified ${finalGems} prospect(s) during the assignment.`;
       } else {
