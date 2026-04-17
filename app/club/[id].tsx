@@ -18,11 +18,14 @@ export default function ClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
   const club    = useWorldStore((s) => s.clubs[id]);
+  const isInitialized = useWorldStore((s) => s.isInitialized);
 
   if (!club) {
+    // isInitialized true but clubs still empty = loadClubs() still running
+    const loading = isInitialized && Object.keys(useWorldStore.getState().clubs).length === 0;
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark, alignItems: 'center', justifyContent: 'center' }}>
-        <PixelText size={8} color={WK.dim}>CLUB NOT FOUND</PixelText>
+        <PixelText size={8} color={WK.dim}>{loading ? 'LOADING...' : 'CLUB NOT FOUND'}</PixelText>
       </SafeAreaView>
     );
   }

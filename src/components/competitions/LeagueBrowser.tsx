@@ -49,7 +49,7 @@ export function LeagueBrowser({
         id:             league.id,
         tier:           league.tier,
         name:           league.name,
-        country:        '',
+        country:        league.country ?? '',
         promotionSpots: league.promotionSpots,
         reputationTier: null,
         clubIds:        [],
@@ -63,6 +63,9 @@ export function LeagueBrowser({
     if (clubId === ampClubId) {
       router.push('/(tabs)/squad');
     } else {
+      // NPC club IDs come from worldStore, which is populated from POST /api/initialize.
+      // The sync league snapshot clubs are a subset of that same world pack, so every
+      // club ID reachable here should exist in worldStore.clubs.
       router.push(`/club/${clubId}`);
     }
   };

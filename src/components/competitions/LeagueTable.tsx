@@ -59,6 +59,9 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
               key={row.clubId}
               onPress={() => onClubPress?.(row.clubId)}
               disabled={!onClubPress}
+              style={({ pressed }) => ({
+                opacity: onClubPress && pressed ? 0.6 : 1,
+              })}
             >
               <View
                 style={{
