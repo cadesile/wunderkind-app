@@ -9,6 +9,7 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { useAcademyStore } from '@/stores/academyStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { useWorldStore } from '@/stores/worldStore';
 import { getLeaderboard } from '@/api/endpoints/leaderboard';
 import { formatCurrencyCompact } from '@/utils/currency';
 import { LeagueTable } from '@/components/competitions/LeagueTable';
@@ -63,6 +64,8 @@ export default function CompetitionsScreen() {
   const clubs           = useLeagueStore((s) => s.clubs);
   const fixtures        = useFixtureStore((s) => s.fixtures);
   const currentMatchday = useFixtureStore((s) => s.currentMatchday);
+  const worldLeagues = useWorldStore((s) => s.leagues);
+  const worldClubs   = useWorldStore((s) => s.clubs);
 
   return (
     <View style={{ flex: 1, backgroundColor: WK.greenDark }}>
@@ -108,6 +111,8 @@ export default function CompetitionsScreen() {
           fixtures={fixtures}
           ampClubId={ampClubId}
           ampName={ampName}
+          worldLeagues={worldLeagues}
+          worldClubs={worldClubs}
         />
       )}
 
