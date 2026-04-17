@@ -8,7 +8,7 @@ interface AssignEntityVars {
 }
 
 /**
- * Mutation for assigning a market entity to the academy.
+ * Mutation for assigning a market entity to the club.
  *
  * Optimistically removes the entity from the local market pool so it can't
  * be double-signed, then notifies the backend. On error the local pool is NOT

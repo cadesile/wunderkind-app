@@ -1,6 +1,6 @@
 import { Position, PersonalityMatrix, PlayerAttributes } from './player';
 import { CoachRole, CoachSpecialisms } from './coach';
-import type { AcademyTier } from './academy';
+import type { ClubTier } from './club';
 
 // ─── Hired staff types (locally-generated) ────────────────────────────────────
 
@@ -24,7 +24,7 @@ export interface Agent {
   nationality: string;
 }
 
-/** A hired scout on the academy's payroll — distinct from MarketScout (backend entity). */
+/** A hired scout on the club's payroll — distinct from MarketScout (backend entity). */
 export interface Scout {
   id: string;
   name: string;
@@ -38,8 +38,8 @@ export interface Scout {
   morale?: number;
   relationships?: import('./player').Relationship[];
   activeMission?: ScoutingMission;
-  /** Academy tier this scout belongs to — from backend */
-  tier?: AcademyTier;
+  /** Club tier this scout belongs to — from backend */
+  tier?: ClubTier;
 }
 
 export type CompanySize = 'SMALL' | 'MEDIUM' | 'LARGE';
@@ -108,7 +108,7 @@ export interface MarketPlayer {
   weight?: number;
   /** Assigned agent, or null if unrepresented */
   agent: Agent | null;
-  /** Guardians from backend — present for academy-assigned and market players */
+  /** Guardians from backend — present for club-assigned and market players */
   guardians?: import('@/types/api').ApiGuardian[];
   scoutingStatus?: 'hidden' | 'scouting' | 'revealed';
   scoutingProgress?: number;
@@ -118,8 +118,8 @@ export interface MarketPlayer {
   assignedScoutId?: string;
   /** True for players discovered by a scout mission — protects them from backend market refresh wipes. */
   isLocalGem?: boolean;
-  /** Academy tier this player belongs to — from backend */
-  tier?: AcademyTier;
+  /** Club tier this player belongs to — from backend */
+  tier?: ClubTier;
 }
 
 /** A coach available in the backend market. */
@@ -136,8 +136,8 @@ export interface MarketCoach {
   /** Attribute training boosts — maps attribute name to strength (0–100) */
   specialisms?: CoachSpecialisms;
   morale?: number;
-  /** Academy tier this coach belongs to — from backend */
-  tier?: AcademyTier;
+  /** Club tier this coach belongs to — from backend */
+  tier?: ClubTier;
 }
 
 /** A scout available in the backend market. */
@@ -153,8 +153,8 @@ export interface MarketScout {
   successRate: number;
   /** Weekly, in pence */
   salary: number;
-  /** Academy tier this scout belongs to — from backend */
-  tier?: AcademyTier;
+  /** Club tier this scout belongs to — from backend */
+  tier?: ClubTier;
 }
 
 export interface ScoutingTask {
@@ -175,11 +175,11 @@ export interface MarketData {
 }
 
 /**
- * Response from POST /api/academy/initialize.
- * Contains academy metadata only — financial setup (starting balance,
+ * Response from POST /api/club/initialize.
+ * Contains club metadata only — financial setup (starting balance,
  * sponsor/investor IDs) is always derived locally from market data.
  */
-export interface AcademyInitResponse {
+export interface ClubInitResponse {
   id: string;
   name: string;
   starterBundle: Record<string, unknown>;

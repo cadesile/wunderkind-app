@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 
 interface Props {
-  academyName: string;
+  clubName: string;
   onDismiss: () => void;
 }
 
-export function WelcomeSplash({ academyName, onDismiss }: Props) {
+export function WelcomeSplash({ clubName, onDismiss }: Props) {
   return (
     <Modal visible transparent animationType="fade">
       <View style={{
@@ -39,7 +39,7 @@ export function WelcomeSplash({ academyName, onDismiss }: Props) {
           }} />
 
           <PixelText size={7} color={WK.yellow} style={{ textAlign: 'center' }}>
-            {academyName.toUpperCase()} IS YOURS NOW.
+            {clubName.toUpperCase()} IS YOURS NOW.
           </PixelText>
 
           <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 14, lineHeight: 16 }}>

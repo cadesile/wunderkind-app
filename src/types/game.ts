@@ -41,3 +41,5 @@ export interface BehavioralIncident {
   delta: number;
   severity?: 'minor' | 'serious';
 }
+
+export type Formation = '4-4-2' | '4-3-3' | '3-5-2' | '5-4-1' | '4-2-3-1';

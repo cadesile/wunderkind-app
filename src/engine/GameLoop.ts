@@ -15,7 +15,7 @@ import { processSocialGraph } from './SocialGraphEngine';
 import { processGuardianTick } from './GuardianEngine';
 import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
 import { useSquadStore } from '@/stores/squadStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -30,9 +30,9 @@ import { WeeklyTick, AltercationBlock } from '@/types/game';
 import { FacilityLevels } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
-import { TIER_OVR_CEILING } from '@/types/academy';
+import { TIER_OVR_CEILING } from '@/types/club';
 import { getEffectiveTier } from '@/utils/tierGate';
-import { calculateAcademyValuation } from '@/hooks/useAcademyMetrics';
+import { calculateClubValuation } from '@/hooks/useClubMetrics';
 
 type InjuryTier = {
   severity: 'minor' | 'moderate' | 'serious';
@@ -73,7 +73,7 @@ export function processWeeklyTick(): WeeklyTick {
   // Only process active players — inactive players (guardian withdrawals, etc.) must not
   // generate new incidents, injuries, or trait shifts.
   const players = allPlayers.filter((p) => p.isActive !== false);
-  const { academy, addBalance, addEarnings, setReputation, incrementWeek } = useAcademyStore.getState();
+  const { club, addBalance, addEarnings, setReputation, incrementWeek } = useClubStore.getState();
   const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
   const { levels, conditions, templates: facilityTemplates } = useFacilityStore.getState();
@@ -83,7 +83,7 @@ export function processWeeklyTick(): WeeklyTick {
   const { processWeeklyRepayments, totalWeeklyRepayment } = useLoanStore.getState();
   const { sponsors: allSponsors, investors: allInvestors } = useMarketStore.getState();
 
-  const weekNumber = academy.weekNumber ?? 1;
+  const weekNumber = club.weekNumber ?? 1;
 
   // Expire stale chain boosts before evaluating any events this tick
   useEventChainStore.getState().expireChains(weekNumber);
@@ -157,7 +157,7 @@ export function processWeeklyTick(): WeeklyTick {
       const weeksRemaining = player.enrollmentEndWeek - weekNumber;
 
       if (weeksRemaining <= 0) {
-        // Contract expired — player leaves the academy
+        // Contract expired — player leaves the club
         removeExpiredPlayer(player.id);
         useInboxStore.getState().purgeForPlayer(player.id);
         addTransfer({
@@ -175,7 +175,7 @@ export function processWeeklyTick(): WeeklyTick {
           type: 'system',
           week: weekNumber,
           subject: `${player.name} Has Left`,
-          body: `${player.name}'s enrollment has expired and they have left the academy. Renew contracts before they reach zero to keep your best players.`,
+          body: `${player.name}'s enrollment has expired and they have left the club. Renew contracts before they reach zero to keep your best players.`,
           isRead: false,
           entityId: player.id,
         });
@@ -195,7 +195,7 @@ export function processWeeklyTick(): WeeklyTick {
           type: 'system',
           week: weekNumber,
           subject: 'Enrollment Expiring Soon',
-          body: `${player.name}'s enrollment ends in 12 weeks. Renew their contract from their player page or they will leave the academy.`,
+          body: `${player.name}'s enrollment ends in 12 weeks. Renew their contract from their player page or they will leave the club.`,
           isRead: false,
           entityId: player.id,
         });
@@ -337,14 +337,14 @@ export function processWeeklyTick(): WeeklyTick {
   processWeeklyRepayments();
 
   // ── 6. Finances ───────────────────────────────────────────────────────────────
-  // Resolve this academy's active sponsors from market data
+  // Resolve this club's active sponsors from market data
   const activeSponsors = allSponsors.filter((s) =>
-    academy.sponsorIds.includes(s.id)
+    club.sponsorIds.includes(s.id)
   );
   const sponsorIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
   const financialSummary = calculateWeeklyFinances(
-    weekNumber, academy, players, coaches, levels, activeSponsors, weeklyLoanRepayment, facilityTemplates,
+    weekNumber, club, players, coaches, levels, activeSponsors, weeklyLoanRepayment, facilityTemplates,
   );
 
   // Balance tracks spendable cash — net is in pence, stored directly in pence
@@ -371,7 +371,7 @@ export function processWeeklyTick(): WeeklyTick {
       .filter((item) => !WAGE_LABELS.has(item.label))
       .reduce((sum, item) => sum + item.amount, 0) / 100,
   );
-  const reputationIncome = Math.floor(academy.reputation); // 0–100 scale → whole pounds
+  const reputationIncome = Math.floor(club.reputation); // 0–100 scale → whole pounds
 
   if (wagesPounds > 0) {
     addTransaction({ amount: -wagesPounds,    category: 'wages',           description: `Week ${nextWeek} payroll`,              weekNumber: nextWeek });
@@ -396,7 +396,7 @@ export function processWeeklyTick(): WeeklyTick {
   const effectiveLevels: FacilityLevels = Object.fromEntries(
     Object.keys(levels).map((slug) => [slug, eff(slug)]),
   );
-  const effectiveTier = getEffectiveTier(academy.reputationTier, levels);
+  const effectiveTier = getEffectiveTier(club.reputationTier, levels);
   const tierOvrCap = TIER_OVR_CEILING[effectiveTier];
   const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber, tierOvrCap);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
@@ -434,7 +434,7 @@ export function processWeeklyTick(): WeeklyTick {
     const { removePlayer } = useSquadStore.getState();
     const { removeCoach, updateMorale: updateCoachMorale } = useCoachStore.getState();
     const { addTransfer } = useFinanceStore.getState();
-    const { setSponsorIds } = useAcademyStore.getState();
+    const { setSponsorIds } = useClubStore.getState();
 
     // Re-read live state — morale engine (section 11) may not have run yet but
     // player/coach arrays reflect any removals that happened earlier this tick.
@@ -442,7 +442,7 @@ export function processWeeklyTick(): WeeklyTick {
     const lcCoaches = useCoachStore.getState().coaches;
 
     // ── 7a. Financial Insolvency ─────────────────────────────────────────────
-    if (academy.balance < 0) {
+    if (club.balance < 0) {
       const newWeeksNeg = weeksNegativeBalance + 1;
       setWeeksNegativeBalance(newWeeksNeg);
 
@@ -451,22 +451,22 @@ export function processWeeklyTick(): WeeklyTick {
           id: `insolvency-warn-wk${weekNumber}`,
           type: 'system',
           week: weekNumber,
-          subject: 'Academy Finances Critical',
-          body: 'The academy is operating at a loss. Resolve this within 8 weeks or the academy will be forced to close.',
+          subject: 'Club Finances Critical',
+          body: 'The club is operating at a loss. Resolve this within 8 weeks or the club will be forced to close.',
           isRead: false,
         });
       }
 
       if (newWeeksNeg === 5) {
-        const currentAcademy = useAcademyStore.getState().academy;
-        if (currentAcademy.sponsorIds.length > 0) {
-          setSponsorIds(currentAcademy.sponsorIds.slice(1));
+        const currentClub = useClubStore.getState().club;
+        if (currentClub.sponsorIds.length > 0) {
+          setSponsorIds(currentClub.sponsorIds.slice(1));
           addMessage({
             id: `admin-sponsor-wk${weekNumber}`,
             type: 'system',
             week: weekNumber,
             subject: 'Sponsor Withdraws',
-            body: "A sponsor has pulled out due to the academy's financial instability. Creditors are watching.",
+            body: "A sponsor has pulled out due to the club's financial instability. Creditors are watching.",
             isRead: false,
           });
         }
@@ -515,7 +515,7 @@ export function processWeeklyTick(): WeeklyTick {
             type: 'system',
             week: weekNumber,
             subject: `${player.name} Is Unhappy`,
-            body: `${player.name}'s morale has collapsed. They are considering leaving the academy.`,
+            body: `${player.name}'s morale has collapsed. They are considering leaving the club.`,
             isRead: false,
           });
         } else if (weeksAtRisk === 2) {
@@ -534,7 +534,7 @@ export function processWeeklyTick(): WeeklyTick {
           addTransfer({
             playerId: player.id,
             playerName: player.name,
-            destinationClub: 'Left Academy',
+            destinationClub: 'Left Club',
             grossFee: 0,
             agentCommission: 0,
             netProceeds: 0,
@@ -546,10 +546,10 @@ export function processWeeklyTick(): WeeklyTick {
             type: 'system',
             week: weekNumber,
             subject: `${player.name} Has Left`,
-            body: `${player.name} walked out of the academy. Their morale had been critically low for too long.`,
+            body: `${player.name} walked out of the club. Their morale had been critically low for too long.`,
             isRead: false,
           });
-          // A walkout damages the academy's reputation
+          // A walkout damages the club's reputation
           setReputation(-1.0);
         }
       } else if (existing) {
@@ -559,7 +559,7 @@ export function processWeeklyTick(): WeeklyTick {
           type: 'system',
           week: weekNumber,
           subject: `${player.name} Has Settled`,
-          body: `${player.name}'s morale has recovered. They've decided to stay at the academy.`,
+          body: `${player.name}'s morale has recovered. They've decided to stay at the club.`,
           isRead: false,
         });
       }
@@ -584,7 +584,7 @@ export function processWeeklyTick(): WeeklyTick {
             type: 'system',
             week: weekNumber,
             subject: `${coach.name} Is Unhappy`,
-            body: `${coach.name}'s morale has collapsed. They are considering leaving the academy.`,
+            body: `${coach.name}'s morale has collapsed. They are considering leaving the club.`,
             isRead: false,
           });
         } else if (weeksAtRisk === 2) {
@@ -615,10 +615,10 @@ export function processWeeklyTick(): WeeklyTick {
             type: 'system',
             week: weekNumber,
             subject: `${coach.name} Has Left`,
-            body: `${coach.name} walked out of the academy. Their morale had been critically low for too long.`,
+            body: `${coach.name} walked out of the club. Their morale had been critically low for too long.`,
             isRead: false,
           });
-          // A coach resignation is visible and damages the academy's standing
+          // A coach resignation is visible and damages the club's standing
           setReputation(-1.0);
         }
       } else if (existing) {
@@ -628,7 +628,7 @@ export function processWeeklyTick(): WeeklyTick {
           type: 'system',
           week: weekNumber,
           subject: `${coach.name} Has Settled`,
-          body: `${coach.name}'s morale has recovered. They've decided to stay at the academy.`,
+          body: `${coach.name}'s morale has recovered. They've decided to stay at the club.`,
           isRead: false,
         });
       }
@@ -667,7 +667,7 @@ export function processWeeklyTick(): WeeklyTick {
           addTransfer({
             playerId: lowestMoralePlayer.id,
             playerName: lowestMoralePlayer.name,
-            destinationClub: 'Left Academy',
+            destinationClub: 'Left Club',
             grossFee: 0,
             agentCommission: 0,
             netProceeds: 0,
@@ -679,7 +679,7 @@ export function processWeeklyTick(): WeeklyTick {
             type: 'system',
             week: weekNumber,
             subject: `${lowestMoralePlayer.name} Left — Overloaded Coach`,
-            body: `${lowestMoralePlayer.name} left the academy. There aren't enough coaches to support the squad.`,
+            body: `${lowestMoralePlayer.name} left the club. There aren't enough coaches to support the squad.`,
             isRead: false,
           });
           setReputation(-1.0);
@@ -708,7 +708,7 @@ export function processWeeklyTick(): WeeklyTick {
             type: 'system',
             week: weekNumber,
             subject: `${lowestMoraleCoach.name} Has Left`,
-            body: `${lowestMoraleCoach.name} resigned — not enough players to coach at this academy.`,
+            body: `${lowestMoraleCoach.name} resigned — not enough players to coach at this club.`,
             isRead: false,
           });
         }
@@ -730,8 +730,8 @@ export function processWeeklyTick(): WeeklyTick {
           id: `floor-warn-1-wk${weekNumber}`,
           type: 'system',
           week: weekNumber,
-          subject: 'Academy Near Collapse',
-          body: 'Fewer than 3 players remain. The academy cannot continue operating at this level.',
+          subject: 'Club Near Collapse',
+          body: 'Fewer than 3 players remain. The club cannot continue operating at this level.',
           isRead: false,
         });
       } else if (newWeeksFloor === 2) {
@@ -739,8 +739,8 @@ export function processWeeklyTick(): WeeklyTick {
           id: `floor-warn-2-wk${weekNumber}`,
           type: 'system',
           week: weekNumber,
-          subject: 'Academy on Life Support',
-          body: 'The squad is still critically small. Sign players immediately or the academy will close.',
+          subject: 'Club on Life Support',
+          body: 'The squad is still critically small. Sign players immediately or the club will close.',
           isRead: false,
         });
       } else if (newWeeksFloor >= 4) {
@@ -764,7 +764,7 @@ export function processWeeklyTick(): WeeklyTick {
   // ── 8. Reputation ─────────────────────────────────────────────────────────────
   // Passive base is a meaningful weekly driver, especially early game.
   // Scouting Center adds to this on top.
-  const rep = academy.reputation;
+  const rep = club.reputation;
   const passiveRepDelta = calculateReputationDelta(
     eff('scouting_center'),
     config.reputationDeltaBase,
@@ -784,7 +784,7 @@ export function processWeeklyTick(): WeeklyTick {
     0;
 
   // Inactivity nudge — secondary penalty on top of tier drain for pure idling
-  const weeksSinceActivity = weekNumber - (academy.lastRepActivityWeek ?? 1);
+  const weeksSinceActivity = weekNumber - (club.lastRepActivityWeek ?? 1);
   const inactivityDecay =
     weeksSinceActivity >= 8 ? 0.15 :
     weeksSinceActivity >= 4 ? 0.08 :
@@ -797,7 +797,7 @@ export function processWeeklyTick(): WeeklyTick {
   expireOldOffers(weekNumber);
   const { agents: allAgents } = useMarketStore.getState();
   const agentOffer = generateAgentOffer(
-    weekNumber, players, allAgents, academy.reputation,
+    weekNumber, players, allAgents, club.reputation,
     useGameConfigStore.getState().config.playerFeeMultiplier,
   );
   if (agentOffer) {
@@ -824,7 +824,7 @@ export function processWeeklyTick(): WeeklyTick {
   // ── 9. Week-1 investor offer ──────────────────────────────────────────────────
   // Only fires once: when this is the first week tick, no investor is assigned yet,
   // and no prior investor message exists in the inbox.
-  if (weekNumber === 1 && !academy.investorId) {
+  if (weekNumber === 1 && !club.investorId) {
     const alreadySent = inboxMessages.some((m) => m.type === 'investor');
     if (!alreadySent) {
       // Prefer a SMALL investor from market data; fall back to any investor available.
@@ -833,8 +833,8 @@ export function processWeeklyTick(): WeeklyTick {
 
       if (investor) {
         const equityPct = 10;
-        const academyValuation = calculateAcademyValuation(players, levels, coaches, academy.balance, academy.reputation);
-        const rawOffer = Math.round(academyValuation * (equityPct / 100));
+        const clubValuation = calculateClubValuation(players, levels, coaches, club.balance, club.reputation);
+        const rawOffer = Math.round(clubValuation * (equityPct / 100));
         const roundedOffer = Math.ceil(rawOffer / 100_000) * 100_000;
         const multiplier = Math.floor(Math.random() * 3) + 1;
         const finalOffer = roundedOffer * multiplier; // pence
@@ -844,7 +844,7 @@ export function processWeeklyTick(): WeeklyTick {
           type: 'investor',
           week: weekNumber,
           subject: 'Investment Offer',
-          body: `${investor.name} is interested in backing your academy. They are offering £${(finalOffer / 100).toLocaleString()} in funding in exchange for a ${equityPct}% stake in all future player sales. This could give you the working capital to upgrade facilities and sign stronger players — but remember, every transfer fee will be shared.`,
+          body: `${investor.name} is interested in backing your club. They are offering £${(finalOffer / 100).toLocaleString()} in funding in exchange for a ${equityPct}% stake in all future player sales. This could give you the working capital to upgrade facilities and sign stronger players — but remember, every transfer fee will be shared.`,
           isRead: false,
           requiresResponse: true,
           entityId: investor.id,
@@ -866,8 +866,8 @@ export function processWeeklyTick(): WeeklyTick {
     (m) => m.type === 'sponsor' && m.requiresResponse && !m.response
   );
   if (!hasPendingSponsorOffer && Math.random() < 0.15) {
-    const rep = academy.reputation;
-    const availableSponsors = allSponsors.filter((s) => !academy.sponsorIds.includes(s.id));
+    const rep = club.reputation;
+    const availableSponsors = allSponsors.filter((s) => !club.sponsorIds.includes(s.id));
     let eligibleSizes: CompanySize[];
     if (rep >= 75)      eligibleSizes = ['LARGE'];
     else if (rep >= 40) eligibleSizes = ['MEDIUM', 'LARGE'];
@@ -886,7 +886,7 @@ export function processWeeklyTick(): WeeklyTick {
         type: 'sponsor',
         week: weekNumber,
         subject: 'Sponsorship Offer',
-        body: `${sponsor.name} has approached your academy with a sponsorship proposal. They are offering £${weeklyPounds.toLocaleString()} per week for ${sponsor.contractWeeks} weeks. Your growing reputation has caught their attention.`,
+        body: `${sponsor.name} has approached your club with a sponsorship proposal. They are offering £${weeklyPounds.toLocaleString()} per week for ${sponsor.contractWeeks} weeks. Your growing reputation has caught their attention.`,
         isRead: false,
         requiresResponse: true,
         entityId: sponsor.id,
@@ -909,12 +909,12 @@ export function processWeeklyTick(): WeeklyTick {
   );
   if (
     weekNumber > 1 &&
-    !academy.investorId &&
+    !club.investorId &&
     !hasPendingInvestorOffer &&
-    academy.reputation >= 5 &&
+    club.reputation >= 5 &&
     Math.random() < 0.08
   ) {
-    const rep = academy.reputation;
+    const rep = club.reputation;
     // Equity ceiling by tier: Regional→SMALL (≤10%), National→MEDIUM (≤20%), Elite→any
     const maxEquity = rep >= 75 ? 100 : rep >= 40 ? 20 : 10;
     const eligible = allInvestors.filter((inv) => inv.equityTaken <= maxEquity);
@@ -925,8 +925,8 @@ export function processWeeklyTick(): WeeklyTick {
     if (investor) {
       const equityPct = investor.equityTaken;
       const size: CompanySize = equityPct <= 10 ? 'SMALL' : equityPct <= 20 ? 'MEDIUM' : 'LARGE';
-      const academyValuation = calculateAcademyValuation(players, levels, coaches, academy.balance, academy.reputation);
-      const rawOffer = Math.round(academyValuation * (equityPct / 100));
+      const clubValuation = calculateClubValuation(players, levels, coaches, club.balance, club.reputation);
+      const rawOffer = Math.round(clubValuation * (equityPct / 100));
       const roundedOffer = Math.ceil(rawOffer / 100_000) * 100_000;
       const multiplier = Math.floor(Math.random() * 3) + 1;
       const finalOffer = roundedOffer * multiplier; // pence
@@ -936,7 +936,7 @@ export function processWeeklyTick(): WeeklyTick {
         type: 'investor',
         week: weekNumber,
         subject: 'Investment Offer',
-        body: `${investor.name} has expressed interest in backing your academy. They are offering £${(finalOffer / 100).toLocaleString()} in funding in exchange for a ${equityPct}% stake in all future player sales. Your growing reputation has made you an attractive proposition.`,
+        body: `${investor.name} has expressed interest in backing your club. They are offering £${(finalOffer / 100).toLocaleString()} in funding in exchange for a ${equityPct}% stake in all future player sales. Your growing reputation has made you an attractive proposition.`,
         isRead: false,
         requiresResponse: true,
         entityId: investor.id,

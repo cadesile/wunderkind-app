@@ -1,16 +1,16 @@
 import {
-  AcademyTier,
+  ClubTier,
   ReputationTier,
   TIER_FACILITY_REQUIREMENTS,
   TIER_ORDER,
-} from '@/types/academy';
+} from '@/types/club';
 import { FacilityLevels } from '@/types/facility';
 
 /**
- * Returns the highest AcademyTier unlocked by the given facility levels.
+ * Returns the highest ClubTier unlocked by the given facility levels.
  * All built facilities must meet the minimum level requirement for each tier.
  */
-export function computeFacilityTier(levels: FacilityLevels): AcademyTier {
+export function computeFacilityTier(levels: FacilityLevels): ClubTier {
   const values = Object.values(levels);
   if (values.length === 0) return 'local';
   const minLevel = Math.min(...values);
@@ -28,8 +28,8 @@ export function computeFacilityTier(levels: FacilityLevels): AcademyTier {
 export function getEffectiveTier(
   reputationTier: ReputationTier,
   facilityLevels: FacilityLevels,
-): AcademyTier {
-  const repTier = reputationTier.toLowerCase() as AcademyTier;
+): ClubTier {
+  const repTier = reputationTier.toLowerCase() as ClubTier;
   const facTier = computeFacilityTier(facilityLevels);
   return TIER_ORDER[repTier] <= TIER_ORDER[facTier] ? repTier : facTier;
 }

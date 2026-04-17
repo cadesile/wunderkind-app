@@ -1,6 +1,6 @@
 import { simulationService } from './SimulationService';
 import { useNarrativeStore } from '@/stores/narrativeStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useGuardianStore } from '@/stores/guardianStore';
@@ -25,7 +25,7 @@ class ReactionHandler {
     }
 
     if (choice.manager_shift) {
-      useAcademyStore.getState().updateManagerPersonality(choice.manager_shift);
+      useClubStore.getState().updateManagerPersonality(choice.manager_shift);
     }
 
     useNarrativeStore.getState().markAsResponded(message.id);
@@ -55,7 +55,7 @@ export function handleGuardianResponse(
   const player = players.find((p) => p.id === playerId);
   if (!player) return;
 
-  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
   const { updateGuardian } = useGuardianStore.getState();
   const worstGuardian = useGuardianStore.getState().guardians.find((g) => g.id === worstGuardianId);
   if (!worstGuardian) return;
@@ -73,7 +73,7 @@ export function handleGuardianResponse(
 
   if (response === 'accepted') {
     updateGuardian(worstGuardianId, {
-      loyaltyToAcademy: Math.min(100, worstGuardian.loyaltyToAcademy + cfg.guardianConvinceGuardianLoyaltyBoost),
+      loyaltyToClub: Math.min(100, worstGuardian.loyaltyToClub + cfg.guardianConvinceGuardianLoyaltyBoost),
       demandLevel: Math.min(10, worstGuardian.demandLevel + cfg.guardianConvinceGuardianDemandIncrease),
     });
 
@@ -82,7 +82,7 @@ export function handleGuardianResponse(
     // Deduct financial cost if applicable
     if (costPence !== undefined) {
       // balance is stored in pence — deduct pence directly
-      useAcademyStore.getState().addBalance(-costPence);
+      useClubStore.getState().addBalance(-costPence);
 
       // Ledger entry — amount in whole pounds, negative = expense
       useFinanceStore.getState().addTransaction({
@@ -94,7 +94,7 @@ export function handleGuardianResponse(
     }
   } else {
     updateGuardian(worstGuardianId, {
-      loyaltyToAcademy: Math.max(0, worstGuardian.loyaltyToAcademy - cfg.guardianIgnoreGuardianLoyaltyPenalty),
+      loyaltyToClub: Math.max(0, worstGuardian.loyaltyToClub - cfg.guardianIgnoreGuardianLoyaltyPenalty),
       demandLevel: Math.min(10, worstGuardian.demandLevel + cfg.guardianIgnoreGuardianDemandIncrease),
       ignoredRequestCount: worstGuardian.ignoredRequestCount + 1,
     });

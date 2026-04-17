@@ -36,7 +36,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
   {
     slug:                    'technical_zone',
     label:                   'Technical Zone',
-    description:             'The heartbeat of your academy. Better facilities mean faster technical improvement.',
+    description:             'The heartbeat of your club. Better facilities mean faster technical improvement.',
     category:                'TRAINING',
     baseCost:                500000,
     weeklyUpkeepBase:        500,
@@ -106,7 +106,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
   {
     slug:                    'scouting_center',
     label:                   'Scouting Center',
-    description:             'Talent identification hub that drives scouting intelligence and academy reputation.',
+    description:             'Talent identification hub that drives scouting intelligence and club reputation.',
     category:                'SCOUTING',
     baseCost:                1000000,
     weeklyUpkeepBase:        300,

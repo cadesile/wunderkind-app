@@ -11,13 +11,13 @@ export interface StarterConfig {
   starterCoachCount: number;
   starterScoutCount: number;
   starterSponsorTier: string;    // 'SMALL' | 'MEDIUM' | 'LARGE'
-  /** Default academy tier for new academies e.g. 'local' | 'regional' | 'national' | 'elite' */
-  starterAcademyTier: string;
+  /** Default club tier for new academies e.g. 'local' | 'regional' | 'national' | 'elite' */
+  starterClubTier: string;
 }
 
-// ─── Academy Status ───────────────────────────────────────────────────────────
+// ─── Club Status ───────────────────────────────────────────────────────────
 
-export interface AcademyStatusResponse {
+export interface ClubStatusResponse {
   id: string;
   name: string;
   /** Balance in pence */
@@ -41,7 +41,7 @@ export interface ApiGuardian {
   dateOfBirth: string | null;
   gender: 'male' | 'female';
   demandLevel: number;
-  loyaltyToAcademy: number;
+  loyaltyToClub: number;
   contactEmail: string | null;
 }
 
@@ -251,7 +251,7 @@ export interface SyncRequest {
   /** Absolute reputation value (0–100) — authoritative anchor for backend reconciliation */
   reputation: number;
 
-  // ── Academy snapshot ───────────────────────────────────────────────────────
+  // ── Club snapshot ───────────────────────────────────────────────────────
   hallOfFamePoints: number;
   /** Number of active (non-transferred/released) players */
   squadSize: number;
@@ -273,15 +273,15 @@ export interface SyncAcceptedResponse {
   gameConfig?: GameConfig;
   /** Active facility templates — replaces local fallback on receipt */
   facilityTemplates?: FacilityTemplate[];
-  academy: {
-    id: string;                  // academy UUID — used as the AMP's club ID in fixtures
+  club: {
+    id: string;                  // club UUID — used as the AMP's club ID in fixtures
     reputation: number;
     totalCareerEarnings: number;
     hallOfFamePoints: number;
-    /** Academy balance in pence — included when backend supports it */
+    /** Club balance in pence — included when backend supports it */
     balance?: number;
   };
-  /** League the academy is currently assigned to. null = not yet assigned or no match found. */
+  /** League the club is currently assigned to. null = not yet assigned or no match found. */
   league: LeagueSnapshot | null;
 }
 
@@ -297,7 +297,7 @@ export type SyncResponse = SyncAcceptedResponse | SyncRejectedResponse;
 
 export type LeaderboardCategory =
   | 'career_earnings'
-  | 'academy_reputation'
+  | 'club_reputation'
   | 'hall_of_fame';
 
 /**
@@ -315,12 +315,12 @@ export interface LeaderboardParams {
 
 export interface LeaderboardEntry {
   rank: number;
-  academyName: string;
+  clubName: string;
   /** Absolute reputation value (0–100) — primary sort key */
   reputation: number;
   /** Cumulative career earnings in pence — secondary sort key */
   totalCareerEarnings: number;
-  /** Academy's current week number — tertiary tiebreaker (ascending: fewer weeks = faster progression) */
+  /** Club's current week number — tertiary tiebreaker (ascending: fewer weeks = faster progression) */
   weekNumber: number;
 }
 

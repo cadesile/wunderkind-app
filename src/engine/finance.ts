@@ -1,5 +1,5 @@
 import { FinancialRecord, ExpenseItem } from '@/types/game';
-import { Academy } from '@/types/academy';
+import { Club } from '@/types/club';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { FacilityTemplate, FacilityLevels } from '@/types/facility';
@@ -29,7 +29,7 @@ export function calculateNetSalePrice(
  */
 export function calculateWeeklyFinances(
   week: number,
-  academy: Academy,
+  club: Club,
   players: Player[],
   coaches: Coach[],
   facilityLevels: FacilityLevels,
@@ -52,7 +52,7 @@ export function calculateWeeklyFinances(
   }
 
   // Legacy staff wages
-  const staffWages = academy.staffCount * 500;
+  const staffWages = club.staffCount * 500;
   if (staffWages > 0) {
     breakdown.push({ label: 'Staff wages', amount: staffWages });
   }
@@ -77,7 +77,7 @@ export function calculateWeeklyFinances(
   const sponsorIncome = sponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
   // Reputation-based passive income
-  const reputationIncome = Math.floor(academy.reputation * 100);
+  const reputationIncome = Math.floor(club.reputation * 100);
 
   const income = sponsorIncome + reputationIncome;
   const net = income - expenses;

@@ -14,7 +14,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { InteractionManager } from 'react-native';
 import { syncWeek } from '@/api/endpoints/sync';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFacilityStore } from '@/stores/facilityStore';
@@ -116,7 +116,7 @@ class SyncQueue {
 
       if (res.accepted) {
         // Server accepted — reconcile authoritative aggregates locally
-        useAcademyStore.getState().applyServerSync(res.academy);
+        useClubStore.getState().applyServerSync(res.club);
         // Piggyback: update engine config if the server sent a newer version
         if (res.gameConfig) {
           useGameConfigStore.getState().setConfig(res.gameConfig);
@@ -132,7 +132,7 @@ class SyncQueue {
         // Discard entire queue (stale data), reset local week, alert user
         this.queue = [];
         await this.persist();
-        useAcademyStore.getState().rollbackWeek(res.currentWeek);
+        useClubStore.getState().rollbackWeek(res.currentWeek);
         this.processing = false;
         this.notify('idle');
         useInboxStore.getState().addMessage({

@@ -3,7 +3,7 @@ import { Coach } from '@/types/coach';
 import { FacilityLevels } from '@/types/facility';
 import { PlayerDevelopmentUpdate } from '@/stores/squadStore';
 import { useInboxStore } from '@/stores/inboxStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 
 const ATTRIBUTE_NAMES: AttributeName[] = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
 
@@ -289,7 +289,7 @@ export function computePlayerDevelopment(
   }
 
   // Breakthrough spike inbox notifications — one message per spiking player
-  const { setReputation, markRepActivity } = useAcademyStore.getState();
+  const { setReputation, markRepActivity } = useClubStore.getState();
   Object.entries(devUpdates).forEach(([playerId, update]) => {
     if (!update.spike) return;
     const player = players.find((p) => p.id === playerId);
@@ -304,7 +304,7 @@ export function computePlayerDevelopment(
       isRead: false,
       metadata: { playerIds: [playerId] },
     });
-    // A visible development breakthrough signals a thriving academy
+    // A visible development breakthrough signals a thriving club
     setReputation(0.5);
     markRepActivity();
   });

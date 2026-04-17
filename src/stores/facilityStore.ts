@@ -10,7 +10,7 @@ import {
 } from '@/types/facility';
 import { zustandStorage } from '@/utils/storage';
 import { computeFacilityTier } from '@/utils/tierGate';
-import type { AcademyTier } from '@/types/academy';
+import type { ClubTier } from '@/types/club';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ interface FacilityState {
   initAllLevels: () => void;
   /** Decays all built facilities by their weekly rate. Called at end of each game tick. */
   decayCondition: () => void;
-  /** Restores facility condition to 100%. Deducts cost from academy balance. */
+  /** Restores facility condition to 100%. Deducts cost from club balance. */
   repairFacility: (slug: string) => void;
   /** Squad capacity: base 15, or 10 + physio_clinic.level × 3 if built */
   maxSquadSize: () => number;
@@ -51,7 +51,7 @@ interface FacilityState {
   /** Total weekly maintenance cost across all facilities (pence) */
   totalWeeklyMaintenance: () => number;
   /** Highest tier unlocked by current facility levels (all must meet minimum) */
-  facilityTier: () => AcademyTier;
+  facilityTier: () => ClubTier;
 }
 
 // ─── Default state builders ───────────────────────────────────────────────────
@@ -98,8 +98,8 @@ export const useFacilityStore = create<FacilityState>()(
         }));
 
         // Award reputation for the upgrade
-        const { useAcademyStore } = require('@/stores/academyStore');
-        const { setReputation, markRepActivity } = useAcademyStore.getState();
+        const { useClubStore } = require('@/stores/clubStore');
+        const { setReputation, markRepActivity } = useClubStore.getState();
         setReputation(template.reputationBonus);
         markRepActivity();
 
@@ -134,14 +134,14 @@ export const useFacilityStore = create<FacilityState>()(
         const cost = repairFacilityCost(levels[slug] ?? 0, conditions[slug] ?? 100, template.baseCost);
         if (cost === 0) return;
 
-        const { addBalance, academy } = require('@/stores/academyStore').useAcademyStore.getState();
+        const { addBalance, club } = require('@/stores/clubStore').useClubStore.getState();
         const { addTransaction }      = require('@/stores/financeStore').useFinanceStore.getState();
         addBalance(-(cost * 100)); // pounds → pence
         addTransaction({
           amount:      -cost,
           category:    'upkeep',
           description: `Repaired ${template.label}`,
-          weekNumber:  academy.weekNumber ?? 1,
+          weekNumber:  club.weekNumber ?? 1,
         });
         set((state) => ({
           conditions: { ...state.conditions, [slug]: 100 },

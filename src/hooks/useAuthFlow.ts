@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { register, login } from '@/api/endpoints/auth';
-import { checkAcademy } from '@/api/endpoints/academy';
+import { checkClub } from '@/api/endpoints/club';
 import { marketApi } from '@/api/endpoints/market';
 import { fetchStarterConfig } from '@/api/endpoints/starterConfig';
 import { ApiError } from '@/types/api';
-import { clearAllAcademyData } from '@/stores/resetAllStores';
+import { clearAllClubData } from '@/stores/resetAllStores';
 import { generatePersonality } from '@/engine/personality';
 import { useGuardianStore } from '@/stores/guardianStore';
 import type { ApiGuardian } from '@/types/api';
@@ -23,10 +23,10 @@ import { useGameConfigStore } from '@/stores/gameConfigStore';
 import type { Scout } from '@/types/market';
 import type { Player, Position } from '@/types/player';
 import type { Coach, CoachRole } from '@/types/coach';
-import type { AcademyCountryCode } from '@/utils/nationality';
+import type { ClubCountryCode } from '@/utils/nationality';
 import type { ManagerProfileInput } from '@/types/api';
-import type { ManagerProfile, AcademyTier } from '@/types/academy';
-import { TIER_REPUTATION_BASELINE } from '@/types/academy';
+import type { ManagerProfile, ClubTier } from '@/types/club';
+import { TIER_REPUTATION_BASELINE } from '@/types/club';
 import { initializeWorld } from '@/api/endpoints/initialize';
 import { useWorldStore } from '@/stores/worldStore';
 import type { WorldPlayer, WorldStaff } from '@/types/world';
@@ -57,7 +57,7 @@ function storeBackendGuardians(playerId: string, apiGuardians: ApiGuardian[]): v
     lastName: g.lastName,
     gender: g.gender,
     demandLevel: g.demandLevel,
-    loyaltyToAcademy: g.loyaltyToAcademy,
+    loyaltyToClub: g.loyaltyToClub,
     ignoredRequestCount: 0,
   }));
   useGuardianStore.getState().addGuardians(guardians);
@@ -179,7 +179,7 @@ function worldStaffToScout(ws: WorldStaff, weekNumber: number): Scout {
 export interface AuthFlowResult {
   isReady: boolean;
   isOnboarding: boolean;
-  registerAcademy: (academyName: string, country: AcademyCountryCode, managerProfile: ManagerProfile) => Promise<void>;
+  registerClub: (clubName: string, country: ClubCountryCode, managerProfile: ManagerProfile) => Promise<void>;
   showWelcomeSplash: boolean;
   dismissWelcomeSplash: () => void;
 }
@@ -190,20 +190,20 @@ export interface AuthFlowResult {
  * 1. Token present → ready immediately; refresh market data in background.
  * 2. Credentials present (token expired) → silent re-login → ready; refresh market data.
  * 3. First launch (no credentials) → isOnboarding=true; call
- *    registerAcademy(name) from the onboarding screen to complete setup.
+ *    registerClub(name) from the onboarding screen to complete setup.
  *
- * Bootstraps a new academy:
- * 1. Register / find the academy via initializeAcademy
+ * Bootstraps a new club:
+ * 1. Register / find the club via initializeClub
  * 2. Call POST /api/initialize to receive the world pack and AMP starter squad
  * 3. Populate worldStore with NPC world data
  * 4. Map ampStarter players/staff to local types and populate stores
- * 5. Apply academy settings (balance, reputation, facilities, sponsor, investor)
+ * 5. Apply club settings (balance, reputation, facilities, sponsor, investor)
  */
 export function useAuthFlow(): AuthFlowResult {
   const { token, email, password, setToken, setTokens, setCredentials, setUserId } =
     useAuthStore();
-  const { setName: setAcademyName, addBalance, setCreatedAt, setSponsorIds, setInvestorId, setCountry, setManagerProfile, setReputation } =
-    useAcademyStore();
+  const { setName: setClubName, addBalance, setCreatedAt, setSponsorIds, setInvestorId, setCountry, setManagerProfile, setReputation } =
+    useClubStore();
   const { setPlayers } = useSquadStore();
   const { addCoach } = useCoachStore();
   const { addScout } = useScoutStore();
@@ -234,21 +234,21 @@ export function useAuthFlow(): AuthFlowResult {
       const { token, email, password } = useAuthStore.getState();
 
       if (token) {
-        // Verify the academy still exists on the backend.
+        // Verify the club still exists on the backend.
         // On 404 → wipe all local data and send the user back to onboarding.
         // On network error → proceed normally (transient failure, data is fine).
         try {
-          const { exists } = await checkAcademy();
+          const { exists } = await checkClub();
           if (!exists) {
-            console.warn('[useAuthFlow] Academy not found on backend — clearing data and redirecting to onboarding');
-            await clearAllAcademyData();
+            console.warn('[useAuthFlow] Club not found on backend — clearing data and redirecting to onboarding');
+            await clearAllClubData();
             setIsOnboarding(true);
             setIsReady(true);
             return;
           }
         } catch (err) {
           // Network/timeout — do nothing, proceed with cached data
-          console.warn('[useAuthFlow] Academy check failed (network) — proceeding with cached data:', err);
+          console.warn('[useAuthFlow] Club check failed (network) — proceeding with cached data:', err);
         }
 
         setIsReady(true);
@@ -268,12 +268,12 @@ export function useAuthFlow(): AuthFlowResult {
             setToken(loginResp.token);
           }
 
-          // Same academy existence check after re-login
+          // Same club existence check after re-login
           try {
-            const { exists } = await checkAcademy();
+            const { exists } = await checkClub();
             if (!exists) {
-              console.warn('[useAuthFlow] Academy not found after re-login — clearing data and redirecting to onboarding');
-              await clearAllAcademyData();
+              console.warn('[useAuthFlow] Club not found after re-login — clearing data and redirecting to onboarding');
+              await clearAllClubData();
               setIsOnboarding(true);
               setIsReady(true);
               return;
@@ -300,7 +300,7 @@ export function useAuthFlow(): AuthFlowResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function registerAcademy(academyName: string, country: AcademyCountryCode, managerProfile: ManagerProfile): Promise<void> {
+  async function registerClub(clubName: string, country: ClubCountryCode, managerProfile: ManagerProfile): Promise<void> {
     // Fetch starter config — required, no fallback. Throws if unavailable.
     const starterConfig = await fetchStarterConfig();
 
@@ -344,27 +344,27 @@ export function useAuthFlow(): AuthFlowResult {
 
     // Use config values everywhere previously hardcoded
     const startingBalance = starterConfig.startingBalance;
-    const academyTier = starterConfig.starterAcademyTier;
+    const clubTier = starterConfig.starterClubTier;
 
     const sponsorIds: string[] = [];
     const investorId = null;
 
-    // 4. Academy setup
+    // 4. Club setup
     setCreatedAt(new Date().toISOString());
     addBalance(startingBalance);
-    // Set initial reputation from the academy tier baseline
-    const tierBaseline = TIER_REPUTATION_BASELINE[academyTier as AcademyTier] ?? 0;
+    // Set initial reputation from the club tier baseline
+    const tierBaseline = TIER_REPUTATION_BASELINE[clubTier as ClubTier] ?? 0;
     setReputation(tierBaseline);
     initAllLevels();
 
     const weekNumber = 1;
 
-    // 2. Create the academy on the backend (sets name + country, required before /api/initialize)
+    // 2. Create the club on the backend (sets name + country, required before /api/initialize)
     try {
-      await marketApi.initializeAcademy(academyName, country, managerInput);
+      await marketApi.initializeClub(clubName, country, managerInput);
     } catch (err) {
       const status = err instanceof ApiError ? ` (HTTP ${err.status}: ${err.message})` : '';
-      console.warn(`[useAuthFlow] Academy creation failed${status} — world init will be skipped`);
+      console.warn(`[useAuthFlow] Club creation failed${status} — world init will be skipped`);
     }
 
     // 3. World initialization — single call replaces fetchMarketData + assignMarketEntity loop
@@ -403,7 +403,7 @@ export function useAuthFlow(): AuthFlowResult {
     setInvestorId(investorId);
 
     // 8. Finalise
-    setAcademyName(academyName);
+    setClubName(clubName);
     setCountry(country);
     setShowWelcomeSplash(true);
     setIsOnboarding(false);
@@ -412,7 +412,7 @@ export function useAuthFlow(): AuthFlowResult {
   return {
     isReady,
     isOnboarding,
-    registerAcademy,
+    registerClub,
     showWelcomeSplash,
     dismissWelcomeSplash: () => setShowWelcomeSplash(false),
   };

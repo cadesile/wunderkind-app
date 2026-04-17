@@ -14,7 +14,7 @@ interface GuardianState {
 
   /** Update a single guardian's mutable fields */
   updateGuardian: (guardianId: string, changes: Partial<Pick<Guardian,
-    'demandLevel' | 'loyaltyToAcademy' | 'ignoredRequestCount'
+    'demandLevel' | 'loyaltyToClub' | 'ignoredRequestCount'
   >>) => void;
 
   /** Returns all guardians for a given player */
@@ -22,7 +22,7 @@ interface GuardianState {
 
   /**
    * Returns the single most-demanding guardian for a player.
-   * Highest demandLevel wins; lowest loyaltyToAcademy breaks ties.
+   * Highest demandLevel wins; lowest loyaltyToClub breaks ties.
    */
   getWorstGuardian: (playerId: string) => Guardian | null;
 
@@ -57,7 +57,7 @@ export const useGuardianStore = create<GuardianState>()(
         if (playerGuardians.length === 0) return null;
         return playerGuardians.reduce((worst, g) => {
           if (g.demandLevel > worst.demandLevel) return g;
-          if (g.demandLevel === worst.demandLevel && g.loyaltyToAcademy < worst.loyaltyToAcademy) return g;
+          if (g.demandLevel === worst.demandLevel && g.loyaltyToClub < worst.loyaltyToClub) return g;
           return worst;
         });
       },

@@ -1,4 +1,4 @@
-// ─── Academy country system ───────────────────────────────────────────────────
+// ─── Club country system ───────────────────────────────────────────────────
 
 export const ACADEMY_COUNTRIES = [
   { code: 'EN', label: 'England',     flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
@@ -10,9 +10,9 @@ export const ACADEMY_COUNTRIES = [
   { code: 'NL', label: 'Netherlands', flag: '🇳🇱' },
 ] as const;
 
-export type AcademyCountryCode = typeof ACADEMY_COUNTRIES[number]['code'];
+export type ClubCountryCode = typeof ACADEMY_COUNTRIES[number]['code'];
 
-export const ACADEMY_COUNTRY_NEIGHBOURS: Record<AcademyCountryCode, AcademyCountryCode[]> = {
+export const ACADEMY_COUNTRY_NEIGHBOURS: Record<ClubCountryCode, ClubCountryCode[]> = {
   EN: ['NL', 'DE'],
   IT: ['ES'],
   DE: ['NL', 'EN'],
@@ -27,20 +27,20 @@ export const ACADEMY_COUNTRY_NEIGHBOURS: Record<AcademyCountryCode, AcademyCount
  * Returns null when unrestricted (Elite tier, reputation >= 75).
  */
 export function getAllowedNationalities(
-  academyCountry: AcademyCountryCode,
+  clubCountry: ClubCountryCode,
   reputation: number,
-): AcademyCountryCode[] | null {
+): ClubCountryCode[] | null {
   if (reputation >= 75) return null;
-  if (reputation >= 40) return ACADEMY_COUNTRIES.map((c) => c.code) as AcademyCountryCode[];
-  if (reputation >= 15) return [academyCountry, ...ACADEMY_COUNTRY_NEIGHBOURS[academyCountry]];
-  return [academyCountry];
+  if (reputation >= 40) return ACADEMY_COUNTRIES.map((c) => c.code) as ClubCountryCode[];
+  if (reputation >= 15) return [clubCountry, ...ACADEMY_COUNTRY_NEIGHBOURS[clubCountry]];
+  return [clubCountry];
 }
 
 /**
- * Maps player nationality strings (as stored on Player entities) to academy
+ * Maps player nationality strings (as stored on Player entities) to club
  * country codes. Used for market/scouting tier restrictions.
  */
-export const NATIONALITY_TO_ACADEMY_CODE: Partial<Record<string, AcademyCountryCode>> = {
+export const NATIONALITY_TO_ACADEMY_CODE: Partial<Record<string, ClubCountryCode>> = {
   'English':   'EN',
   'Italian':   'IT',
   'German':    'DE',
@@ -50,8 +50,8 @@ export const NATIONALITY_TO_ACADEMY_CODE: Partial<Record<string, AcademyCountryC
   'Dutch':     'NL',
 };
 
-/** Reverse of NATIONALITY_TO_ACADEMY_CODE — maps academy code to nationality string. */
-export const ACADEMY_CODE_TO_NATIONALITY: Record<AcademyCountryCode, string> = {
+/** Reverse of NATIONALITY_TO_ACADEMY_CODE — maps club code to nationality string. */
+export const ACADEMY_CODE_TO_NATIONALITY: Record<ClubCountryCode, string> = {
   EN: 'English',
   IT: 'Italian',
   DE: 'German',

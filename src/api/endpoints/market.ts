@@ -97,9 +97,9 @@ interface RawMarketData {
   investors: RawInvestor[];
 }
 
-// ─── Backend academy init response ────────────────────────────────────────────
+// ─── Backend club init response ────────────────────────────────────────────
 
-export interface AcademyInitServerResponse {
+export interface ClubInitServerResponse {
   id: string;
   name: string;
   starterBundle: Record<string, unknown>;
@@ -193,7 +193,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
             }
           : null,
         guardians: p.guardians ?? [],
-        tier: p.tier as import('@/types/academy').AcademyTier | undefined,
+        tier: p.tier as import('@/types/club').ClubTier | undefined,
       };
     }),
 
@@ -207,7 +207,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
       salary: c.weeklySalary,
       morale: c.morale,
       specialisms: c.specialisms as import('@/types/coach').CoachSpecialisms | undefined,
-      tier: c.tier as import('@/types/academy').AcademyTier | undefined,
+      tier: c.tier as import('@/types/club').ClubTier | undefined,
     })),
 
     scouts: raw.scouts.map((s) => {
@@ -222,7 +222,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
         scoutingRange: mapScoutingRange(s.experience),
         successRate,
         salary: successRate * 300,
-        tier: s.tier as import('@/types/academy').AcademyTier | undefined,
+        tier: s.tier as import('@/types/club').ClubTier | undefined,
       };
     }),
 
@@ -278,7 +278,7 @@ export const marketApi = {
 
   /**
    * POST /api/market/assign
-   * Notifies the backend that an entity has been recruited to the academy.
+   * Notifies the backend that an entity has been recruited to the club.
    * Fire-and-forget via the sync queue; game state is updated locally first.
    */
   assignEntity(entityType: MarketEntityType, entityId: string): Promise<void> {
@@ -292,7 +292,7 @@ export const marketApi = {
    * POST /api/pool/ensure
    * Guarantees at least `min` unassigned players of the given nationality exist
    * in the pool. Idempotent — safe to call even if the pool is already full.
-   * Call before initializeAcademy to ensure Tier 1 always finds enough players.
+   * Call before initializeClub to ensure Tier 1 always finds enough players.
    */
   async ensurePool(countryCode: string, min = 10): Promise<void> {
     await apiRequest<unknown>('/api/pool/ensure', {
@@ -302,16 +302,16 @@ export const marketApi = {
   },
 
   /**
-   * POST /api/academy/initialize
-   * Registers the academy server-side. The response is academy metadata only —
+   * POST /api/club/initialize
+   * Registers the club server-side. The response is club metadata only —
    * starting balance and sponsor/investor IDs are always derived locally from
    * market data (see useAuthFlow).
    */
-  initializeAcademy(academyName: string, country?: string | null, manager?: ManagerProfileInput): Promise<AcademyInitServerResponse> {
-    return apiRequest<AcademyInitServerResponse>('/api/academy/initialize', {
+  initializeClub(clubName: string, country?: string | null, manager?: ManagerProfileInput): Promise<ClubInitServerResponse> {
+    return apiRequest<ClubInitServerResponse>('/api/club/initialize', {
       method: 'POST',
       body: JSON.stringify({
-        academyName,
+        clubName,
         ...(country ? { country } : {}),
         ...(manager ? { manager } : {}),
       }),
@@ -320,7 +320,7 @@ export const marketApi = {
 };
 
 /**
- * Standalone named export — assign a market entity to the academy.
+ * Standalone named export — assign a market entity to the club.
  * Preferred over `marketApi.assignEntity` for new code (fully typed request/response).
  */
 export async function assignMarketEntity(

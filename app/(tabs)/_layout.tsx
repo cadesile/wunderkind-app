@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { View, Pressable, Modal } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, LayoutGrid, Building2, DollarSign, Store, Trophy, Settings } from 'lucide-react-native';
+import { Home, LayoutGrid, Building2, DollarSign, Store, Trophy, Settings, RefreshCw } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
+import { SimulationService } from '@/engine/SimulationService';
 import { syncQueue } from '@/api/syncQueue';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -16,6 +17,7 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useAltercationStore } from '@/stores/altercationStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
 import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { WeeklyTickOverlay } from '@/components/WeeklyTickOverlay';
@@ -111,6 +113,7 @@ function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
   const backActive = backFabCallback !== null;
   const router = useRouter();
 
+  const isSimulating = useTickProgressStore((s) => s.isSimulatingResults);
   const fabBottom = TAB_BAR_HEIGHT + insets.bottom + 8;
 
   return (
@@ -165,22 +168,27 @@ function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
 
       {/* ADVANCE FAB */}
       <Pressable
-        onPress={() => { hapticPress(); onAdvance(); }}
+        onPress={() => { if (!isSimulating) { hapticPress(); onAdvance(); } }}
+        disabled={isSimulating}
         style={[
           {
             marginBottom: fabBottom,
             width: 52,
             height: 52,
-            backgroundColor: WK.yellow,
+            backgroundColor: isSimulating ? WK.tealMid : WK.yellow,
             borderWidth: 3,
             borderColor: WK.border,
             alignItems: 'center',
             justifyContent: 'center',
           },
-          pixelShadow,
+          !isSimulating ? pixelShadow : undefined,
         ]}
       >
-        <PixelText size={12} color={WK.border}>{'>>'}</PixelText>
+        {isSimulating ? (
+          <RefreshCw size={24} color={WK.yellow} />
+        ) : (
+          <PixelText size={12} color={WK.border}>{'>>'}</PixelText>
+        )}
       </Pressable>
     </View>
   );
@@ -217,7 +225,7 @@ export default function TabLayout() {
       const result = processWeeklyTick();
 
       // Read post-tick state — stores have already been mutated by processWeeklyTick()
-      const { academy } = useAcademyStore.getState();
+      const { club } = useClubStore.getState();
       const { transactions, transfers } = useFinanceStore.getState();
       const { coaches } = useCoachStore.getState();
       const { scouts } = useScoutStore.getState();
@@ -248,15 +256,15 @@ export default function TabLayout() {
 
         // Financial — all in pence, signed (allows negative deficit weeks)
         earningsDelta:       result.financialSummary.net,
-        balance:             academy.balance,
-        totalCareerEarnings: academy.totalCareerEarnings,
+        balance:             club.balance,
+        totalCareerEarnings: club.totalCareerEarnings,
 
         // Reputation — both delta and absolute anchor
         reputationDelta:     Math.round(result.reputationDelta),
-        reputation:          academy.reputation,
+        reputation:          club.reputation,
 
-        // Academy snapshot
-        hallOfFamePoints:    academy.hallOfFamePoints,
+        // Club snapshot
+        hallOfFamePoints:    club.hallOfFamePoints,
         squadSize:           activePlayers.length,
         staffCount:          coaches.length + scouts.length,
         facilityLevels:      levels,
@@ -269,6 +277,10 @@ export default function TabLayout() {
       if (useGameConfigStore.getState().shouldRefetch(result.week)) {
         void fetchAndCacheGameConfig(result.week);
       }
+
+      // Batch simulate background fixtures
+      void SimulationService.runBatchSimulation();
+
     } finally {
       endTick();
     }
@@ -276,7 +288,7 @@ export default function TabLayout() {
 
   function handleAdvanceButton() {
     // Prevent double-press while the overlay is active
-    if (useTickProgressStore.getState().isProcessing) return;
+    if (useTickProgressStore.getState().isProcessing || useTickProgressStore.getState().isSimulatingResults) return;
 
     // Auto-resolve any blocks where one of the players has already left the squad
     const currentPlayers = useSquadStore.getState().players;
@@ -315,7 +327,7 @@ export default function TabLayout() {
       if (player) {
         // Severance: 4 weeks of the player's weekly wage (pence)
         const severancePence = player.wage * 4;
-        const { addBalance, academy, setReputation } = useAcademyStore.getState();
+        const { addBalance, club, setReputation } = useClubStore.getState();
         addBalance(-severancePence);
         // Forced release damages reputation — visible sign of a dysfunctional squad
         setReputation(-0.5);
@@ -325,7 +337,7 @@ export default function TabLayout() {
           amount: -Math.round(severancePence / 100), // ledger in whole pounds
           category: 'wages',
           description: `Severance — ${player.name}`,
-          weekNumber: academy.weekNumber,
+          weekNumber: club.weekNumber,
         });
 
         await releasePlayer(playerId);

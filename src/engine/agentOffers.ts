@@ -37,7 +37,7 @@ export function generateAgentOffer(
   currentWeek: number,
   players: Player[],
   agents: Agent[],
-  academyReputation: number,
+  clubReputation: number,
   playerFeeMultiplier: number,
 ): AgentOffer | null {
   const activePlayers = players.filter((p) => p.isActive);
@@ -56,7 +56,7 @@ export function generateAgentOffer(
 
   // Fee in pence: OVR × rand(80–120) × playerFeeMultiplier × reputationMod
   const multiplier    = 80 + Math.random() * 40;           // 80–120
-  const reputationMod = 1 + academyReputation / 200;       // 1.0–1.5
+  const reputationMod = 1 + clubReputation / 200;       // 1.0–1.5
   const estimatedFee  = Math.round(player.overallRating * multiplier * playerFeeMultiplier * reputationMod);
 
   const netProceeds = Math.round(estimatedFee * (1 - agent.commissionRate / 100));

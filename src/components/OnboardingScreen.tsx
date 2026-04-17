@@ -15,14 +15,14 @@ import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { WK, pixelShadow } from '@/constants/theme';
-import { ACADEMY_COUNTRIES, AcademyCountryCode, ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
+import { ACADEMY_COUNTRIES, ClubCountryCode, ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
 import { generateAppearance } from '@/engine/appearance';
-import type { ManagerProfile } from '@/types/academy';
+import type { ManagerProfile } from '@/types/club';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onRegister: (academyName: string, country: AcademyCountryCode, managerProfile: ManagerProfile) => Promise<void>;
+  onRegister: (clubName: string, country: ClubCountryCode, managerProfile: ManagerProfile) => Promise<void>;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -205,11 +205,11 @@ export function OnboardingScreen({ onRegister }: Props) {
   const [dobMonth, setDobMonth]                     = useState<number | null>(null);
   const [dobYear, setDobYear]                       = useState<number | null>(null);
   const [gender, setGender]                         = useState<Gender | null>(null);
-  const [managerNationality, setManagerNationality] = useState<AcademyCountryCode | null>(null);
+  const [managerNationality, setManagerNationality] = useState<ClubCountryCode | null>(null);
 
-  // Academy state
-  const [selectedCountry, setSelectedCountry] = useState<AcademyCountryCode | null>(null);
-  const [academyName, setAcademyName]         = useState('');
+  // Club state
+  const [selectedCountry, setSelectedCountry] = useState<ClubCountryCode | null>(null);
+  const [clubName, setClubName]         = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -248,7 +248,7 @@ export function OnboardingScreen({ onRegister }: Props) {
     dobMonth !== null &&
     dobYear !== null;
 
-  const canSubmit = academyName.trim().length > 0 && selectedCountry !== null && !loading;
+  const canSubmit = clubName.trim().length > 0 && selectedCountry !== null && !loading;
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
@@ -264,10 +264,10 @@ export function OnboardingScreen({ onRegister }: Props) {
         nationality: ACADEMY_CODE_TO_NATIONALITY[managerNationality],
         appearance:  avatarAppearance,
       };
-      await onRegister(academyName.trim(), selectedCountry, profile);
+      await onRegister(clubName.trim(), selectedCountry, profile);
     } catch (err) {
       setError('COULD NOT CONNECT TO SERVER.\nCHECK YOUR CONNECTION AND TRY AGAIN.');
-      console.error('[Onboarding] registerAcademy failed:', err);
+      console.error('[Onboarding] registerClub failed:', err);
     } finally {
       setLoading(false);
     }
@@ -462,7 +462,7 @@ export function OnboardingScreen({ onRegister }: Props) {
             </>
           )}
 
-          {/* ── Step 2: Academy Location ── */}
+          {/* ── Step 2: Club Location ── */}
           {step === 'country' && (
             <>
               <Pressable onPress={() => setStep('manager')} style={{ marginBottom: 16 }}>
@@ -526,7 +526,7 @@ export function OnboardingScreen({ onRegister }: Props) {
             </>
           )}
 
-          {/* ── Step 3: Academy Name ── */}
+          {/* ── Step 3: Club Name ── */}
           {step === 'name' && (
             <>
               {selectedCountryMeta && (
@@ -583,8 +583,8 @@ export function OnboardingScreen({ onRegister }: Props) {
                   }}
                   placeholder="E.G. NORTH STAR FC"
                   placeholderTextColor={WK.dim}
-                  value={academyName}
-                  onChangeText={(text) => { setAcademyName(text); setError(null); }}
+                  value={clubName}
+                  onChangeText={(text) => { setClubName(text); setError(null); }}
                   maxLength={40}
                   editable={!loading}
                   returnKeyType="done"

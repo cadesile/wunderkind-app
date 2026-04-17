@@ -14,7 +14,7 @@ import { marketApi } from '@/api/endpoints/market';
 import { useCoachStore } from './coachStore';
 import { useSquadStore } from './squadStore';
 import { useScoutStore } from './scoutStore';
-import { useAcademyStore } from './academyStore';
+import { useClubStore } from './clubStore';
 import { useGuardianStore } from './guardianStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { updateCoachRelationship } from '@/engine/RelationshipService';
@@ -158,7 +158,7 @@ export const useMarketStore = create<MarketState>()(
 
         set({ isLoading: true, error: null });
         try {
-          const tier = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.reputationTier;
+          const tier = (await import('@/stores/clubStore')).useClubStore.getState().club.reputationTier;
           const data = await marketApi.getMarketData(null, tier);
           get().setMarketData(data);
         } catch (err) {
@@ -172,7 +172,7 @@ export const useMarketStore = create<MarketState>()(
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
-          const tier = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.reputationTier;
+          const tier = (await import('@/stores/clubStore')).useClubStore.getState().club.reputationTier;
           const data = await marketApi.getMarketData(null, tier);
           get().setMarketData(data);
         } catch (err) {
@@ -230,13 +230,13 @@ export const useMarketStore = create<MarketState>()(
             actualOverall: player.currentAbility,
             actualPotential: player.potential,
             accuracyPercent: Math.max(0, 100 - diff * 2),
-            revealedAt: useAcademyStore.getState().academy.weekNumber ?? 1,
+            revealedAt: useClubStore.getState().club.weekNumber ?? 1,
           };
         }
 
         // Add to squad with true stats, stripped of market fields
         const { addPlayer } = useSquadStore.getState();
-        const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+        const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { generatePersonality } = require('@/engine/personality');
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -258,7 +258,7 @@ export const useMarketStore = create<MarketState>()(
             lastName: g.lastName,
             gender: g.gender,
             demandLevel: g.demandLevel,
-            loyaltyToAcademy: g.loyaltyToAcademy,
+            loyaltyToClub: g.loyaltyToClub,
             ignoredRequestCount: 0,
           }));
           useGuardianStore.getState().addGuardians(guardians);
@@ -291,8 +291,8 @@ export const useMarketStore = create<MarketState>()(
           players: state.players.filter((p) => p.id !== playerId),
         }));
 
-        // Signing a player is a visible academy activity — meaningful rep boost
-        const { setReputation: setRep, markRepActivity } = useAcademyStore.getState();
+        // Signing a player is a visible club activity — meaningful rep boost
+        const { setReputation: setRep, markRepActivity } = useClubStore.getState();
         setRep(1.0);
         markRepActivity();
       },
@@ -348,8 +348,8 @@ export const useMarketStore = create<MarketState>()(
         });
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== coachId) }));
 
-        // Hiring a coach signals investment in the academy — moderate rep boost
-        const { setReputation: setRep, markRepActivity } = useAcademyStore.getState();
+        // Hiring a coach signals investment in the club — moderate rep boost
+        const { setReputation: setRep, markRepActivity } = useClubStore.getState();
         setRep(1.0);
         markRepActivity();
       },

@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Mail, AlertTriangle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useNavStore } from '@/stores/navStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
@@ -19,12 +19,12 @@ import { ACADEMY_COUNTRIES } from '@/utils/nationality';
  * Persistent top header rendered above all tab screens.
  *
  * Single row:
- *   [14px] Academy Name 🏳  ·  ■ LIVE  ·  DATE    [⚠][✉]
+ *   [14px] Club Name 🏳  ·  ■ LIVE  ·  DATE    [⚠][✉]
  */
 export function GlobalHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
   const unreadCount =
     useInboxStore((s) => s.messages.filter((m) => !m.isRead).length) +
     useInboxStore((s) => s.agentOffers.filter((o) => o.status === 'pending').length) +
@@ -37,10 +37,10 @@ export function GlobalHeader() {
     )
   );
 
-  const weekNumber = academy.weekNumber ?? 1;
+  const weekNumber = club.weekNumber ?? 1;
   const dateStr = getGameDateDisplay(weekNumber);
-  const countryFlag = academy.country
-    ? ACADEMY_COUNTRIES.find((c) => c.code === academy.country)?.flag ?? null
+  const countryFlag = club.country
+    ? ACADEMY_COUNTRIES.find((c) => c.code === club.country)?.flag ?? null
     : null;
 
   return (
@@ -55,10 +55,10 @@ export function GlobalHeader() {
       paddingLeft: 14,
     }}>
 
-      {/* Academy name + flag */}
+      {/* Club name + flag */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
         <PixelText size={9} upper numberOfLines={1} style={{ flexShrink: 1 }}>
-          {academy.name}
+          {club.name}
         </PixelText>
         {countryFlag && (
           <PixelText size={14}>{countryFlag}</PixelText>

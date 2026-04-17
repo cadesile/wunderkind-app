@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './authStore';
 import { useEventChainStore } from './eventChainStore';
-import { useAcademyStore } from './academyStore';
+import { useClubStore } from './clubStore';
 import { useSquadStore } from './squadStore';
 import { useCoachStore } from './coachStore';
 import { useScoutStore } from './scoutStore';
@@ -13,7 +13,7 @@ import { useGuardianStore } from './guardianStore';
  */
 const ALL_STORE_KEYS = [
   'auth-store',
-  'academy-store',
+  'club-store',
   'squad-store',
   'coach-store',
   'scout-store',
@@ -45,9 +45,9 @@ const ALL_STORE_KEYS = [
 export function resetInMemoryStores(): void {
   useAuthStore.getState().clearAuth();
 
-  useAcademyStore.setState({
-    academy: {
-      id: 'academy-1',
+  useClubStore.setState({
+    club: {
+      id: 'club-1',
       name: '',
       foundedWeek: 1,
       weekNumber: 1,
@@ -75,15 +75,15 @@ export function resetInMemoryStores(): void {
 }
 
 /**
- * Wipes all academy data — both persisted (AsyncStorage) and in-memory (Zustand).
+ * Wipes all club data — both persisted (AsyncStorage) and in-memory (Zustand).
  *
- * Call this only when the backend definitively reports that the academy no longer
- * exists (HTTP 404 on /api/academy/check), or when the player starts a new game
+ * Call this only when the backend definitively reports that the club no longer
+ * exists (HTTP 404 on /api/club/check), or when the player starts a new game
  * after a game over. Never call on transient network errors.
  *
  * After this returns, the caller is responsible for redirecting to onboarding.
  */
-export async function clearAllAcademyData(): Promise<void> {
+export async function clearAllClubData(): Promise<void> {
   // Remove all persisted store data so the next app launch starts clean
   await AsyncStorage.multiRemove(ALL_STORE_KEYS);
 

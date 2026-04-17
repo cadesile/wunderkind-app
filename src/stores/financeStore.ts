@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
 import { uuidv7 } from '@/utils/uuidv7';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import type { FinancialTransaction, FinancialCategory, TransferRecord } from '@/types/finance';
 
 /** Rolling window: ~52 weeks × 7 days */
@@ -50,7 +50,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       getRecentHistory: (weeks = ROLLING_WEEKS) => {
-        const currentWeek = useAcademyStore.getState().academy.weekNumber ?? 1;
+        const currentWeek = useClubStore.getState().club.weekNumber ?? 1;
         const cutoff = currentWeek - weeks;
         return get().transactions.filter((tx) => tx.weekNumber >= cutoff);
       },
@@ -64,7 +64,7 @@ export const useFinanceStore = create<FinanceState>()(
           .reduce((sum, tx) => sum + tx.amount, 0),
 
       clearOldTransactions: () => {
-        const currentWeek = useAcademyStore.getState().academy.weekNumber ?? 1;
+        const currentWeek = useClubStore.getState().club.weekNumber ?? 1;
         const cutoff = currentWeek - ROLLING_WEEKS;
         set((state) => ({
           transactions: state.transactions.filter((tx) => tx.weekNumber >= cutoff),

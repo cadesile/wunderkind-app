@@ -1,5 +1,5 @@
 import { PersonalityMatrix, Appearance } from './player';
-import type { AcademyTier } from './academy';
+import type { ClubTier } from './club';
 
 export type CoachRole =
   | 'Head Coach'
@@ -28,6 +28,6 @@ export interface Coach {
   specialisms?: CoachSpecialisms;
   morale?: number;
   relationships?: import('./player').Relationship[];
-  /** Academy tier this coach belongs to — from backend */
-  tier?: AcademyTier;
+  /** Club tier this coach belongs to — from backend */
+  tier?: ClubTier;
 }

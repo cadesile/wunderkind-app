@@ -1,7 +1,7 @@
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { Relationship } from '@/types/player';
 import { Player } from '@/types/player';
@@ -30,7 +30,7 @@ export function updatePlayerRelationship(
   delta: number,
 ): void {
   const { players, updatePlayer } = useSquadStore.getState();
-  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
   const player = players.find((p) => p.id === playerId);
   if (!player) return;
 
@@ -75,7 +75,7 @@ export function updateCoachRelationship(
   delta: number,
 ): void {
   const { coaches, updateCoach } = useCoachStore.getState();
-  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
   const coach = coaches.find((c) => c.id === coachId);
   if (!coach) return;
 

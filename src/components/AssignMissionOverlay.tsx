@@ -4,10 +4,10 @@ import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 import { FlagText } from '@/components/ui/FlagText';
 import { WK, pixelShadow } from '@/constants/theme';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useScoutStore } from '@/stores/scoutStore';
-import useAcademyMetrics from '@/hooks/useAcademyMetrics';
+import useClubMetrics from '@/hooks/useClubMetrics';
 import { Scout, ScoutingMission } from '@/types/market';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
 import { calcMissionCost } from '@/utils/scoutingCost';
@@ -35,21 +35,21 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
   const [selectedNationality, setSelectedNationality] = useState<string | null>(null);
   const [selectedWeeks, setSelectedWeeks] = useState(4);
 
-  const academy = useAcademyStore((s) => s.academy);
-  const { addBalance } = useAcademyStore.getState();
+  const club = useClubStore((s) => s.club);
+  const { addBalance } = useClubStore.getState();
   const { addTransaction } = useFinanceStore.getState();
   const { assignMission } = useScoutStore.getState();
 
   // totalValuation is in pence — convert to pounds for cost calculation
-  const metrics = useAcademyMetrics();
-  const academyValuePounds = penceToPounds(metrics.totalValuation);
+  const metrics = useClubMetrics();
+  const clubValuePounds = penceToPounds(metrics.totalValuation);
 
-  const costPence = calcMissionCost(academyValuePounds, selectedWeeks);
+  const costPence = calcMissionCost(clubValuePounds, selectedWeeks);
 
-  // academy.balance is in pence — compare directly with costPence
-  const canAfford = academy.balance >= costPence;
+  // club.balance is in pence — compare directly with costPence
+  const canAfford = club.balance >= costPence;
 
-  const reputationTier = academy.reputationTier;
+  const reputationTier = club.reputationTier;
   const availableRegions = getAvailableRegions(reputationTier, scout.scoutingRange);
 
   const isConfirmDisabled = !canAfford;
@@ -64,7 +64,7 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
       amount: -costPence,
       category: 'upkeep',
       description: `Scouting mission — ${scout.name}${positionLabel}`,
-      weekNumber: academy.weekNumber ?? 1,
+      weekNumber: club.weekNumber ?? 1,
     });
 
     // Build mission
@@ -77,7 +77,7 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
       weeksElapsed: 0,
       gemsFound: 0,
       costPaid: costPence,
-      startWeek: academy.weekNumber ?? 1,
+      startWeek: club.weekNumber ?? 1,
       status: 'active',
     };
 
@@ -262,7 +262,7 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <PixelText size={6} dim>BALANCE AFTER</PixelText>
                 <PixelText size={6} color={canAfford ? WK.green : WK.red}>
-                  {formatCurrencyWhole(academy.balance - costPence)}
+                  {formatCurrencyWhole(club.balance - costPence)}
                 </PixelText>
               </View>
               {!canAfford && (

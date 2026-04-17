@@ -38,7 +38,7 @@ interface SquadState {
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   /**
    * Extend a player's enrollment by 52 weeks and increment extensionCount.
-   * Caller is responsible for deducting the extension fee from the academy balance.
+   * Caller is responsible for deducting the extension fee from the club balance.
    */
   extendContract: (playerId: string) => void;
   /** Set or clear a development focus on a player. Pass null to clear. */
@@ -62,7 +62,7 @@ interface SquadState {
   recordDevelopmentSnapshots: (weekNumber: number) => void;
   /**
    * Release a player back to the market pool. Removes from local squad immediately
-   * (fat-client model) and fires a best-effort backend call to set academy = null.
+   * (fat-client model) and fires a best-effort backend call to set club = null.
    */
   releasePlayer: (playerId: string) => Promise<{ success: boolean; playerName?: string; error?: string }>;
 }

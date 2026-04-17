@@ -3,8 +3,8 @@ import type { SquadResponse } from '@/types/api';
 
 /**
  * GET /api/squad
- * Returns all players currently assigned to this academy.
- * No filtering — the backend already scoped assignments at initializeAcademy time.
+ * Returns all players currently assigned to this club.
+ * No filtering — the backend already scoped assignments at initializeClub time.
  * Used for bootstrap and server-side reconciliation; local squadStore is authoritative for gameplay.
  */
 export async function getSquad(): Promise<SquadResponse> {
@@ -20,7 +20,7 @@ interface ReleasePlayerResponse {
 
 /**
  * POST /api/squad/release/{id}
- * Releases a player from the academy back to the global market pool (sets academy = null).
+ * Releases a player from the club back to the global market pool (sets club = null).
  * Local state is authoritative; this is best-effort sync with the backend.
  */
 export async function releasePlayer(playerId: string): Promise<ReleasePlayerResponse> {

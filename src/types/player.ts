@@ -105,8 +105,8 @@ export interface Player {
   potential: number;     // 1–5 stars
   wage: number;          // weekly, in pence
   personality: PersonalityMatrix;
-  /** Academy tier this player belongs to — from backend ('local'|'regional'|'national'|'elite') */
-  tier?: import('./academy').AcademyTier;
+  /** Club tier this player belongs to — from backend ('local'|'regional'|'national'|'elite') */
+  tier?: import('./club').ClubTier;
   /** Deterministic visual appearance generated from id. Optional for backward compat. */
   appearance?: Appearance;
   /** ID of the agent representing this player, or null if unrepresented */

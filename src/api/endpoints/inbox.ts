@@ -20,7 +20,7 @@ export async function getMessage(messageId: string): Promise<ApiInboxMessage> {
 /**
  * POST /api/inbox/:messageId/accept
  * Accepts an offer message.
- * For sponsor/investor offers this adds funds to the academy balance on the server.
+ * For sponsor/investor offers this adds funds to the club balance on the server.
  */
 export async function acceptMessage(messageId: string): Promise<{ status: string }> {
   return apiRequest<{ status: string }>(`/api/inbox/${messageId}/accept`, {

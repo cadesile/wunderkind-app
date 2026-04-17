@@ -1,9 +1,9 @@
-export function getLoyaltyNote(loyalty: number, academyName: string): string {
-  if (loyalty >= 80) return `They really like ${academyName}. A solid relationship.`;
-  if (loyalty >= 60) return `They think well of ${academyName} — keep it that way.`;
-  if (loyalty >= 40) return `They seem fairly comfortable with ${academyName} for now.`;
-  if (loyalty >= 20) return `They're not particularly attached to ${academyName}.`;
-  return `Frankly, they couldn't care less about ${academyName}.`;
+export function getLoyaltyNote(loyalty: number, clubName: string): string {
+  if (loyalty >= 80) return `They really like ${clubName}. A solid relationship.`;
+  if (loyalty >= 60) return `They think well of ${clubName} — keep it that way.`;
+  if (loyalty >= 40) return `They seem fairly comfortable with ${clubName} for now.`;
+  if (loyalty >= 20) return `They're not particularly attached to ${clubName}.`;
+  return `Frankly, they couldn't care less about ${clubName}.`;
 }
 
 export function getDemandNote(demand: number): string {

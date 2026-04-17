@@ -1,5 +1,5 @@
 import { useSquadStore } from '@/stores/squadStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useEventStore } from '@/stores/eventStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
@@ -339,7 +339,7 @@ function computeDressingRoomHealth(
  */
 export function processSocialGraph(): void {
   const { players } = useSquadStore.getState();
-  const { academy } = useAcademyStore.getState();
+  const { club } = useClubStore.getState();
   const {
     cliques: existingCliques,
     updateCliques,
@@ -347,7 +347,7 @@ export function processSocialGraph(): void {
   } = useInteractionStore.getState();
   const config = useGameConfigStore.getState().config;
 
-  const weekNumber = academy.weekNumber ?? 1;
+  const weekNumber = club.weekNumber ?? 1;
   const activePlayers = players.filter((p) => p.isActive);
 
   // ── 1. Clique detection ───────────────────────────────────────────────────

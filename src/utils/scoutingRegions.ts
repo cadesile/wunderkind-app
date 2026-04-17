@@ -1,4 +1,4 @@
-import { ReputationTier } from '@/types/academy';
+import { ReputationTier } from '@/types/club';
 
 export type ScoutingRegion = {
   label: string;
@@ -42,7 +42,7 @@ export function getAvailableRegions(
 ): ScoutingRegion[] | null {
   if (scoutRange === 'local') return null;
   if (scoutRange === 'national') return REGIONAL_POOL;
-  // International scout — pool depth scales with academy tier
+  // International scout — pool depth scales with club tier
   if (tier === 'Local' || tier === 'Regional') return NATIONAL_POOL;
   if (tier === 'National') return NATIONAL_POOL;
   return ELITE_POOL;

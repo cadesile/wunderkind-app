@@ -1,7 +1,7 @@
 import { useScoutStore } from '@/stores/scoutStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useInboxStore } from '@/stores/inboxStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { MarketPlayer } from '@/types/market';
@@ -107,7 +107,7 @@ export function processScoutingTasks(): void {
 /** Process active scouting missions — called once per weekly tick */
 export function processMissions(): void {
   const scouts = useScoutStore.getState().scouts;
-  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
   const { addMessage } = useInboxStore.getState();
   const { addMarketPlayer } = useMarketStore.getState();
   const { tickMission, completeMission, incrementGemsFound } = useScoutStore.getState();
@@ -129,17 +129,17 @@ export function processMissions(): void {
       roll >= t0 ? 1 : 0;
 
     // 3. Pull from the backend prospect pool — never generate locally.
-    //    Allowed nationalities are determined by the academy's reputation tier and
-    //    the scout's range. Domestic nationality is derived from academy.country.
+    //    Allowed nationalities are determined by the club's reputation tier and
+    //    the scout's range. Domestic nationality is derived from club.country.
     const foundPlayers: MarketPlayer[] = [];
     if (count > 0) {
       const { prospects, consumeProspect } = useProspectPoolStore.getState();
-      const { academy } = useAcademyStore.getState();
+      const { club } = useClubStore.getState();
 
       // Build allowed nationality set for this scout
-      const availableRegions = getAvailableRegions(academy.reputationTier, scout.scoutingRange);
-      const domesticNationality = academy.country
-        ? ACADEMY_CODE_TO_NATIONALITY[academy.country]
+      const availableRegions = getAvailableRegions(club.reputationTier, scout.scoutingRange);
+      const domesticNationality = club.country
+        ? ACADEMY_CODE_TO_NATIONALITY[club.country]
         : null;
       const poolNationalities = availableRegions
         ? availableRegions.flatMap((r) => r.nationalities)

@@ -4,7 +4,7 @@ export interface GameConfig {
   cliqueRelationshipThreshold: number;
   /** Max % of active squad in cliques combined across all cliques. Default: 30 */
   cliqueSquadCapPercent: number;
-  /** Minimum academy tenure in weeks before clique eligibility. Default: 3 */
+  /** Minimum club tenure in weeks before clique eligibility. Default: 3 */
   cliqueMinTenureWeeks: number;
 
   // ── Pricing ───────────────────────────────────────────────────────────────

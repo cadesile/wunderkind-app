@@ -1,13 +1,13 @@
 import { useMutation } from '@tanstack/react-query';
 import { syncWeek } from '@/api/endpoints/sync';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { SyncRequest, SyncAcceptedResponse } from '@/types/api';
 
 export function useSyncWeek() {
-  const updateFromSyncResponse = useAcademyStore((s) => s.updateFromSyncResponse);
+  const updateFromSyncResponse = useClubStore((s) => s.updateFromSyncResponse);
   const setTemplates            = useFacilityStore((s) => s.setTemplates);
   const setFromSync             = useLeagueStore((s) => s.setFromSync);
   const clearLeague             = useLeagueStore((s) => s.clear);
@@ -23,7 +23,7 @@ export function useSyncWeek() {
       if (data.accepted) {
         const accepted = data as SyncAcceptedResponse;
 
-        updateFromSyncResponse(accepted.academy);
+        updateFromSyncResponse(accepted.club);
 
         if (accepted.facilityTemplates && accepted.facilityTemplates.length > 0) {
           setTemplates(accepted.facilityTemplates);
@@ -39,7 +39,7 @@ export function useSyncWeek() {
             (f) => f.leagueId === accepted.league!.id && f.season === accepted.league!.season
           );
           if (!hasFixtures) {
-            generateFixtures(accepted.league, accepted.academy.id);
+            generateFixtures(accepted.league, accepted.club.id);
           }
         }
 

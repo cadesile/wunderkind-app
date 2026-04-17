@@ -9,9 +9,9 @@ import Animated, {
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Trophy, UserPlus } from 'lucide-react-native';
-import useAcademyMetrics from '@/hooks/useAcademyMetrics';
+import useClubMetrics from '@/hooks/useClubMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -207,7 +207,7 @@ function RosterStackedBar({ playerCount, coachCount }: { playerCount: number; co
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AcademyDashboard() {
+export function ClubDashboard() {
   const router = useRouter();
   const {
     totalValuation,
@@ -218,10 +218,10 @@ export function AcademyDashboard() {
     crownJewel,
     cashBalance,
     weeklyNetCashflow,
-  } = useAcademyMetrics();
+  } = useClubMetrics();
 
   const messages = useInboxStore((s) => s.messages);
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
   const archetypes = useArchetypeStore((s) => s.archetypes);
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
@@ -235,14 +235,14 @@ export function AcademyDashboard() {
 
   // ── Leaderboard position ─────────────────────────────────────────────────────
   const { data: lbData } = useQuery({
-    queryKey: ['leaderboard', 'academy_reputation', 'dashboard'],
-    queryFn: () => getLeaderboard('academy_reputation', { page: 1, pageSize: 100 }),
+    queryKey: ['leaderboard', 'club_reputation', 'dashboard'],
+    queryFn: () => getLeaderboard('club_reputation', { page: 1, pageSize: 100 }),
     staleTime: 10 * 60 * 1000,
     retry: 0,
     // @ts-ignore – gcTime is tanstack v5
     gcTime: 10 * 60 * 1000,
   });
-  const myRank = lbData?.entries.findIndex((e) => e.academyName === academy.name);
+  const myRank = lbData?.entries.findIndex((e) => e.clubName === club.name);
   const rankDisplay = (myRank !== undefined && myRank >= 0) ? `#${myRank + 1}` : '–';
 
   // ── Squad potential breakdown ────────────────────────────────────────────────
@@ -273,7 +273,7 @@ export function AcademyDashboard() {
   const tickDeltaColor    = isDeficit ? WK.red : WK.green;
   const tickDeltaSign     = isDeficit ? '-' : '+';
   const willGoNegative    = cashBalance + weeklyNetCashflow < 0;
-  const careerSalesPounds = penceToPounds(academy.totalCareerEarnings);
+  const careerSalesPounds = penceToPounds(club.totalCareerEarnings);
 
   // ── Deficit pulse animation ──────────────────────────────────────────────────
   const pulseOpacity = useSharedValue(1);
@@ -297,7 +297,7 @@ export function AcademyDashboard() {
 
       {/* ── Card 1: Valuation Hero ────────────────────────────────────────── */}
       <SectionCard borderColor={WK.yellow}>
-        <PixelText size={7} dim upper style={{ marginBottom: 6 }}>Academy Value</PixelText>
+        <PixelText size={7} dim upper style={{ marginBottom: 6 }}>Club Value</PixelText>
 
         <PixelText size={22} color={WK.yellow} numberOfLines={1}>
           {formatCurrencyCompact(totalValuation)}
@@ -430,8 +430,8 @@ export function AcademyDashboard() {
           <PixelText size={16} color={rankDisplay !== '–' ? WK.yellow : WK.dim} variant="vt323">
             {rankDisplay}
           </PixelText>
-          <BodyText size={10} dim>REP {academy.reputation.toFixed(1)}</BodyText>
-          <BodyText size={10} color={WK.tealLight}>{(academy.reputationTier ?? 'LOCAL').toUpperCase()}</BodyText>
+          <BodyText size={10} dim>REP {club.reputation.toFixed(1)}</BodyText>
+          <BodyText size={10} color={WK.tealLight}>{(club.reputationTier ?? 'LOCAL').toUpperCase()}</BodyText>
         </View>
       </View>
 
@@ -664,7 +664,7 @@ export function AcademyDashboard() {
 
           <StatRow
             label="Reputation"
-            value={`${academy.reputation.toFixed(1)} / 100`}
+            value={`${club.reputation.toFixed(1)} / 100`}
             valueColor={WK.tealLight}
           />
           <StatRow

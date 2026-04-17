@@ -20,7 +20,7 @@ export const DEFAULT_ARCHETYPES: PlayerArchetype[] = [
     id: 2,
     name: 'The Professional',
     description:
-      'A model academy student. Punctual, disciplined, and endlessly repeatable. Won\'t dazzle in the highlights reel — but will never let you down on a Tuesday night.',
+      'A model club student. Punctual, disciplined, and endlessly repeatable. Won\'t dazzle in the highlights reel — but will never let you down on a Tuesday night.',
     traitMapping: {
       formula: { professionalism: 1.0, consistency: 0.7, temperament: 0.4 },
       threshold: 12,
@@ -40,7 +40,7 @@ export const DEFAULT_ARCHETYPES: PlayerArchetype[] = [
     id: 4,
     name: 'Club Servant',
     description:
-      'All heart, all badge. Won\'t be lured away easily and rarely causes problems. The kind of player whose loyalty becomes part of the academy\'s identity.',
+      'All heart, all badge. Won\'t be lured away easily and rarely causes problems. The kind of player whose loyalty becomes part of the club\'s identity.',
     traitMapping: {
       formula: { loyalty: 1.0, professionalism: 0.6, consistency: 0.5 },
       threshold: 12,

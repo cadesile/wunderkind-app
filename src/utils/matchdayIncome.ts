@@ -16,7 +16,7 @@ import type { FacilityTemplate, FacilityLevels, FacilityConditions } from '@/typ
  * @param templates  - Live FacilityTemplate array from facilityStore
  * @param levels     - Current facility levels from facilityStore
  * @param conditions - Current facility conditions (0–100) from facilityStore
- * @param reputation - Academy reputation (0–100) from academyStore
+ * @param reputation - Club reputation (0–100) from clubStore
  */
 export function calculateMatchdayIncome(
   templates: FacilityTemplate[],

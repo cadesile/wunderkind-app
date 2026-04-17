@@ -1,16 +1,16 @@
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { calculateWeeklyFinances } from '@/engine/finance';
 import { Player } from '@/types/player';
-import { ReputationTier } from '@/types/academy';
+import { ReputationTier } from '@/types/club';
 import { FacilityLevels } from '@/types/facility';
 import { Coach } from '@/types/coach';
 
 // ─── Return type ───────────────────────────────────────────────────────────────
 
-export interface AcademyMetrics {
+export interface ClubMetrics {
   // Valuation
   totalValuation: number;       // pence
   baseAssetSum: number;         // pence
@@ -62,11 +62,11 @@ function resolveTierBand(reputation: number): TierBand {
 // ─── Pure valuation utility (no React deps) ───────────────────────────────────
 
 /**
- * Computes the academy's Enterprise Value in pence.
+ * Computes the club's Enterprise Value in pence.
  * Identical arithmetic to the hook's internal calculation — usable in engine/GameLoop
  * contexts via Zustand getState() without violating React hook rules.
  */
-export function calculateAcademyValuation(
+export function calculateClubValuation(
   players: Player[],
   facilityLevels: FacilityLevels,
   coaches: Coach[],
@@ -92,15 +92,15 @@ export function calculateAcademyValuation(
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export default function useAcademyMetrics(): AcademyMetrics {
+export default function useClubMetrics(): ClubMetrics {
   // Stable Zustand selectors — each re-renders this hook only when its slice changes
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
   const levels            = useFacilityStore((s) => s.levels);
   const facilityTemplates = useFacilityStore((s) => s.templates);
 
-  const { reputation } = academy;
+  const { reputation } = club;
 
   // ── Player Asset Value ─────────────────────────────────────────────────────
   // playerValue = overallRating × potential × 1_000 pence
@@ -124,8 +124,8 @@ export default function useAcademyMetrics(): AcademyMetrics {
   );
 
   // ── Cash ──────────────────────────────────────────────────────────────────
-  // academy.balance is stored in pence
-  const cashBalance = academy.balance ?? 0;
+  // club.balance is stored in pence
+  const cashBalance = club.balance ?? 0;
 
   // ── Base Asset Sum & Valuation ─────────────────────────────────────────────
   const baseAssetSum = totalPlayerValue + totalInfraValue + totalStaffValue + cashBalance;
@@ -146,8 +146,8 @@ export default function useAcademyMetrics(): AcademyMetrics {
   // ── Weekly Net Cashflow ────────────────────────────────────────────────────
   // Pass empty sponsors/loans for a baseline estimate; net is already in pence
   const weeklyNetCashflow = calculateWeeklyFinances(
-    academy.weekNumber ?? 1,
-    academy,
+    club.weekNumber ?? 1,
+    club,
     players,
     coaches,
     levels,

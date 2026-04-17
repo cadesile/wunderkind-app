@@ -4,7 +4,7 @@ import { InboxMessage } from '@/stores/inboxStore';
 import { useGuardianStore } from '@/stores/guardianStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useInboxStore } from '@/stores/inboxStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useEventStore } from '@/stores/eventStore';
 import { EventCategory } from '@/types/narrative';
@@ -51,7 +51,7 @@ export function generateGuardiansForPlayer(player: { id: string; name: string })
       lastName,
       gender,
       demandLevel: 1 + Math.floor(Math.random() * 10),
-      loyaltyToAcademy: 50,
+      loyaltyToClub: 50,
       ignoredRequestCount: 0,
     };
   }
@@ -98,7 +98,7 @@ const MODERATE_TEMPLATES: Record<DemandBucket, Record<LoyaltyBucket, string[]>> 
     warm: [
       'A really positive meeting — {guardian_name} was warm and enthusiastic, but clearly very involved. They\'ll be engaged, which can be a good thing.',
       'Very supportive family, lots of energy in the room. They\'ll be active participants — worth setting expectations early.',
-      '{guardian_name} was genuinely excited about the academy, though they\'ll likely want regular updates and involvement.',
+      '{guardian_name} was genuinely excited about the club, though they\'ll likely want regular updates and involvement.',
     ],
   },
   moderate: {
@@ -126,7 +126,7 @@ const MODERATE_TEMPLATES: Record<DemandBucket, Record<LoyaltyBucket, string[]>> 
     ],
     neutral: [
       "Relaxed family — {guardian_name} seemed comfortable and undemanding. Should be easy to manage.",
-      "A straightforward meeting. No red flags, no particular concerns. {guardian_name} seemed happy to leave decisions to the academy.",
+      "A straightforward meeting. No red flags, no particular concerns. {guardian_name} seemed happy to leave decisions to the club.",
       "The family came across as laid back about the whole thing. {guardian_name} didn't press on many issues.",
     ],
     warm: [
@@ -150,14 +150,14 @@ const ACCURATE_TEMPLATES: Record<DemandBucket, Record<LoyaltyBucket, string[]>> 
       "A demanding family who are broadly positive but have plenty of questions. {guardian_name} will want to feel like a partner in the process, not an afterthought.",
     ],
     warm: [
-      '{guardian_name} was genuinely warm about the academy and clearly excited. They\'re involved and will be demanding, but from a place of real enthusiasm.',
+      '{guardian_name} was genuinely warm about the club and clearly excited. They\'re involved and will be demanding, but from a place of real enthusiasm.',
       'Very active family who are fully on board with the project. {guardian_name} will want regular updates, but they\'re pushing in the right direction.',
       'A positive meeting, though {guardian_name} made it clear they\'ll want to be kept informed at every step. That\'s manageable given how positive they were overall.',
     ],
   },
   moderate: {
     low: [
-      "{guardian_name} had reasonable expectations but wasn't particularly sold on the academy. Worth investing time to bring them on side.",
+      "{guardian_name} had reasonable expectations but wasn't particularly sold on the club. Worth investing time to bring them on side.",
       'Moderate demands, cautious disposition. {guardian_name} will need some early wins to build trust before they\'re fully committed.',
       '{guardian_name} made clear they\'ll be watching closely. Keep them informed and they should be manageable.',
     ],
@@ -167,7 +167,7 @@ const ACCURATE_TEMPLATES: Record<DemandBucket, Record<LoyaltyBucket, string[]>> 
       "Nothing to worry about here. {guardian_name} was engaged and balanced — standard family dynamic, easy to manage.",
     ],
     warm: [
-      '{guardian_name} left the meeting clearly positive about the academy. Reasonable in their expectations and very warm in their outlook.',
+      '{guardian_name} left the meeting clearly positive about the club. Reasonable in their expectations and very warm in their outlook.',
       'A genuinely easy meeting. {guardian_name} is supportive and has sensible expectations — this should be a smooth relationship.',
       'Positive family dynamic. {guardian_name} is engaged without being demanding, and left the session in good spirits.',
     ],
@@ -184,7 +184,7 @@ const ACCURATE_TEMPLATES: Record<DemandBucket, Record<LoyaltyBucket, string[]>> 
       "A calm, unassuming family. {guardian_name} seemed comfortable leaving things in our hands — straightforward.",
     ],
     warm: [
-      "{guardian_name} was genuinely warm about the academy setup. Easy conversation — I think they'd be a pleasure to work with.",
+      "{guardian_name} was genuinely warm about the club setup. Easy conversation — I think they'd be a pleasure to work with.",
       '{guardian_name} had nothing but positive things to say and asked almost nothing of us.',
       'A lovely meeting. {guardian_name} was enthusiastic, supportive, and low on demands. This one\'s a tick in the win column.',
     ],
@@ -206,7 +206,7 @@ function getLoyaltyBucket(loyalty: number): LoyaltyBucket {
 function getWorstGuardianFromArray(guardians: Guardian[]): Guardian {
   return guardians.reduce((worst, g) => {
     if (g.demandLevel > worst.demandLevel) return g;
-    if (g.demandLevel === worst.demandLevel && g.loyaltyToAcademy < worst.loyaltyToAcademy) return g;
+    if (g.demandLevel === worst.demandLevel && g.loyaltyToClub < worst.loyaltyToClub) return g;
     return worst;
   });
 }
@@ -229,7 +229,7 @@ export function generateGuardianNote(guardians: Guardian[], scoutSuccessRate: nu
     template = pick(VAGUE_TEMPLATES);
   } else {
     const demand = getDemandBucket(worst.demandLevel);
-    const loyalty = getLoyaltyBucket(worst.loyaltyToAcademy);
+    const loyalty = getLoyaltyBucket(worst.loyaltyToClub);
     const pool = scoutSuccessRate >= 75
       ? ACCURATE_TEMPLATES[demand][loyalty]
       : MODERATE_TEMPLATES[demand][loyalty];
@@ -251,11 +251,11 @@ function isFinancialRequest(slug: string): boolean {
 }
 
 function calculateGuardianCost(): number {
-  const { academy } = useAcademyStore.getState();
+  const { club } = useClubStore.getState();
   // Both totalCareerEarnings and balance are stored in pence
-  const academyValuePence = academy.totalCareerEarnings + (academy.balance * 0.5);
+  const clubValuePence = club.totalCareerEarnings + (club.balance * 0.5);
   const rate = 0.0025 + Math.random() * 0.0075; // 0.25%–1.0%
-  const rawCost = Math.round(academyValuePence * rate);
+  const rawCost = Math.round(clubValuePence * rate);
   const minimumCost = 5000; // £50 minimum (in pence)
   return Math.max(minimumCost, rawCost);
 }
@@ -285,7 +285,7 @@ export function processGuardianTick(weekNumber: number): void {
     const worstGuardian = getWorstGuardianFromArray(guardians);
 
     // Spike 1: Threat warning when loyalty < 20
-    if (worstGuardian.loyaltyToAcademy < 20) {
+    if (worstGuardian.loyaltyToClub < 20) {
       const alreadyFired = inboxMessages.some(
         (m) => m.week === weekNumber &&
                m.entityId === player.id &&
@@ -372,8 +372,8 @@ export function processGuardianTick(weekNumber: number): void {
     const worstGuardian = getWorstGuardianFromArray(guardians);
 
     // Loyalty-based suppression
-    if (worstGuardian.loyaltyToAcademy >= 90 && Math.random() > 0.0625) continue;
-    else if (worstGuardian.loyaltyToAcademy >= 70 && Math.random() > 0.125) continue;
+    if (worstGuardian.loyaltyToClub >= 90 && Math.random() > 0.0625) continue;
+    else if (worstGuardian.loyaltyToClub >= 70 && Math.random() > 0.125) continue;
 
     const template = useEventStore.getState().getWeightedRandomTemplate(EventCategory.GUARDIAN);
     if (!template) continue;
@@ -410,7 +410,7 @@ export function processGuardianTick(weekNumber: number): void {
 
   if (weekNumber % 4 === 0) {
     allGuardians.forEach((g) => {
-      if (g.loyaltyToAcademy >= 70 && g.demandLevel > 1) {
+      if (g.loyaltyToClub >= 70 && g.demandLevel > 1) {
         useGuardianStore.getState().updateGuardian(g.id, {
           demandLevel: g.demandLevel - 1,
         });
@@ -419,13 +419,13 @@ export function processGuardianTick(weekNumber: number): void {
   }
 
   // ── Threat execution ─────────────────────────────────────────────────────────
-  // Guardians with loyalty < 20 withdraw the player from the academy.
+  // Guardians with loyalty < 20 withdraw the player from the club.
 
   for (const player of activePlayers) {
     const guardians = allGuardians.filter((g) => g.playerId === player.id);
     if (guardians.length === 0) continue;
 
-    const hasLowLoyalty = guardians.some((g) => g.loyaltyToAcademy < 20);
+    const hasLowLoyalty = guardians.some((g) => g.loyaltyToClub < 20);
     if (!hasLowLoyalty) continue;
 
     // Check we haven't already processed a withdrawal for this player this week
@@ -462,7 +462,7 @@ export function processGuardianTick(weekNumber: number): void {
       type: 'system',
       week: weekNumber,
       subject: `${player.name} Has Been Withdrawn`,
-      body: `A guardian of ${player.name} has lost confidence in the academy and has withdrawn them from your programme. This follows a breakdown in the relationship that was not resolved in time.`,
+      body: `A guardian of ${player.name} has lost confidence in the club and has withdrawn them from your programme. This follows a breakdown in the relationship that was not resolved in time.`,
       isRead: false,
       requiresResponse: false,
       entityId: player.id,

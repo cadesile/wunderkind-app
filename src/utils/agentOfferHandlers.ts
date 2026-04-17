@@ -1,6 +1,6 @@
 import { useInboxStore } from '@/stores/inboxStore';
 import { useSquadStore } from '@/stores/squadStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
@@ -10,7 +10,7 @@ import { calculateNetSalePrice } from '@/engine/finance';
  * Accept an agent transfer offer:
  * 1. Mark offer accepted in inbox store
  * 2. Mark player as transferred (isActive: false, status: 'transferred_via_agent')
- * 3. Credit net proceeds to academy balance (pence)
+ * 3. Credit net proceeds to club balance (pence)
  * 4. Record in ledger (transfer_fee) and transfer history
  */
 export function handleAcceptAgentOffer(offerId: string): void {
@@ -31,10 +31,10 @@ export function handleAcceptAgentOffer(offerId: string): void {
   });
 
   // Apply both agent commission AND investor equity deduction
-  const { academy } = useAcademyStore.getState();
+  const { club } = useClubStore.getState();
   const { investors } = useMarketStore.getState();
   const investorEquityPcts = investors
-    .filter((inv) => inv.id === academy.investorId)
+    .filter((inv) => inv.id === club.investorId)
     .map((inv) => inv.equityTaken);
 
   // calculateNetSalePrice: gross × (1 − agentComm) × (1 − investorEquity) — all in pence
@@ -49,10 +49,10 @@ export function handleAcceptAgentOffer(offerId: string): void {
 
   // balance is stored in pence — credit pence directly
   // addEarnings updates totalCareerEarnings (the SALES dashboard stat)
-  useAcademyStore.getState().addBalance(netPence);
-  useAcademyStore.getState().addEarnings(netPence);
+  useClubStore.getState().addBalance(netPence);
+  useClubStore.getState().addEarnings(netPence);
 
-  const weekNumber = academy.weekNumber;
+  const weekNumber = club.weekNumber;
   const financeStore = useFinanceStore.getState();
 
   // Ledger entry — net amount after all deductions (whole pounds)
@@ -89,7 +89,7 @@ export function handleAcceptAgentOffer(offerId: string): void {
   // Reputation effects: compare fee against rough fair value (OVR × £1,000 in pence)
   const { players: currentSquad } = useSquadStore.getState();
   const soldPlayer = currentSquad.find((p) => p.id === offer.playerId);
-  const { setReputation, markRepActivity } = useAcademyStore.getState();
+  const { setReputation, markRepActivity } = useClubStore.getState();
 
   if (soldPlayer) {
     const { playerFeeMultiplier } = useGameConfigStore.getState().config;

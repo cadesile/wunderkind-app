@@ -7,7 +7,7 @@ import { uuidv7 } from '@/utils/uuidv7';
 const INTEREST_RATE = 0.046;
 const LOAN_WEEKS = 52;
 
-/** Maximum loan amount based on academy reputation (0–100) */
+/** Maximum loan amount based on club reputation (0–100) */
 export function getLoanLimit(reputation: number): number {
   if (reputation >= 90) return 500_000;
   if (reputation >= 70) return 200_000;

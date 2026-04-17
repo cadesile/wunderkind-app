@@ -1,4 +1,4 @@
-import type { AcademyCountryCode } from '@/utils/nationality';
+import type { ClubCountryCode } from '@/utils/nationality';
 import type { Appearance } from '@/types/player';
 
 export interface ManagerProfile {
@@ -12,10 +12,10 @@ export interface ManagerProfile {
 export type ReputationTier = 'Local' | 'Regional' | 'National' | 'Elite';
 
 /** Lowercase tier identifier used by the backend and on market/squad entities. */
-export type AcademyTier = 'local' | 'regional' | 'national' | 'elite';
+export type ClubTier = 'local' | 'regional' | 'national' | 'elite';
 
-/** Minimum reputation value for each tier — used to seed initial academy reputation. */
-export const TIER_REPUTATION_BASELINE: Record<AcademyTier, number> = {
+/** Minimum reputation value for each tier — used to seed initial club reputation. */
+export const TIER_REPUTATION_BASELINE: Record<ClubTier, number> = {
   local: 0,
   regional: 15,
   national: 40,
@@ -23,7 +23,7 @@ export const TIER_REPUTATION_BASELINE: Record<AcademyTier, number> = {
 };
 
 /** Numeric rank for tier comparison — higher = more prestigious. */
-export const TIER_ORDER: Record<AcademyTier, number> = {
+export const TIER_ORDER: Record<ClubTier, number> = {
   local: 0,
   regional: 1,
   national: 2,
@@ -31,10 +31,10 @@ export const TIER_ORDER: Record<AcademyTier, number> = {
 };
 
 /**
- * Maximum overallRating a player can achieve while the academy is at this tier.
+ * Maximum overallRating a player can achieve while the club is at this tier.
  * Matches the backend Tier.scoreRange() max values.
  */
-export const TIER_OVR_CEILING: Record<AcademyTier, number> = {
+export const TIER_OVR_CEILING: Record<ClubTier, number> = {
   local:    14,
   regional: 39,
   national: 74,
@@ -47,7 +47,7 @@ export const TIER_OVR_CEILING: Record<AcademyTier, number> = {
  * Regional → National: all ≥ 2
  * National → Elite: all ≥ 5
  */
-export const TIER_FACILITY_REQUIREMENTS: Record<AcademyTier, number> = {
+export const TIER_FACILITY_REQUIREMENTS: Record<ClubTier, number> = {
   local:    0,
   regional: 1,
   national: 2,
@@ -61,7 +61,7 @@ export interface ManagerPersonality {
   ambition: number;    // 0–100
 }
 
-export interface Academy {
+export interface Club {
   id: string;
   name: string;
   foundedWeek: number;
@@ -80,8 +80,8 @@ export interface Academy {
   sponsorIds: string[];
   /** ID of assigned investor, or null */
   investorId: string | null;
-  /** Academy home country — restricts market/scouting at Local reputation tier */
-  country: AcademyCountryCode | null;
+  /** Club home country — restricts market/scouting at Local reputation tier */
+  country: ClubCountryCode | null;
   /**
    * Game week of the last rep-positive event (sign, hire, upgrade, breakthrough, transfer).
    * Used to detect inactivity and trigger passive reputation decay.

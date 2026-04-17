@@ -76,7 +76,7 @@ export const useProspectPoolStore = create<ProspectPoolState>()(
 
         set({ isLoading: true });
         try {
-          const tier = (await import('@/stores/academyStore')).useAcademyStore.getState().academy.reputationTier;
+          const tier = (await import('@/stores/clubStore')).useClubStore.getState().club.reputationTier;
           const data = await marketApi.getMarketData(null, tier);
           get().setProspects(data.players);
         } catch {
