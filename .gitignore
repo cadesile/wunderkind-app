@@ -11,3 +11,4 @@ android/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+.worktrees/
