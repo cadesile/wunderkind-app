@@ -1,13 +1,13 @@
 #!/bin/bash
 #
 # generate_project_context.sh
-# Drop into any project root — auto-detects stack, uses Claude to generate context.
+# Drop into any project root — auto-detects stack, uses Claude or Gemini to generate context.
 #
 # Usage:
-#   bash scripts/generate_project_context.sh [--no-ai] [--output-dir <dir>] [--depth <n>] [--debug-detection]
+#   bash scripts/generate_project_context.sh [--no-ai] [--ai <claude|gemini>] [--output-dir <dir>] [--depth <n>] [--debug-detection]
 #
 # Requirements: jq
-# Optional:     Claude Code CLI (claude) — enables AI-generated summaries
+# Optional:     Claude Code CLI (claude) or Gemini CLI (gemini) — enables AI-generated summaries
 
 set -e
 
@@ -21,7 +21,7 @@ DEBUG_DETECTION=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-ai)            USE_AI=false ;;
-        --ai-cli)           AI_CLI="$2"; shift ;;
+        --ai)               AI_CLI="$2"; shift ;;
         --output-dir)       OUTPUT_DIR="$2"; shift ;;
         --depth)            TREE_DEPTH="$2"; shift ;;
         --debug-detection)  DEBUG_DETECTION=true ;;
