@@ -541,7 +541,7 @@ export function OnboardingScreen({ onRegister, enabledCountries }: Props) {
           {step === 'name' && (
             <>
               {selectedCountryMeta && (
-                <Pressable onPress={() => setStep('country')} style={{ marginBottom: 16 }}>
+                <Pressable onPress={() => setStep(availableCountries.length === 1 ? 'manager' : 'country')} style={{ marginBottom: 16 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 }}>
                     <PixelText size={6} color={WK.tealLight}>← CHANGE</PixelText>
                     <PixelText size={8}>{selectedCountryMeta.flag}</PixelText>
