@@ -10,6 +10,8 @@ import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
 
 const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 
+const VALID_REPUTATION_TIERS = ['local', 'regional', 'national', 'elite'] as const;
+
 interface WorldState {
   isInitialized: boolean;
   leagues: WorldLeague[];
@@ -117,7 +119,9 @@ export const useWorldStore = create<WorldState>()(
             country:                       bottomLeague.country,
             season:                        1,
             promotionSpots:                bottomLeague.promotionSpots,
-            reputationTier:                bottomLeague.reputationTier as LeagueSnapshot['reputationTier'],
+            reputationTier:                (VALID_REPUTATION_TIERS as readonly string[]).includes(bottomLeague.reputationTier ?? '')
+                                             ? (bottomLeague.reputationTier as LeagueSnapshot['reputationTier'])
+                                             : null,
             tvDeal:                        null,
             sponsorPot:                    0,
             prizeMoney:                    null,
