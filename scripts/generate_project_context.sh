@@ -869,6 +869,15 @@ else
 fi
 fi
 
+if [ "$USE_AI" = true ]; then
+cat << EOF
+
+---
+
+> _AI summaries generated using **${AI_CLI}**._
+EOF
+fi
+
 } > "$TEMP_FILE"
 
 mv "$TEMP_FILE" "$OUTPUT_FILE"
