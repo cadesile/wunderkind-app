@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -15,7 +15,7 @@ import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { WK, pixelShadow } from '@/constants/theme';
-import { ACADEMY_COUNTRIES, ClubCountryCode, ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
+import { CLUB_COUNTRIES, ClubCountryCode, CLUB_CODE_TO_NATIONALITY } from '@/utils/nationality';
 import { generateAppearance } from '@/engine/appearance';
 import type { ManagerProfile } from '@/types/club';
 
@@ -23,6 +23,7 @@ import type { ManagerProfile } from '@/types/club';
 
 interface Props {
   onRegister: (clubName: string, country: ClubCountryCode, managerProfile: ManagerProfile) => Promise<void>;
+  enabledCountries: string[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -175,8 +176,8 @@ function computeAge(dob: string): number {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function StepIndicator({ current }: { current: Step }) {
-  const steps: Step[] = ['manager', 'country', 'name'];
+function StepIndicator({ current, showCountryStep }: { current: Step; showCountryStep: boolean }) {
+  const steps: Step[] = showCountryStep ? ['manager', 'country', 'name'] : ['manager', 'name'];
   const idx = steps.indexOf(current);
   return (
     <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center', marginBottom: 20 }}>
@@ -196,7 +197,7 @@ function StepIndicator({ current }: { current: Step }) {
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
-export function OnboardingScreen({ onRegister }: Props) {
+export function OnboardingScreen({ onRegister, enabledCountries }: Props) {
   const [step, setStep] = useState<Step>('manager');
 
   // Manager profile state
@@ -211,6 +212,16 @@ export function OnboardingScreen({ onRegister }: Props) {
   const [selectedCountry, setSelectedCountry] = useState<ClubCountryCode | null>(null);
   const [clubName, setClubName]         = useState('');
 
+  const availableCountries = CLUB_COUNTRIES.filter((c) => enabledCountries.includes(c.code));
+
+  // Auto-select and skip the country picker when only one country is enabled.
+  useEffect(() => {
+    if (availableCountries.length === 1 && selectedCountry === null) {
+      setSelectedCountry(availableCountries[0].code);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
@@ -222,14 +233,14 @@ export function OnboardingScreen({ onRegister }: Props) {
     const last  = pick(RANDOM_LAST_NAMES);
     setManagerName(`${first} ${last}`);
     setGender(g);
-    setManagerNationality(pick(ACADEMY_COUNTRIES).code);
+    setManagerNationality(pick(CLUB_COUNTRIES).code);
     setDobDay(pick(DAY_OPTIONS));
     setDobMonth(pick(MONTH_OPTIONS).value);
     setDobYear(pick(YEAR_OPTIONS));
   }
 
   function randomiseCountry() {
-    setSelectedCountry(pick(ACADEMY_COUNTRIES).code);
+    setSelectedCountry(pick(availableCountries).code);
   }
 
   // Live avatar preview — deterministic from manager name
@@ -261,7 +272,7 @@ export function OnboardingScreen({ onRegister }: Props) {
         name:        managerName.trim(),
         dateOfBirth: dob,
         gender,
-        nationality: ACADEMY_CODE_TO_NATIONALITY[managerNationality],
+        nationality: CLUB_CODE_TO_NATIONALITY[managerNationality],
         appearance:  avatarAppearance,
       };
       await onRegister(clubName.trim(), selectedCountry, profile);
@@ -273,7 +284,7 @@ export function OnboardingScreen({ onRegister }: Props) {
     }
   }
 
-  const selectedCountryMeta = ACADEMY_COUNTRIES.find((c) => c.code === selectedCountry);
+  const selectedCountryMeta = CLUB_COUNTRIES.find((c) => c.code === selectedCountry);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -294,7 +305,7 @@ export function OnboardingScreen({ onRegister }: Props) {
             <View style={{ height: 3, width: 80, backgroundColor: WK.yellow, marginTop: 8 }} />
           </View>
 
-          <StepIndicator current={step} />
+          <StepIndicator current={step} showCountryStep={availableCountries.length > 1} />
 
           {/* ── Step 1: Manager Profile ── */}
           {step === 'manager' && (
@@ -427,7 +438,7 @@ export function OnboardingScreen({ onRegister }: Props) {
               }}>
                 <PixelText size={6} dim style={{ marginBottom: 8 }}>NATIONALITY</PixelText>
                 <View style={{ gap: 6 }}>
-                  {ACADEMY_COUNTRIES.map((country) => {
+                  {CLUB_COUNTRIES.map((country) => {
                     const isSelected = managerNationality === country.code;
                     return (
                       <Pressable key={country.code} onPress={() => setManagerNationality(country.code)}>
@@ -453,10 +464,10 @@ export function OnboardingScreen({ onRegister }: Props) {
               </View>
 
               <Button
-                label="NEXT → ACADEMY LOCATION"
+                label={availableCountries.length === 1 ? 'NEXT → CLUB NAME' : 'NEXT → CLUB LOCATION'}
                 variant="yellow"
                 fullWidth
-                onPress={() => setStep('country')}
+                onPress={() => setStep(availableCountries.length === 1 ? 'name' : 'country')}
                 disabled={!managerValid}
               />
             </>
@@ -473,7 +484,7 @@ export function OnboardingScreen({ onRegister }: Props) {
               </Pressable>
 
               <PixelText size={7} dim style={{ marginBottom: 12, textAlign: 'center' }}>
-                WHERE IS YOUR ACADEMY BASED?
+                WHERE IS YOUR CLUB BASED?
               </PixelText>
 
               <View style={{ gap: 8, marginBottom: 20 }}>
@@ -492,7 +503,7 @@ export function OnboardingScreen({ onRegister }: Props) {
                     <PixelText size={6} color={WK.tealLight}>⚄ RANDOM LOCATION</PixelText>
                   </View>
                 </Pressable>
-                {ACADEMY_COUNTRIES.map((country) => {
+                {availableCountries.map((country) => {
                   const isSelected = selectedCountry === country.code;
                   return (
                     <Pressable key={country.code} onPress={() => setSelectedCountry(country.code)}>
@@ -517,7 +528,7 @@ export function OnboardingScreen({ onRegister }: Props) {
               </View>
 
               <Button
-                label="NEXT → ACADEMY NAME"
+                label="NEXT → CLUB NAME"
                 variant="yellow"
                 fullWidth
                 onPress={() => setStep('name')}
@@ -555,7 +566,7 @@ export function OnboardingScreen({ onRegister }: Props) {
                 <View style={{ flex: 1 }}>
                   <PixelText size={7} upper>{managerName}</PixelText>
                   <PixelText size={5} dim style={{ marginTop: 4 }}>
-                    {ACADEMY_CODE_TO_NATIONALITY[managerNationality!]} • {gender?.toUpperCase()} • {dobYear}
+                    {CLUB_CODE_TO_NATIONALITY[managerNationality!]} • {gender?.toUpperCase()} • {dobYear}
                   </PixelText>
                 </View>
               </View>
@@ -568,7 +579,7 @@ export function OnboardingScreen({ onRegister }: Props) {
                 marginBottom: 12,
                 ...pixelShadow,
               }}>
-                <PixelText size={7} dim style={{ marginBottom: 10 }}>ACADEMY NAME</PixelText>
+                <PixelText size={7} dim style={{ marginBottom: 10 }}>CLUB NAME</PixelText>
                 <TextInput
                   style={{
                     backgroundColor: WK.tealDark,
@@ -608,7 +619,7 @@ export function OnboardingScreen({ onRegister }: Props) {
                 </View>
               ) : (
                 <Button
-                  label="▶ CREATE MY ACADEMY"
+                  label="▶ CREATE MY CLUB"
                   variant="yellow"
                   fullWidth
                   onPress={handleSubmit}
@@ -623,7 +634,7 @@ export function OnboardingScreen({ onRegister }: Props) {
               )}
 
               <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 16 }}>
-                YOU'LL RECEIVE 10 YOUTH PLAYERS + FULL ACADEMY SETUP
+                YOU'LL RECEIVE 10 YOUTH PLAYERS + FULL CLUB SETUP
               </PixelText>
             </>
           )}

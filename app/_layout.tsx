@@ -13,7 +13,7 @@ import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-star
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
-import { clearAllAcademyData } from '@/stores/resetAllStores';
+import { clearAllClubData } from '@/stores/resetAllStores';
 import { useNarrativeSync } from '@/hooks/useNarrativeSync';
 import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 import { useArchetypeSync } from '@/hooks/useArchetypeSync';
@@ -22,7 +22,7 @@ import { OnboardingScreen } from '@/components/OnboardingScreen';
 import { WelcomeSplash } from '@/components/WelcomeSplash';
 import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
 import { PixelText } from '@/components/ui/PixelText';
@@ -45,8 +45,8 @@ function AppNavigator() {
     VT323_400Regular,
     FlagsColorWorld: require('../assets/fonts/FlagsColorWorld.ttf'),
   });
-  const { isReady, isOnboarding, registerAcademy, showWelcomeSplash, dismissWelcomeSplash } = useAuthFlow();
-  const academyName = useAcademyStore((s) => s.academy.name);
+  const { isReady, isOnboarding, registerClub, showWelcomeSplash, dismissWelcomeSplash, enabledCountries } = useAuthFlow();
+  const clubName = useClubStore((s) => s.club.name);
   useNarrativeSync();
   useArchetypeSync();
   useProspectSync();
@@ -65,7 +65,7 @@ function AppNavigator() {
 
   useEffect(() => {
     async function waitForHydration() {
-      const stores = [useAcademyStore, useSquadStore] as const;
+      const stores = [useClubStore, useSquadStore] as const;
       for (const store of stores) {
         if (!store.persist.hasHydrated()) {
           await new Promise<void>((resolve) => {
@@ -107,8 +107,8 @@ function AppNavigator() {
     if (!pendingNewGame) return;
     async function doNewGameReset() {
       // Clear AsyncStorage for all stores and reset critical in-memory state
-      await clearAllAcademyData();
-      // clearAllAcademyData calls resetInMemoryStores() which clears auth;
+      await clearAllClubData();
+      // clearAllClubData calls resetInMemoryStores() which clears auth;
       // also explicitly reset lossConditionStore in memory
       useLossConditionStore.getState().resetAll();
       setNewGameOnboarding(true);
@@ -159,8 +159,9 @@ function AppNavigator() {
       <OnboardingScreen
         onRegister={async (name, country, managerProfile) => {
           setNewGameOnboarding(false);
-          await registerAcademy(name, country, managerProfile);
+          await registerClub(name, country, managerProfile);
         }}
+        enabledCountries={enabledCountries}
       />
     );
   }
@@ -170,7 +171,7 @@ function AppNavigator() {
       <Stack screenOptions={{ headerShown: false }} />
       {showWelcomeSplash && (
         <WelcomeSplash
-          academyName={academyName}
+          clubName={clubName}
           onDismiss={dismissWelcomeSplash}
         />
       )}
