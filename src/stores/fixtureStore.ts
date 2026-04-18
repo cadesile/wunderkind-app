@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { LeagueSnapshot } from '@/types/api';
+import type { WorldLeague } from '@/types/world';
 import { zustandStorage } from '@/utils/storage';
 import { generateRoundRobin } from '@/utils/fixtureGenerator';
 
@@ -28,6 +29,8 @@ interface FixtureState {
 
 interface FixtureActions {
   generateFixtures: (league: LeagueSnapshot, ampClubId: string) => void;
+  /** Generate fixtures from a WorldLeague (used at world init when no LeagueSnapshot exists yet). */
+  generateFixturesFromWorldLeague: (league: WorldLeague, ampClubId: string, season: number) => void;
   recordResult: (fixtureId: string, result: Omit<FixtureResult, 'synced'>) => void;
   advanceMatchday: () => void;
   markSynced: (fixtureIds: string[]) => void;
@@ -64,6 +67,32 @@ export const useFixtureStore = create<FixtureStore>()(
         }));
 
         set((state) => ({ fixtures: [...state.fixtures, ...newFixtures] }));
+      },
+
+      generateFixturesFromWorldLeague: (league, ampClubId, season) => {
+        const { fixtures } = get();
+        const alreadyGenerated = fixtures.some(
+          (f) => f.leagueId === league.id && f.season === season
+        );
+        if (alreadyGenerated) return;
+
+        const participants = [ampClubId, ...league.clubIds];
+        const generated = generateRoundRobin(participants);
+
+        const newFixtures: Fixture[] = generated.map((g) => ({
+          id: `${league.id}-s${season}-r${g.round}-${g.homeClubId}-${g.awayClubId}`,
+          leagueId: league.id,
+          season,
+          round: g.round,
+          homeClubId: g.homeClubId,
+          awayClubId: g.awayClubId,
+          result: null,
+        }));
+
+        set((state) => ({
+          fixtures: [...state.fixtures, ...newFixtures],
+          currentMatchday: 1,
+        }));
       },
 
       recordResult: (fixtureId, result) =>
