@@ -30,6 +30,8 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
+START_TIME=$(date +%s)
+
 # ── Config ────────────────────────────────────────────────────────────────────
 REPO_NAME=$(basename "$PWD")
 OUTPUT_FILE="${OUTPUT_DIR}/${REPO_NAME}-context.md"
@@ -628,11 +630,14 @@ mkdir -p "$OUTPUT_DIR"
 
 {
 
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
 # Header — uses unquoted heredoc so variables expand
 cat << EOF
 # ${REPO_NAME} — Project Context
 
-> Generated: $(date +"%Y-%m-%d %H:%M:%S") | Stack: ${STACK_LABEL} | Dev: ${DEV_ENV}
+> Generated: $(date +"%Y-%m-%d %H:%M:%S") | Duration: ${DURATION}s | Stack: ${STACK_LABEL} | Dev: ${DEV_ENV}
 
 ---
 
