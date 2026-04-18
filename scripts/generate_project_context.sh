@@ -13,6 +13,7 @@ set -e
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 USE_AI=true
+AI_CLI="claude"
 OUTPUT_DIR="docs"
 TREE_DEPTH=3
 DEBUG_DETECTION=false
@@ -20,6 +21,7 @@ DEBUG_DETECTION=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-ai)            USE_AI=false ;;
+        --ai-cli)           AI_CLI="$2"; shift ;;
         --output-dir)       OUTPUT_DIR="$2"; shift ;;
         --depth)            TREE_DEPTH="$2"; shift ;;
         --debug-detection)  DEBUG_DETECTION=true ;;
@@ -51,27 +53,31 @@ else
     HAS_JQ=true
 fi
 
-# ── Claude Code CLI check ─────────────────────────────────────────────────────
+# ── AI CLI check ──────────────────────────────────────────────────────────────
 if [ "$USE_AI" = true ]; then
-    if [ -n "$CLAUDECODE" ]; then
+    if [ -n "$CLAUDECODE" ] && [ "$AI_CLI" = "claude" ]; then
         info "Running inside a Claude Code session — AI summaries skipped (nested sessions not supported)."
         USE_AI=false
-    elif command -v claude &>/dev/null; then
-        info "Claude Code CLI detected — AI summaries enabled."
+    elif command -v "$AI_CLI" &>/dev/null; then
+        info "${AI_CLI} CLI detected — AI summaries enabled."
     else
-        info "Claude Code CLI not found — AI summaries skipped. Install claude to enable."
+        info "${AI_CLI} CLI not found — AI summaries skipped. Install ${AI_CLI} to enable."
         USE_AI=false
     fi
 fi
 
-# ── Claude Code CLI helper ────────────────────────────────────────────────────
-# Uses `claude -p` (print mode) — non-interactive, exits after one response.
-call_claude() {
+# ── AI CLI helper ─────────────────────────────────────────────────────────────
+# Uses either `claude -p` or `gemini -p` (print mode).
+call_ai() {
     local prompt="$1"
     [ "$USE_AI" = false ] && echo "" && return 0
     local result
-    result=$(claude -p "$prompt" 2>/dev/null)
-    [ -z "$result" ] && warn "Claude returned empty for: ${prompt:0:60}..."
+    if [ "$AI_CLI" = "gemini" ]; then
+        result=$(gemini -p "$prompt" 2>/dev/null)
+    else
+        result=$(claude -p "$prompt" 2>/dev/null)
+    fi
+    [ -z "$result" ] && warn "$AI_CLI returned empty for: ${prompt:0:60}..."
     echo "$result"
 }
 
@@ -256,6 +262,7 @@ if [ "$DEBUG_DETECTION" = true ]; then
     echo ""
     echo "=== Detection Results ==="
     echo "REPO_NAME         : $REPO_NAME"
+    echo "AI_CLI            : $AI_CLI"
     echo "PRIMARY_LANG      : $PRIMARY_LANG"
     echo "PRIMARY_FRAMEWORK : $PRIMARY_FRAMEWORK"
     echo "FRAMEWORK_VERSION : $FRAMEWORK_VERSION"
@@ -357,8 +364,8 @@ if [ -z "$OPENAPI_FILE" ]; then
 fi
 
 if [ "$USE_AI" = true ]; then
-    info "Calling Claude — project overview..."
-    AI_OVERVIEW=$(call_claude "You are generating documentation for a software project.
+    info "Calling ${AI_CLI} — project overview..."
+    AI_OVERVIEW=$(call_ai "You are generating documentation for a software project.
 
 Project name: ${REPO_NAME}
 Detected framework: ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG})
@@ -372,7 +379,7 @@ $(echo -e "$AI_CONTEXT_FILES" | head -c 3000)
 
 Write a concise 2-3 sentence project overview describing what it does, its purpose, and primary architectural approach. Output only the overview text — no preamble, no heading." 512)
 
-    info "Calling Claude — architecture notes..."
+    info "Calling ${AI_CLI} — architecture notes..."
     ENTITY_LIST=$([ -n "$MODELS_DIR" ] && [ -d "$MODELS_DIR" ] && \
         find "$MODELS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | xargs -I{} basename {} ".$PRIMARY_EXT" | sort | tr '\n' ', ' || echo "none")
     SERVICE_LIST=$([ -n "$SERVICES_DIR" ] && [ -d "$SERVICES_DIR" ] && \
@@ -380,7 +387,7 @@ Write a concise 2-3 sentence project overview describing what it does, its purpo
     DIR_LIST=$(find "${SOURCE_DIR}" -type d -not -path '*/vendor/*' -not -path '*/var/*' \
         -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | sort | head -30)
 
-    AI_ARCHITECTURE=$(call_claude "Analyse this ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG}) codebase.
+    AI_ARCHITECTURE=$(call_ai "Analyse this ${PRIMARY_FRAMEWORK} (${PRIMARY_LANG}) codebase.
 
 Entities/models: ${ENTITY_LIST}
 Services: ${SERVICE_LIST}
@@ -389,8 +396,8 @@ ${DIR_LIST}
 
 Identify 3-5 key architectural patterns (e.g. repository pattern, service layer, DTO, CQRS). Base this only on the directory structure and class names provided. Return a markdown bullet list only — no preamble, no heading." 512)
 
-    info "Calling Claude — development focus areas..."
-    AI_FOCUS=$(call_claude "Analyse recent development activity on a ${PRIMARY_FRAMEWORK} project.
+    info "Calling ${AI_CLI} — development focus areas..."
+    AI_FOCUS=$(call_ai "Analyse recent development activity on a ${PRIMARY_FRAMEWORK} project.
 
 Recent commits:
 ${GIT_LOG}
@@ -401,9 +408,9 @@ ${GIT_RECENT}
 Based solely on the above, identify 3-5 areas of active development that would benefit from AI assistance. Return a markdown bullet list only — no preamble, no heading." 512)
 
     if [ -n "$OPENAPI_FILE" ]; then
-        info "Calling Claude — analysing OpenAPI spec (${OPENAPI_FILE})..."
+        info "Calling ${AI_CLI} — analysing OpenAPI spec (${OPENAPI_FILE})..."
         OPENAPI_CONTENT=$(head -c 8000 "$OPENAPI_FILE")
-        AI_OPENAPI=$(call_claude "You are documenting a REST API from its OpenAPI/Swagger specification.
+        AI_OPENAPI=$(call_ai "You are documenting a REST API from its OpenAPI/Swagger specification.
 
 Spec file: ${OPENAPI_FILE}
 Contents (truncated to 8000 chars):
