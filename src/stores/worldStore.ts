@@ -3,6 +3,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
 import type { WorldClub, WorldLeague, WorldPackResponse } from '@/types/world';
+import { useClubStore } from '@/stores/clubStore';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
+import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
 
 const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 
@@ -36,6 +40,8 @@ export const useWorldStore = create<WorldState>()(
         const leagues: WorldLeague[] = [];
         const clubs: Record<string, WorldClub> = {};
 
+        // Build leagues + clubs, writing each league's club map to AsyncStorage with verification.
+        // Throws on any write failure so the caller (useAuthFlow) is notified loudly.
         for (const leagueData of pack.leagues) {
           const clubIds = leagueData.clubs.map((c) => c.id);
           leagues.push({
@@ -54,13 +60,75 @@ export const useWorldStore = create<WorldState>()(
             leagueClubMap[club.id] = club;
           }
 
-          await AsyncStorage.setItem(
-            `${CLUBS_KEY_PREFIX}${leagueData.id}`,
-            JSON.stringify(leagueClubMap),
-          );
+          const key = `${CLUBS_KEY_PREFIX}${leagueData.id}`;
+          try {
+            await AsyncStorage.setItem(key, JSON.stringify(leagueClubMap));
+
+            // Verify the write round-tripped successfully
+            const verification = await AsyncStorage.getItem(key);
+            if (!verification) {
+              throw new Error(`WorldStore: storage write did not persist for league ${leagueData.id}`);
+            }
+            const parsed = JSON.parse(verification) as Record<string, WorldClub>;
+            if (Object.keys(parsed).length === 0) {
+              throw new Error(`WorldStore: persisted club map is empty for league ${leagueData.id}`);
+            }
+          } catch (e) {
+            // Rethrow so the caller (useAuthFlow) surfaces this as console.error
+            throw e;
+          }
         }
 
-        set({ isInitialized: true, leagues, clubs });
+        // Find the bottom league for the AMP's country (highest tier number = lowest prestige).
+        const ampClub = useClubStore.getState().club;
+        const ampCountry = ampClub?.country ?? null;
+        const ampClubId  = ampClub?.id ?? null;
+
+        const bottomLeague = ampCountry
+          ? leagues
+              .filter((l) => l.country === ampCountry)
+              .sort((a, b) => b.tier - a.tier)[0] ?? null
+          : null;
+
+        const ampLeagueId = bottomLeague?.id ?? null;
+
+        set({ isInitialized: true, leagues, clubs, ampLeagueId });
+
+        // Wire leagueStore and fixtureStore if we found a bottom league and have an AMP club id.
+        if (bottomLeague && ampClubId) {
+          const clubSnapshots: ClubSnapshot[] = bottomLeague.clubIds
+            .map((id) => clubs[id])
+            .filter((c): c is WorldClub => c !== undefined)
+            .map((c) => ({
+              id:             c.id,
+              name:           c.name,
+              reputation:     c.reputation,
+              tier:           c.tier,
+              primaryColor:   c.primaryColor,
+              secondaryColor: c.secondaryColor,
+              stadiumName:    c.stadiumName,
+              facilities:     c.facilities,
+            }));
+
+          const syntheticLeague: LeagueSnapshot = {
+            id:                            bottomLeague.id,
+            tier:                          bottomLeague.tier,
+            name:                          bottomLeague.name,
+            country:                       bottomLeague.country,
+            season:                        1,
+            promotionSpots:                bottomLeague.promotionSpots,
+            reputationTier:                bottomLeague.reputationTier as LeagueSnapshot['reputationTier'],
+            tvDeal:                        null,
+            sponsorPot:                    0,
+            prizeMoney:                    null,
+            leaguePositionPot:             null,
+            leaguePositionDecreasePercent: 0,
+            clubs:                         clubSnapshots,
+          };
+
+          useLeagueStore.getState().setFromSync(syntheticLeague);
+          useFixtureStore.getState().generateFixturesFromWorldLeague(bottomLeague, ampClubId, 1);
+        }
       },
 
       loadClubs: async () => {

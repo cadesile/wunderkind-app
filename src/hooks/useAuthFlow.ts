@@ -390,7 +390,7 @@ export function useAuthFlow(): AuthFlowResult {
 
       console.log(`[useAuthFlow] World initialized: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s`);
     } catch (err) {
-      console.warn('[useAuthFlow] World initialization failed — squad will be empty:', err);
+      console.error('[useAuthFlow] World initialization failed — squad will be empty:', err);
     }
 
     setPlayers(players);
