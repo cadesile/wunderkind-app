@@ -18,6 +18,8 @@ import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFacilityStore } from '@/stores/facilityStore';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
 import { SyncRequest } from '@/types/api';
 
 const QUEUE_STORAGE_KEY = 'wk-sync-queue';
@@ -124,6 +126,20 @@ class SyncQueue {
         // Piggyback: hydrate facility templates from the server catalogue
         if (res.facilityTemplates && res.facilityTemplates.length > 0) {
           useFacilityStore.getState().setTemplates(res.facilityTemplates);
+        }
+        // League + fixture handling: mirror useSyncWeek.onSuccess logic
+        if (res.league === null) {
+          useLeagueStore.getState().clear();
+          useFixtureStore.getState().clearSeason();
+        } else {
+          useLeagueStore.getState().setFromSync(res.league);
+          const { fixtures } = useFixtureStore.getState();
+          const hasFixtures = fixtures.some(
+            (f) => f.leagueId === res.league!.id && f.season === res.league!.season,
+          );
+          if (!hasFixtures) {
+            useFixtureStore.getState().generateFixtures(res.league, res.club.id);
+          }
         }
         this.queue.shift();
         await this.persist();

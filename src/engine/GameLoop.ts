@@ -793,7 +793,7 @@ export function processWeeklyTick(): WeeklyTick {
   const reputationDelta = passiveRepDelta - tierDrain - inactivityDecay;
   setReputation(reputationDelta);
 
-  // ── 8a. Agent offers: expire stale, generate new ──────────────────────────────
+  // ── 8a. Agent offers: expire stale (generation disabled) ─────────────────────
   expireOldOffers(weekNumber);
   const { agents: allAgents } = useMarketStore.getState();
   const agentOffer = generateAgentOffer(
