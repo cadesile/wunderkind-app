@@ -182,6 +182,7 @@ export interface AuthFlowResult {
   registerClub: (clubName: string, country: ClubCountryCode, managerProfile: ManagerProfile) => Promise<void>;
   showWelcomeSplash: boolean;
   dismissWelcomeSplash: () => void;
+  enabledCountries: string[];
 }
 
 /**
@@ -214,6 +215,7 @@ export function useAuthFlow(): AuthFlowResult {
   const [isReady, setIsReady] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [showWelcomeSplash, setShowWelcomeSplash] = useState(false);
+  const [enabledCountries, setEnabledCountries] = useState<string[]>(['EN']);
 
   useEffect(() => {
     async function initialize() {
@@ -298,6 +300,12 @@ export function useAuthFlow(): AuthFlowResult {
 
     initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    fetchStarterConfig()
+      .then((cfg) => setEnabledCountries(cfg.enabledCountries ?? ['EN']))
+      .catch(() => {}); // keep default ['EN'] on failure
   }, []);
 
   async function registerClub(clubName: string, country: ClubCountryCode, managerProfile: ManagerProfile): Promise<void> {
@@ -417,5 +425,6 @@ export function useAuthFlow(): AuthFlowResult {
     registerClub,
     showWelcomeSplash,
     dismissWelcomeSplash: () => setShowWelcomeSplash(false),
+    enabledCountries,
   };
 }
