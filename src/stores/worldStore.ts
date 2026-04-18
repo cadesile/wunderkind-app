@@ -11,6 +11,10 @@ interface WorldState {
   leagues: WorldLeague[];
   /** In-memory club map indexed by clubId. NOT persisted via Zustand — loaded via loadClubs(). */
   clubs: Record<string, WorldClub>;
+  /** ID of the WorldLeague the AMP was placed into at world init. null until init runs. */
+  ampLeagueId: string | null;
+  /** null = ok; non-null = one or more league club keys failed to parse on load */
+  clubsLoadError: string | null;
   /** Called once on app start after Zustand rehydrates meta. Loads per-league club data from AsyncStorage. */
   loadClubs: () => Promise<void>;
   /** Called once on successful POST /api/initialize. Persists everything and sets isInitialized. */
@@ -25,6 +29,8 @@ export const useWorldStore = create<WorldState>()(
       isInitialized: false,
       leagues: [],
       clubs: {},
+      ampLeagueId: null,
+      clubsLoadError: null,
 
       setFromWorldPack: async (pack) => {
         const leagues: WorldLeague[] = [];
@@ -61,14 +67,23 @@ export const useWorldStore = create<WorldState>()(
         const { leagues } = get();
         if (leagues.length === 0) return;
         const clubs: Record<string, WorldClub> = {};
+        const errors: string[] = [];
         for (const league of leagues) {
           const raw = await AsyncStorage.getItem(`${CLUBS_KEY_PREFIX}${league.id}`);
           if (raw) {
-            const leagueClubs = JSON.parse(raw) as Record<string, WorldClub>;
-            Object.assign(clubs, leagueClubs);
+            try {
+              const leagueClubs = JSON.parse(raw) as Record<string, WorldClub>;
+              Object.assign(clubs, leagueClubs);
+            } catch (e) {
+              console.warn(`[WorldStore] Failed to parse clubs for league ${league.id}:`, e);
+              errors.push(`league ${league.id}: ${String(e)}`);
+            }
           }
         }
-        set({ clubs });
+        set({
+          clubs,
+          clubsLoadError: errors.length > 0 ? errors.join('; ') : null,
+        });
       },
 
       getClub: (clubId) => get().clubs[clubId],
@@ -88,7 +103,9 @@ export const useWorldStore = create<WorldState>()(
       partialize: (state) => ({
         isInitialized: state.isInitialized,
         leagues:       state.leagues,
+        ampLeagueId:   state.ampLeagueId,
         // clubs excluded — stored per-league in AsyncStorage
+        // clubsLoadError excluded — transient, reset on each loadClubs call
       }),
     },
   ),
