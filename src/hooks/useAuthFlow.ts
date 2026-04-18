@@ -367,6 +367,9 @@ export function useAuthFlow(): AuthFlowResult {
       console.warn(`[useAuthFlow] Club creation failed${status} — world init will be skipped`);
     }
 
+    // Set country before world init so setFromWorldPack can read it for bottom-league detection.
+    setCountry(country);
+
     // 3. World initialization — single call replaces fetchMarketData + assignMarketEntity loop
     let players:         Player[] = [];
     let assignedCoaches: Coach[]  = [];
@@ -404,7 +407,6 @@ export function useAuthFlow(): AuthFlowResult {
 
     // 8. Finalise
     setClubName(clubName);
-    setCountry(country);
     setShowWelcomeSplash(true);
     setIsOnboarding(false);
   }
