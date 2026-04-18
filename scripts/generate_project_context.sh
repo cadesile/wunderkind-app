@@ -497,7 +497,7 @@ summarize_markdown_files() {
         fi
         
         local summary
-        summary=$(call_ai "$prompt")
+        summary=$(call_ai "$prompt" < /dev/null)
         
         echo "### [$rel_path]($rel_path)"
         echo "> AI Summary: $summary"
