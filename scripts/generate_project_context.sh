@@ -41,8 +41,8 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-info()    { echo -e "${BLUE}▸ $1${NC}"; }
-success() { echo -e "${GREEN}✓ $1${NC}"; }
+info()    { echo -e "${BLUE}▸ $1${NC}" >&2; }
+success() { echo -e "${GREEN}✓ $1${NC}" >&2; }
 warn()    { echo -e "${YELLOW}⚠ $1${NC}" >&2; }
 
 # ── Dependency checks ─────────────────────────────────────────────────────────
@@ -469,6 +469,42 @@ elif [ "$PRIMARY_FRAMEWORK" = "rails" ] && [ -f "config/routes.rb" ]; then
 fi
 
 # ── Scan functions ────────────────────────────────────────────────────────────
+summarize_markdown_files() {
+    [ "$USE_AI" = false ] && return
+    
+    info "Discovering and summarizing markdown files..."
+    
+    # Exclude common vendor/build directories
+    local EXCLUDE_PATTERNS='node_modules|vendor|.git|dist|build|__pycache__'
+    local md_files
+    md_files=$(find . -name "*.md" -not -path "*/.*" | grep -vE "$EXCLUDE_PATTERNS" | sort)
+    local count
+    count=$(echo "$md_files" | grep -c ".md" || echo 0)
+    
+    info "Found $count markdown files."
+    
+    echo "$md_files" | while read -r f; do
+        [ -z "$f" ] && continue
+        local rel_path=${f#./}
+        local content
+        content=$(head -c 2000 "$f")
+        
+        local prompt
+        if [[ "$rel_path" == docs/* ]]; then
+            prompt="Summarize the following documentation file in detail (3-4 sentences), focusing on its core purpose and any architectural decisions it documents. File: $rel_path\n\nContent:\n$content"
+        else
+            prompt="Provide a brief 1-sentence summary of this markdown file. File: $rel_path\n\nContent:\n$content"
+        fi
+        
+        local summary
+        summary=$(call_ai "$prompt")
+        
+        echo "### [$rel_path]($rel_path)"
+        echo "> AI Summary: $summary"
+        echo ""
+    done
+}
+
 scan_models() {
     [ -z "$MODELS_DIR" ] || [ ! -d "$MODELS_DIR" ] && return
     find "$MODELS_DIR" -name "*.$PRIMARY_EXT" -type f 2>/dev/null | sort | while read -r f; do
@@ -609,6 +645,17 @@ if [ -n "$AI_OVERVIEW" ]; then
 else
     echo "Auto-detected **${PRIMARY_FRAMEWORK}** (${PRIMARY_LANG}) project."
     [ -n "$DB_HINTS" ] && echo "Database: ${DB_HINTS}."
+fi
+
+if [ "$USE_AI" = true ]; then
+cat << EOF
+
+---
+
+## Document Context
+
+$(summarize_markdown_files)
+EOF
 fi
 
 # All subsequent heredocs are single-quoted — no variable expansion needed
