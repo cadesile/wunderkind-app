@@ -92,9 +92,9 @@ export const useWorldStore = create<WorldState>()(
 
         const ampLeagueId = bottomLeague?.id ?? null;
 
-        set({ isInitialized: true, leagues, clubs, ampLeagueId });
-
         // Wire leagueStore and fixtureStore if we found a bottom league and have an AMP club id.
+        // These must succeed before set() so worldStore is never persisted as isInitialized: true
+        // with incomplete league/fixture state.
         if (bottomLeague && ampClubId) {
           const clubSnapshots: ClubSnapshot[] = bottomLeague.clubIds
             .map((id) => clubs[id])
@@ -128,7 +128,17 @@ export const useWorldStore = create<WorldState>()(
 
           useLeagueStore.getState().setFromSync(syntheticLeague);
           useFixtureStore.getState().generateFixturesFromWorldLeague(bottomLeague, ampClubId, 1);
+        } else if (!bottomLeague) {
+          if (ampCountry) {
+            console.warn(`[WorldStore] setFromWorldPack: no league found for AMP country "${ampCountry}" — league/fixture wiring skipped`);
+          } else {
+            console.warn('[WorldStore] setFromWorldPack: AMP club has no country set — league/fixture wiring skipped');
+          }
         }
+
+        // set() is LAST — only called after all wiring succeeds so worldStore is never persisted
+        // as isInitialized: true with incomplete cross-store state.
+        set({ isInitialized: true, leagues, clubs, ampLeagueId });
       },
 
       loadClubs: async () => {
