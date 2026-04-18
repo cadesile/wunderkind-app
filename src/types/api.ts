@@ -13,6 +13,8 @@ export interface StarterConfig {
   starterSponsorTier: string;    // 'SMALL' | 'MEDIUM' | 'LARGE'
   /** Default club tier for new academies e.g. 'local' | 'regional' | 'national' | 'elite' */
   starterClubTier: string;
+  /** ClubCountryCode values available in the country picker. Defaults to ['EN'] if absent. */
+  enabledCountries?: string[];
 }
 
 // ─── Club Status ───────────────────────────────────────────────────────────
