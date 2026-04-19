@@ -1,7 +1,7 @@
 import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -112,11 +112,13 @@ export default function ClubDetailScreen() {
             </PixelText>
             <PixelText size={7} color={WK.dim} style={{ width: 40, textAlign: 'center' }}>POS</PixelText>
             <PixelText size={7} color={WK.dim} style={{ width: 36, textAlign: 'right' }}>OVR</PixelText>
+            <View style={{ width: 16 }} />
           </View>
 
           {players.map((p, i) => (
-            <View
+            <Pressable
               key={p.id}
+              onPress={() => router.push(`/player/${p.id}`)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -143,7 +145,8 @@ export default function ClubDetailScreen() {
               <VT323Text size={18} color={WK.yellow} style={{ width: 36, textAlign: 'right' }}>
                 {calcOvr(p)}
               </VT323Text>
-            </View>
+              <ChevronRight size={12} color={WK.dim} style={{ marginLeft: 4 }} />
+            </Pressable>
           ))}
         </View>
 
