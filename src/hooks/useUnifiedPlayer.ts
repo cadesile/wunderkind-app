@@ -12,65 +12,24 @@ export interface UnifiedPlayerResult {
 }
 
 /**
- * Hook to find a player by ID across both the user's squad and all NPC clubs in the world.
- * Standardizes NPC WorldPlayers into the full Player type for UI consistency.
- */
-export function useUnifiedPlayer(id: string | undefined): UnifiedPlayerResult {
-  const squadPlayer = useSquadStore((s) => 
-    id ? s.players.find((p) => p.id === id) : undefined
-  );
-
-  const worldClubs = useWorldStore((s) => s.clubs);
-
-  const npcResult = useMemo(() => {
-    if (squadPlayer || !id) return null;
-
-    for (const clubId in worldClubs) {
-      const club = worldClubs[clubId];
-      const wp = club.players.find((p) => p.id === id);
-      if (wp) {
-        return {
-          player: mapWorldPlayerToPlayer(wp),
-          isNpc: true,
-          clubColors: { primary: club.primaryColor, secondary: club.secondaryColor },
-          clubName: club.name,
-        };
-      }
-    }
-    return null;
-  }, [id, worldClubs, squadPlayer]);
-
-  if (squadPlayer) {
-    return {
-      player: squadPlayer,
-      isNpc: false,
-    };
-  }
-
-  if (npcResult) {
-    return npcResult;
-  }
-
-  return { player: null, isNpc: false };
-}
-
-/**
- * Robustly maps a WorldPlayer (from world pack) to the standard Player type.
- * Includes attributes and personality matrix mapping.
+ * Standardises a WorldPlayer (from an NPC club) into the main Player type.
  */
 function mapWorldPlayerToPlayer(wp: WorldPlayer): Player {
   return {
     id: wp.id,
     name: `${wp.firstName} ${wp.lastName}`,
     dateOfBirth: wp.dateOfBirth,
-    age: 20, // NPC players don't have dynamic age in world pack, default to 20
+    age: 18, // Fallback, usually computed from dob
     position: (wp.position === 'ATT' ? 'FWD' : wp.position) as Position,
     nationality: wp.nationality,
     overallRating: Math.round((wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6),
-    morale: 50,
-    potential: 3,
+    potential: 3, // Fallback for NPC
     wage: 0,
     personality: wp.personality,
+    agentId: null,
+    joinedWeek: 1,
+    isActive: true,
+    status: 'active',
     attributes: {
       pace: wp.pace,
       technical: wp.technical,
@@ -79,9 +38,38 @@ function mapWorldPlayerToPlayer(wp: WorldPlayer): Player {
       stamina: wp.stamina,
       heart: wp.heart,
     },
-    agentId: null,
-    joinedWeek: 1,
-    isActive: true,
-    status: 'active',
   };
+}
+
+export function useUnifiedPlayer(id: string | null): UnifiedPlayerResult {
+  const squadPlayer = useSquadStore((s) => s.players.find((p) => p.id === id));
+  const worldClubs = useWorldStore((s) => s.clubs);
+
+  return useMemo(() => {
+    if (!id) return { player: null, isNpc: false };
+
+    // 1. Check user squad
+    if (squadPlayer) {
+      return { player: squadPlayer, isNpc: false };
+    }
+
+    // 2. Search NPC clubs
+    for (const clubId in worldClubs) {
+      const club = worldClubs[clubId];
+      const npcPlayer = club.players.find((p) => p.id === id);
+      if (npcPlayer) {
+        return {
+          player: mapWorldPlayerToPlayer(npcPlayer),
+          isNpc: true,
+          clubColors: {
+            primary: club.primaryColor,
+            secondary: club.secondaryColor,
+          },
+          clubName: club.name,
+        };
+      }
+    }
+
+    return { player: null, isNpc: false };
+  }, [id, squadPlayer, worldClubs]);
 }

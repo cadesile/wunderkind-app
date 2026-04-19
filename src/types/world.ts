@@ -14,7 +14,7 @@ export interface WorldPlayer {
   power: number;
   stamina: number;
   heart: number;
-  // Nested personality matrix
+  // Unified personality matrix (1-20 scale)
   personality: PersonalityMatrix;
 }
 
