@@ -9,7 +9,7 @@ module.exports = {
           green: '#2D6A4F',
           dark: '#1B4332',
         },
-        academy: {
+        club: {
           gold: '#F4A261',
           blue: '#2196F3',
           light: '#E6F4FE',

@@ -8,6 +8,7 @@ import { useClubStore } from '@/stores/clubStore';
 import { useWorldStore } from '@/stores/worldStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
+import { useInboxStore } from '@/stores/inboxStore';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
 import { Player, Position } from '../types/player';
@@ -60,22 +61,47 @@ class SimulationService {
 
     const tacticalMatrix = gameConfig?.tacticalMatrix ?? {};
 
+    console.log('tacticalMatrix', tacticalMatrix);
+
     // 2. Process in chunks
     const batchSize = 10;
+          console.log('batchSize',batchSize);
+          console.log('currentFixtures',currentFixtures);
     for (let i = 0; i < currentFixtures.length; i += batchSize) {
       const chunk = currentFixtures.slice(i, i + batchSize);
       
       for (const fixture of chunk) {
+          console.log('fixture',fixture);
         const homeTeam = this.getSimTeam(fixture.homeClubId, worldClubs, userClub, userSquad);
         const awayTeam = this.getSimTeam(fixture.awayClubId, worldClubs, userClub, userSquad);
 
         if (homeTeam && awayTeam) {
           const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix);
+          console.log('home',homeTeam);
           recordResult(fixture.id, {
             homeGoals: result.homeScore,
             awayGoals: result.awayScore,
             playedAt: new Date().toISOString(),
           });
+
+          const ampIsHome = fixture.homeClubId === userClub.id;
+          const ampIsAway = fixture.awayClubId === userClub.id;
+          if (ampIsHome || ampIsAway) {
+            const homeName = ampIsHome ? userClub.name : (worldClubs[fixture.homeClubId]?.name ?? 'Opponent');
+            const awayName = ampIsAway ? userClub.name : (worldClubs[fixture.awayClubId]?.name ?? 'Opponent');
+            const ampGoals = ampIsHome ? result.homeScore : result.awayScore;
+            const oppGoals = ampIsHome ? result.awayScore : result.homeScore;
+            const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
+            const venue = ampIsHome ? 'Home' : 'Away';
+            useInboxStore.getState().addMessage({
+              id: uuidv7(),
+              type: 'match_result',
+              week: userClub.weekNumber,
+              subject: `Result — ${venue} ${outcome}`,
+              body: `${homeName} ${result.homeScore} – ${result.awayScore} ${awayName}\nMatchday ${fixture.round}`,
+              isRead: false,
+            });
+          }
         }
       }
 
@@ -84,6 +110,7 @@ class SimulationService {
     }
 
     endSimulation();
+    useFixtureStore.getState().advanceMatchday();
   }
 
   private getSimTeam(

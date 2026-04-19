@@ -14,6 +14,7 @@ function computeTier(reputation: number): ReputationTier {
 interface ClubState {
   club: Club;
   managerPersonality: ManagerPersonality | null;
+  setId: (id: string) => void;
   setName: (name: string) => void;
   setReputation: (delta: number) => void;
   addEarnings: (amount: number) => void;
@@ -71,6 +72,8 @@ export const useClubStore = create<ClubState>()(
       club: DEFAULT_CLUB,
       managerPersonality: null,
       managerProfile: null,
+      setId: (id) =>
+        set((state) => ({ club: { ...state.club, id } })),
       setName: (name) =>
         set((state) => ({ club: { ...state.club, name } })),
       setReputation: (delta) =>

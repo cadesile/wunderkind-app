@@ -17,12 +17,13 @@ import { penceToPounds, formatPounds } from '@/utils/currency';
 
 // ─── Category definition ──────────────────────────────────────────────────────
 
-type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'SCOUTING';
+type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'SCOUTING' | 'STADIUM';
 
 const CATEGORIES: { id: FacilityCategory; label: string }[] = [
   { id: 'TRAINING',  label: 'TRAINING'  },
   { id: 'MEDICAL',   label: 'MEDICAL'   },
   { id: 'SCOUTING',  label: 'SCOUTING'  },
+  { id: 'STADIUM',  label: 'STADIUM'  },
 ];
 
 // ─── Benefit labels (client-side game logic) ──────────────────────────────────

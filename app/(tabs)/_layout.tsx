@@ -279,6 +279,7 @@ export default function TabLayout() {
       }
 
       // Batch simulate background fixtures
+      console.log('run batch simulation...')
       void simulationService.runBatchSimulation();
 
     } finally {

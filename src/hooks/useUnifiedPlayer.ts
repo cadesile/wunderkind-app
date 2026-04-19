@@ -41,6 +41,26 @@ function mapWorldPlayerToPlayer(wp: WorldPlayer): Player {
   };
 }
 
+function findNPCPlayer(worldClubs, id) {
+  for(const clubId in worldClubs){
+    const club = worldClubs[clubId];
+    if(Array.isArray(club.players)){
+      const npcPlayer = club.players.find((p) => p.id === id);
+      if(npcPlayer){
+        return {
+          'player': npcPlayer,
+          'club': club
+        }
+      }
+    }
+  }
+
+  return {
+    'player': null,
+    'club': null,
+  }
+}
+
 export function useUnifiedPlayer(id: string | null): UnifiedPlayerResult {
   const squadPlayer = useSquadStore((s) => s.players.find((p) => p.id === id));
   const worldClubs = useWorldStore((s) => s.clubs);
@@ -53,22 +73,23 @@ export function useUnifiedPlayer(id: string | null): UnifiedPlayerResult {
       return { player: squadPlayer, isNpc: false };
     }
 
-    // 2. Search NPC clubs
-    for (const clubId in worldClubs) {
-      const club = worldClubs[clubId];
-      const npcPlayer = club.players.find((p) => p.id === id);
-      if (npcPlayer) {
-        return {
-          player: mapWorldPlayerToPlayer(npcPlayer),
-          isNpc: true,
-          clubColors: {
-            primary: club.primaryColor,
-            secondary: club.secondaryColor,
-          },
-          clubName: club.name,
-        };
-      }
-    }
+    const npcData = findNPCPlayer(worldClubs, id);
+      if(npcData.club){
+        const club = npcData.club;
+        const npcPlayer = npcData.player;
+        if (npcPlayer) {
+          return {
+            player: mapWorldPlayerToPlayer(npcPlayer),
+            isNpc: true,
+            clubColors: {
+              primary: club.primaryColor,
+              secondary: club.secondaryColor,
+              },
+              clubName: club.name,
+            };
+          }
+        }  
+      
 
     return { player: null, isNpc: false };
   }, [id, squadPlayer, worldClubs]);

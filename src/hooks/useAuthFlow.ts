@@ -369,7 +369,11 @@ export function useAuthFlow(): AuthFlowResult {
 
     // 2. Create the club on the backend (sets name + country, required before /api/initialize)
     try {
-      await marketApi.initializeClub(clubName, country, managerInput);
+      const clubResp = await marketApi.initializeClub(clubName, country, managerInput);
+      // Persist the real backend UUID immediately so setFromWorldPack reads the correct club ID
+      // when generating fixtures — without this, fixtures are generated with the default 'club-1'
+      // and the AMP's matches are never matched against the real club ID after the first sync.
+      useClubStore.getState().setId(clubResp.id);
     } catch (err) {
       const status = err instanceof ApiError ? ` (HTTP ${err.status}: ${err.message})` : '';
       console.warn(`[useAuthFlow] Club creation failed${status} — world init will be skipped`);

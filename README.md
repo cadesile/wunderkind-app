@@ -1,6 +1,6 @@
 # Wunderkind Factory — Mobile App
 
-The React Native mobile application for **The Wunderkind Factory**, a football academy management strategy game. Contains the core game loop, the dynamic 8-trait Personality Matrix engine, and offline-first synchronisation logic.
+The React Native mobile application for **The Wunderkind Factory**, a football club management strategy game. Contains the core game loop, the dynamic 8-trait Personality Matrix engine, and offline-first synchronisation logic.
 
 ## Tech Stack
 
@@ -20,7 +20,7 @@ The app is **client-authoritative** to support seamless offline play:
 
 1. **GameLoop** (`src/engine/GameLoop.ts`) — processes the Weekly Tick entirely on-device: trait shifts, financial deductions, behavioral incidents.
 2. **AsyncStorage persistence** — Zustand stores are persisted via `@react-native-async-storage/async-storage` so state survives app closure.
-3. **Async sync** — high-level metrics (Academy Reputation, Total Career Earnings) are queued and pushed to the Symfony API via TanStack Query offline mutations.
+3. **Async sync** — high-level metrics (Club Reputation, Total Career Earnings) are queued and pushed to the Symfony API via TanStack Query offline mutations.
 
 ## Getting Started
 
@@ -74,7 +74,7 @@ app/
 ├── _layout.tsx             # Root layout (QueryClient, font loading, auth gate)
 ├── (tabs)/
 │   ├── _layout.tsx         # Tab navigator (4 primary + hidden routes)
-│   ├── index.tsx           # Academy Hub (SQUAD / COACHES / SCOUTS top tabs)
+│   ├── index.tsx           # Club Hub (SQUAD / COACHES / SCOUTS top tabs)
 │   ├── advance.tsx         # Advance Week screen
 │   ├── coaches.tsx         # Coaching staff
 │   ├── facilities.tsx      # Facility upgrades
@@ -108,7 +108,7 @@ src/
 │   ├── useAuthFlow.ts      # Bootstrap: players + coaches + scouts + market data
 │   └── useSyncStatus.ts
 ├── stores/
-│   ├── academyStore.ts     # Reputation, balance, tier, sponsorIds, investorId
+│   ├── clubStore.ts        # Reputation, balance, tier, sponsorIds, investorId
 │   ├── authStore.ts        # Token, email, userId
 │   ├── coachStore.ts       # Coaches (add/remove)
 │   ├── facilityStore.ts    # Facility levels (0–10)
@@ -117,7 +117,7 @@ src/
 │   ├── marketStore.ts      # Readonly API snapshot (agents/scouts/investors/sponsors)
 │   ├── scoutStore.ts       # Scouts (add/remove)
 │   └── squadStore.ts       # Players, setPlayers(), generateStarterSquad()
-├── types/                  # TypeScript types (Player, Coach, Academy, Facility…)
+├── types/                  # TypeScript types (Player, Coach, Club, Facility…)
 └── utils/
     ├── gameDate.ts
     ├── storage.ts          # Zustand StateStorage adapter for AsyncStorage
@@ -131,4 +131,4 @@ assets/
 
 ## Related Repositories
 
-- **Wunderkind Backend:** Symfony 6.4 API (separate repo) — JWT auth, leaderboard sync, academy management endpoints
+- **Wunderkind Backend:** Symfony 6.4 API (separate repo) — JWT auth, leaderboard sync, club management endpoints
