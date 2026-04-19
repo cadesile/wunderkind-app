@@ -97,16 +97,7 @@ export class SimulationService {
       morale: 50,
       potential: 3,
       wage: 0,
-      personality: {
-        determination: wp.maturity, // Map as needed
-        professionalism: wp.maturity,
-        ambition: wp.ego,
-        loyalty: wp.loyalty,
-        adaptability: 10,
-        pressure: wp.maturity,
-        temperament: 10,
-        consistency: wp.maturity,
-      },
+      personality: wp.personality,
       agentId: null,
       joinedWeek: 1,
       isActive: true,

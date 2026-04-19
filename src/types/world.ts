@@ -1,3 +1,5 @@
+import { PersonalityMatrix } from './player';
+
 /** Player as delivered in the world pack — full attributes + personality */
 export interface WorldPlayer {
   id: string;
@@ -12,15 +14,8 @@ export interface WorldPlayer {
   power: number;
   stamina: number;
   heart: number;
-  // 8-trait personality
-  confidence: number;
-  maturity: number;
-  teamwork: number;
-  leadership: number;
-  ego: number;
-  bravery: number;
-  greed: number;
-  loyalty: number;
+  // Unified personality matrix (1-20 scale)
+  personality: PersonalityMatrix;
 }
 
 /** Staff member as delivered in the world pack */
