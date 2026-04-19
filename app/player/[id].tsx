@@ -11,6 +11,7 @@ import { useFinanceStore } from '@/stores/financeStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useGuardianStore } from '@/stores/guardianStore';
+import { useUnifiedPlayer } from '@/hooks/useUnifiedPlayer';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -97,7 +98,9 @@ export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  const player = useSquadStore((s) => s.players.find((p) => p.id === id));
+
+  const { player, isNpc, clubColors, clubName } = useUnifiedPlayer(id ?? null);
+
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const extendContract = useSquadStore((s) => s.extendContract);
   const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
@@ -249,9 +252,9 @@ export default function PlayerDetailScreen() {
 
       {/* ── Screen header ───────────────────────────────────────────────────── */}
       <View style={{
-        backgroundColor: WK.tealMid,
+        backgroundColor: isNpc ? (clubColors?.primary ?? WK.tealMid) : WK.tealMid,
         borderBottomWidth: 4,
-        borderBottomColor: WK.border,
+        borderBottomColor: isNpc ? (clubColors?.secondary ?? WK.border) : WK.border,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 14,
@@ -259,9 +262,11 @@ export default function PlayerDetailScreen() {
         gap: 10,
       }}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
-          <ChevronLeft size={20} color={WK.text} />
+          <ChevronLeft size={20} color={isNpc ? WK.text : WK.text} />
         </Pressable>
-        <PixelText size={9} upper style={{ flex: 1 }} numberOfLines={1}>{player.name}</PixelText>
+        <PixelText size={9} upper style={{ flex: 1 }} numberOfLines={1}>
+          {player.name} {isNpc && clubName ? `(${clubName})` : ''}
+        </PixelText>
         <Badge label={`OVR ${player.overallRating}`} color="yellow" />
       </View>
 
@@ -410,318 +415,324 @@ export default function PlayerDetailScreen() {
         {/* ── 6. Scout's Report ────────────────────────────────────────────────── */}
         <ScoutReportCard player={player} />
 
-        <SectionDivider label="ACADEMY" />
+        {!isNpc && (
+          <>
+            <SectionDivider label="ACADEMY" />
 
-        {/* ── 7. Guardians — with loyalty chips ───────────────────────────────── */}
-        {guardians.length > 0 && (
-          <View style={{
-            backgroundColor: WK.tealCard, borderWidth: 3,
-            borderColor: WK.border, ...pixelShadow,
-          }}>
-            <View style={{
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-              paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10,
-              borderBottomWidth: 2, borderBottomColor: WK.border,
-            }}>
-              <PixelText size={8} color={WK.yellow}>GUARDIANS</PixelText>
-              <BodyText size={12} dim>{guardians.length === 1 ? '1 GUARDIAN' : `${guardians.length} GUARDIANS`}</BodyText>
-            </View>
-            {guardians.map((g, i) => {
-              const chip = loyaltyChip(g.loyaltyToAcademy);
-              return (
-                <View key={g.id} style={{
-                  paddingHorizontal: 14, paddingVertical: 12,
-                  borderBottomWidth: i < guardians.length - 1 ? 2 : 0,
-                  borderBottomColor: WK.border,
+            {/* ── 7. Guardians — with loyalty chips ───────────────────────────────── */}
+            {guardians.length > 0 && (
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3,
+                borderColor: WK.border, ...pixelShadow,
+              }}>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10,
+                  borderBottomWidth: 2, borderBottomColor: WK.border,
                 }}>
-                  {/* Name row + loyalty chip */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                    <View style={{
-                      paddingHorizontal: 6, paddingVertical: 3,
-                      borderWidth: 2, borderColor: WK.border, backgroundColor: WK.tealDark,
+                  <PixelText size={8} color={WK.yellow}>GUARDIANS</PixelText>
+                  <BodyText size={12} dim>{guardians.length === 1 ? '1 GUARDIAN' : `${guardians.length} GUARDIANS`}</BodyText>
+                </View>
+                {guardians.map((g, i) => {
+                  const chip = loyaltyChip(g.loyaltyToAcademy);
+                  return (
+                    <View key={g.id} style={{
+                      paddingHorizontal: 14, paddingVertical: 12,
+                      borderBottomWidth: i < guardians.length - 1 ? 2 : 0,
+                      borderBottomColor: WK.border,
                     }}>
-                      <BodyText size={11} dim>{guardianLabel(g, guardians, i)}</BodyText>
+                      {/* Name row + loyalty chip */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <View style={{
+                          paddingHorizontal: 6, paddingVertical: 3,
+                          borderWidth: 2, borderColor: WK.border, backgroundColor: WK.tealDark,
+                        }}>
+                          <BodyText size={11} dim>{guardianLabel(g, guardians, i)}</BodyText>
+                        </View>
+                        <PixelText size={8}>{g.firstName} {g.lastName}</PixelText>
+                        <Badge label={chip.label} color={chip.color} />
+                      </View>
+                      <View style={{ gap: 6 }}>
+                        <BodyText size={13} style={{ lineHeight: 20 }}>
+                          {getLoyaltyNote(g.loyaltyToAcademy, academyName)}
+                        </BodyText>
+                        <BodyText size={12} dim style={{ lineHeight: 18 }}>
+                          {getDemandNote(g.demandLevel)}
+                        </BodyText>
+                      </View>
                     </View>
-                    <PixelText size={8}>{g.firstName} {g.lastName}</PixelText>
-                    <Badge label={chip.label} color={chip.color} />
+                  );
+                })}
+              </View>
+            )}
+
+            {/* ── 8. Scout accuracy report ─────────────────────────────────────────── */}
+            {player.scoutingReport && (
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3,
+                borderColor: WK.tealLight, padding: 14, ...pixelShadow,
+              }}>
+                <PixelText size={8} upper style={{ marginBottom: 10 }}>Scout Accuracy Report</PixelText>
+                <BodyText size={13} dim style={{ marginBottom: 10 }}>
+                  Scouted by {player.scoutingReport.scoutName} · {player.scoutingReport.accuracyPercent}% accurate
+                </BodyText>
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border }}>
+                    <BodyText size={13} dim>OVERALL RATING</BodyText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <PixelText size={8} color={WK.dim}>{player.scoutingReport.perceivedOverall}</PixelText>
+                      <BodyText size={13} dim>→</BodyText>
+                      <PixelText size={9} color={WK.green}>{player.scoutingReport.actualOverall}</PixelText>
+                    </View>
                   </View>
-                  <View style={{ gap: 6 }}>
-                    <BodyText size={13} style={{ lineHeight: 20 }}>
-                      {getLoyaltyNote(g.loyaltyToAcademy, academyName)}
-                    </BodyText>
-                    <BodyText size={12} dim style={{ lineHeight: 18 }}>
-                      {getDemandNote(g.demandLevel)}
-                    </BodyText>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
+                    <BodyText size={13} dim>POTENTIAL</BodyText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <PixelText size={8} color={WK.dim}>{player.scoutingReport.perceivedPotential}</PixelText>
+                      <BodyText size={13} dim>→</BodyText>
+                      <PixelText size={9} color={WK.green}>{player.scoutingReport.actualPotential}</PixelText>
+                    </View>
                   </View>
                 </View>
+              </View>
+            )}
+
+            {/* ── 9. Social graph ──────────────────────────────────────────────────── */}
+            {(player.relationships ?? []).length > 0 && (
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3,
+                borderColor: WK.border, padding: 14, ...pixelShadow,
+              }}>
+                <PixelText size={8} upper style={{ marginBottom: 10 }}>Social Graph</PixelText>
+                {(player.relationships ?? []).map((rel) => {
+                  const name = (() => {
+                    if (rel.type === 'coach') {
+                      const c = require('@/stores/coachStore').useCoachStore.getState().coaches.find((x: { id: string }) => x.id === rel.id);
+                      return c ? `${c.name} (Coach)` : 'Unknown Coach';
+                    }
+                    if (rel.type === 'scout') {
+                      const s = require('@/stores/scoutStore').useScoutStore.getState().scouts.find((x: { id: string }) => x.id === rel.id);
+                      return s ? `${s.name} (Scout)` : 'Unknown Scout';
+                    }
+                    const p = require('@/stores/squadStore').useSquadStore.getState().players.find((x: { id: string }) => x.id === rel.id);
+                    return p ? p.name : 'Unknown Player';
+                  })();
+                  const isPositive = rel.value >= 0;
+                  return (
+                    <View key={rel.id} style={{
+                      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                      paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border,
+                    }}>
+                      <BodyText size={13} style={{ flex: 1 }} numberOfLines={1}>{name}</BodyText>
+                      <BodyText size={13} color={isPositive ? WK.green : WK.red}>
+                        {isPositive ? `TRUST +${rel.value}` : `CONFLICT ${rel.value}`}
+                      </BodyText>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* ── 10. Assigned coach ───────────────────────────────────────────────── */}
+            {player.assignedCoachId && (() => {
+              const assignedCoach = require('@/stores/coachStore').useCoachStore.getState().coaches.find(
+                (c: { id: string }) => c.id === player.assignedCoachId,
               );
-            })}
-          </View>
-        )}
-
-        {/* ── 8. Scout accuracy report ─────────────────────────────────────────── */}
-        {player.scoutingReport && (
-          <View style={{
-            backgroundColor: WK.tealCard, borderWidth: 3,
-            borderColor: WK.tealLight, padding: 14, ...pixelShadow,
-          }}>
-            <PixelText size={8} upper style={{ marginBottom: 10 }}>Scout Accuracy Report</PixelText>
-            <BodyText size={13} dim style={{ marginBottom: 10 }}>
-              Scouted by {player.scoutingReport.scoutName} · {player.scoutingReport.accuracyPercent}% accurate
-            </BodyText>
-            <View style={{ gap: 6 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                <BodyText size={13} dim>OVERALL RATING</BodyText>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <PixelText size={8} color={WK.dim}>{player.scoutingReport.perceivedOverall}</PixelText>
-                  <BodyText size={13} dim>→</BodyText>
-                  <PixelText size={9} color={WK.green}>{player.scoutingReport.actualOverall}</PixelText>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
-                <BodyText size={13} dim>POTENTIAL</BodyText>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <PixelText size={8} color={WK.dim}>{player.scoutingReport.perceivedPotential}</PixelText>
-                  <BodyText size={13} dim>→</BodyText>
-                  <PixelText size={9} color={WK.green}>{player.scoutingReport.actualPotential}</PixelText>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* ── 9. Social graph ──────────────────────────────────────────────────── */}
-        {(player.relationships ?? []).length > 0 && (
-          <View style={{
-            backgroundColor: WK.tealCard, borderWidth: 3,
-            borderColor: WK.border, padding: 14, ...pixelShadow,
-          }}>
-            <PixelText size={8} upper style={{ marginBottom: 10 }}>Social Graph</PixelText>
-            {(player.relationships ?? []).map((rel) => {
-              const name = (() => {
-                if (rel.type === 'coach') {
-                  const c = require('@/stores/coachStore').useCoachStore.getState().coaches.find((x: { id: string }) => x.id === rel.id);
-                  return c ? `${c.name} (Coach)` : 'Unknown Coach';
-                }
-                if (rel.type === 'scout') {
-                  const s = require('@/stores/scoutStore').useScoutStore.getState().scouts.find((x: { id: string }) => x.id === rel.id);
-                  return s ? `${s.name} (Scout)` : 'Unknown Scout';
-                }
-                const p = require('@/stores/squadStore').useSquadStore.getState().players.find((x: { id: string }) => x.id === rel.id);
-                return p ? p.name : 'Unknown Player';
-              })();
-              const isPositive = rel.value >= 0;
+              if (!assignedCoach) return null;
+              const bond = (player.relationships ?? []).find((r) => r.id === assignedCoach.id);
               return (
-                <View key={rel.id} style={{
-                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                  paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border,
-                }}>
-                  <BodyText size={13} style={{ flex: 1 }} numberOfLines={1}>{name}</BodyText>
-                  <BodyText size={13} color={isPositive ? WK.green : WK.red}>
-                    {isPositive ? `TRUST +${rel.value}` : `CONFLICT ${rel.value}`}
-                  </BodyText>
+                <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+                  <PixelText size={8} upper style={{ marginBottom: 8 }}>Assigned Coach</PixelText>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View>
+                      <PixelText size={8}>{assignedCoach.name}</PixelText>
+                      <BodyText size={12} dim>{assignedCoach.role}</BodyText>
+                    </View>
+                    {bond && (
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <PixelText size={8} color={bond.value >= 0 ? WK.green : WK.red}>
+                          {bond.value >= 0 ? `+${bond.value}` : `${bond.value}`}
+                        </PixelText>
+                        <BodyText size={11} dim>
+                          {bond.value >= 0 ? `+${Math.round(bond.value / 2)}% XP` : `${Math.round(bond.value / 2)}% XP`}
+                        </BodyText>
+                      </View>
+                    )}
+                  </View>
                 </View>
               );
-            })}
-          </View>
-        )}
+            })()}
 
-        {/* ── 10. Assigned coach ───────────────────────────────────────────────── */}
-        {player.assignedCoachId && (() => {
-          const assignedCoach = require('@/stores/coachStore').useCoachStore.getState().coaches.find(
-            (c: { id: string }) => c.id === player.assignedCoachId,
-          );
-          if (!assignedCoach) return null;
-          const bond = (player.relationships ?? []).find((r) => r.id === assignedCoach.id);
-          return (
-            <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
-              <PixelText size={8} upper style={{ marginBottom: 8 }}>Assigned Coach</PixelText>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                  <PixelText size={8}>{assignedCoach.name}</PixelText>
-                  <BodyText size={12} dim>{assignedCoach.role}</BodyText>
-                </View>
-                {bond && (
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <PixelText size={8} color={bond.value >= 0 ? WK.green : WK.red}>
-                      {bond.value >= 0 ? `+${bond.value}` : `${bond.value}`}
-                    </PixelText>
-                    <BodyText size={11} dim>
-                      {bond.value >= 0 ? `+${Math.round(bond.value / 2)}% XP` : `${Math.round(bond.value / 2)}% XP`}
-                    </BodyText>
+            {/* ── 11. Enrollment contract — with progress bar ──────────────────────── */}
+            {player.enrollmentEndWeek !== undefined && (
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3,
+                borderColor: contractBorderColor, padding: 14, ...pixelShadow,
+              }}>
+                <PixelText size={8} upper style={{ marginBottom: 10 }}>Enrollment Contract</PixelText>
+
+                {/* Status badge + weeks remaining */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <View style={{
+                    paddingHorizontal: 8, paddingVertical: 4,
+                    backgroundColor:
+                      contractStatus === 'ACTIVE'   ? WK.green :
+                      contractStatus === 'EXPIRING' ? WK.orange : WK.red,
+                  }}>
+                    <PixelText size={7} color={WK.text}>{contractStatus}</PixelText>
                   </View>
+                  <BodyText size={13} dim>{weeksRemaining}w remaining</BodyText>
+                </View>
+
+                {/* Contract elapsed progress bar */}
+                <View style={{ marginBottom: 12 }}>
+                  <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                    <View style={{ height: '100%', width: `${contractPct}%`, backgroundColor: contractBarColor }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                    <BodyText size={11} dim>CONTRACT ELAPSED</BodyText>
+                    <BodyText size={11} dim>{contractPct}%</BodyText>
+                  </View>
+                </View>
+
+                <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 10, gap: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <BodyText size={13} dim>WEEKLY FEE</BodyText>
+                    <PixelText size={8} color={WK.tealLight}>£{weeklyFee}/wk</PixelText>
+                  </View>
+                  {player.morale !== undefined && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <BodyText size={13} dim>MORALE</BodyText>
+                      <PixelText size={8} color={player.morale >= 60 ? WK.green : player.morale >= 40 ? WK.yellow : WK.red}>
+                        {moraleLabel(player.morale)}
+                      </PixelText>
+                    </View>
+                  )}
+                  {(player.extensionCount ?? 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <BodyText size={13} dim>EXTENSIONS</BodyText>
+                      <PixelText size={8} color={WK.dim}>{player.extensionCount}</PixelText>
+                    </View>
+                  )}
+                </View>
+
+                {/* Extension button — visible when EXPIRING or CRITICAL */}
+                {(contractStatus === 'EXPIRING' || contractStatus === 'CRITICAL') && (
+                  <Pressable
+                    onPress={() => setShowExtendDialog(true)}
+                    style={{
+                      marginTop: 12,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      backgroundColor: canAffordExtension ? WK.tealMid : 'rgba(0,0,0,0.3)',
+                      borderWidth: 2,
+                      borderColor: canAffordExtension ? WK.tealLight : WK.dim,
+                    }}
+                  >
+                    <PixelText size={8} color={canAffordExtension ? WK.tealLight : WK.dim}>
+                      EXTEND CONTRACT  £{extensionCostPounds.toLocaleString()}
+                    </PixelText>
+                  </Pressable>
                 )}
               </View>
-            </View>
-          );
-        })()}
-
-        {/* ── 11. Enrollment contract — with progress bar ──────────────────────── */}
-        {player.enrollmentEndWeek !== undefined && (
-          <View style={{
-            backgroundColor: WK.tealCard, borderWidth: 3,
-            borderColor: contractBorderColor, padding: 14, ...pixelShadow,
-          }}>
-            <PixelText size={8} upper style={{ marginBottom: 10 }}>Enrollment Contract</PixelText>
-
-            {/* Status badge + weeks remaining */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <View style={{
-                paddingHorizontal: 8, paddingVertical: 4,
-                backgroundColor:
-                  contractStatus === 'ACTIVE'   ? WK.green :
-                  contractStatus === 'EXPIRING' ? WK.orange : WK.red,
-              }}>
-                <PixelText size={7} color={WK.text}>{contractStatus}</PixelText>
-              </View>
-              <BodyText size={13} dim>{weeksRemaining}w remaining</BodyText>
-            </View>
-
-            {/* Contract elapsed progress bar */}
-            <View style={{ marginBottom: 12 }}>
-              <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-                <View style={{ height: '100%', width: `${contractPct}%`, backgroundColor: contractBarColor }} />
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                <BodyText size={11} dim>CONTRACT ELAPSED</BodyText>
-                <BodyText size={11} dim>{contractPct}%</BodyText>
-              </View>
-            </View>
-
-            <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 10, gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <BodyText size={13} dim>WEEKLY FEE</BodyText>
-                <PixelText size={8} color={WK.tealLight}>£{weeklyFee}/wk</PixelText>
-              </View>
-              {player.morale !== undefined && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <BodyText size={13} dim>MORALE</BodyText>
-                  <PixelText size={8} color={player.morale >= 60 ? WK.green : player.morale >= 40 ? WK.yellow : WK.red}>
-                    {moraleLabel(player.morale)}
-                  </PixelText>
-                </View>
-              )}
-              {(player.extensionCount ?? 0) > 0 && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <BodyText size={13} dim>EXTENSIONS</BodyText>
-                  <PixelText size={8} color={WK.dim}>{player.extensionCount}</PixelText>
-                </View>
-              )}
-            </View>
-
-            {/* Extension button — visible when EXPIRING or CRITICAL */}
-            {(contractStatus === 'EXPIRING' || contractStatus === 'CRITICAL') && (
-              <Pressable
-                onPress={() => setShowExtendDialog(true)}
-                style={{
-                  marginTop: 12,
-                  paddingVertical: 12,
-                  alignItems: 'center',
-                  backgroundColor: canAffordExtension ? WK.tealMid : 'rgba(0,0,0,0.3)',
-                  borderWidth: 2,
-                  borderColor: canAffordExtension ? WK.tealLight : WK.dim,
-                }}
-              >
-                <PixelText size={8} color={canAffordExtension ? WK.tealLight : WK.dim}>
-                  EXTEND CONTRACT  £{extensionCostPounds.toLocaleString()}
-                </PixelText>
-              </Pressable>
             )}
-          </View>
-        )}
 
-        {/* ── 12. Recent interactions — hidden when empty ──────────────────────── */}
-        {recentInteractions.length > 0 && (
-          <View style={{
-            backgroundColor: WK.tealCard, borderWidth: 3,
-            borderColor: WK.border, padding: 14, ...pixelShadow,
-          }}>
-            <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>RECENT INTERACTIONS</PixelText>
-            {recentInteractions.map((record) => (
-              <View key={record.id} style={{
-                flexDirection: 'row', gap: 8, paddingVertical: 6,
-                borderBottomWidth: 2, borderBottomColor: WK.border, alignItems: 'flex-start',
+            {/* ── 12. Recent interactions — hidden when empty ──────────────────────── */}
+            {recentInteractions.length > 0 && (
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3,
+                borderColor: WK.border, padding: 14, ...pixelShadow,
               }}>
-                <PixelText size={8} color={WK.yellow} style={{ minWidth: 42 }}>WK {record.week}</PixelText>
-                <BodyText size={12} dim style={{ flex: 1, lineHeight: 16 }}>{record.narrativeSummary}</BodyText>
+                <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>RECENT INTERACTIONS</PixelText>
+                {recentInteractions.map((record) => (
+                  <View key={record.id} style={{
+                    flexDirection: 'row', gap: 8, paddingVertical: 6,
+                    borderBottomWidth: 2, borderBottomColor: WK.border, alignItems: 'flex-start',
+                  }}>
+                    <PixelText size={8} color={WK.yellow} style={{ minWidth: 42 }}>WK {record.week}</PixelText>
+                    <BodyText size={12} dim style={{ flex: 1, lineHeight: 16 }}>{record.narrativeSummary}</BodyText>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-        )}
+            )}
 
-        {/* ── 13. Release player — SwipeConfirm ───────────────────────────────── */}
-        <View style={{ borderWidth: 3, borderColor: WK.red, padding: 14, marginTop: 6 }}>
-          <PixelText size={8} color={WK.red} style={{ marginBottom: 8 }}>RELEASE PLAYER</PixelText>
-          <BodyText size={13} dim style={{ marginBottom: 14 }}>
-            Return {player.name} to the market pool. Swipe right to confirm — no transfer fee received.
-          </BodyText>
-          <SwipeConfirm
-            onAccept={() => {}}
-            onDecline={confirmRelease}
-            acceptLabel="KEEP"
-            declineLabel="RELEASE"
-          />
-        </View>
+            {/* ── 13. Release player — SwipeConfirm ───────────────────────────────── */}
+            <View style={{ borderWidth: 3, borderColor: WK.red, padding: 14, marginTop: 6 }}>
+              <PixelText size={8} color={WK.red} style={{ marginBottom: 8 }}>RELEASE PLAYER</PixelText>
+              <BodyText size={13} dim style={{ marginBottom: 14 }}>
+                Return {player.name} to the market pool. Swipe right to confirm — no transfer fee received.
+              </BodyText>
+              <SwipeConfirm
+                onAccept={() => {}}
+                onDecline={confirmRelease}
+                acceptLabel="KEEP"
+                declineLabel="RELEASE"
+              />
+            </View>
+          </>
+        )}
 
         {/* Spacer so last card clears the sticky management bar */}
         <View style={{ height: 16 }} />
       </ScrollView>
 
       {/* ── Sticky Management Bar ───────────────────────────────────────────── */}
-      <View style={{
-        backgroundColor: WK.tealDark,
-        borderTopWidth: 3,
-        borderTopColor: WK.border,
-        paddingHorizontal: 14,
-        paddingTop: 10,
-        paddingBottom: 12,
-        gap: 8,
-      }}>
-        {/* Feedback / cooldown notice */}
-        {(lastAction || managementCooldown.locked) && (
-          <View style={{ alignItems: 'center' }}>
-            {lastAction ? (
-              <View style={{
-                paddingVertical: 4, paddingHorizontal: 12,
-                borderWidth: 2,
-                borderColor: lastAction === 'SUPPORTED' ? WK.green : WK.red,
-              }}>
-                <PixelText size={7} color={lastAction === 'SUPPORTED' ? WK.green : WK.red}>
-                  ✓ {lastAction}
-                </PixelText>
-              </View>
-            ) : (
-              <BodyText size={12} dim>AVAILABLE WK {managementCooldown.availableWeek}</BodyText>
-            )}
+      {!isNpc && (
+        <View style={{
+          backgroundColor: WK.tealDark,
+          borderTopWidth: 3,
+          borderTopColor: WK.border,
+          paddingHorizontal: 14,
+          paddingTop: 10,
+          paddingBottom: 12,
+          gap: 8,
+        }}>
+          {/* Feedback / cooldown notice */}
+          {(lastAction || managementCooldown.locked) && (
+            <View style={{ alignItems: 'center' }}>
+              {lastAction ? (
+                <View style={{
+                  paddingVertical: 4, paddingHorizontal: 12,
+                  borderWidth: 2,
+                  borderColor: lastAction === 'SUPPORTED' ? WK.green : WK.red,
+                }}>
+                  <PixelText size={7} color={lastAction === 'SUPPORTED' ? WK.green : WK.red}>
+                    ✓ {lastAction}
+                  </PixelText>
+                </View>
+              ) : (
+                <BodyText size={12} dim>AVAILABLE WK {managementCooldown.availableWeek}</BodyText>
+              )}
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable
+              onPress={managementCooldown.locked ? undefined : handleSupport}
+              style={{
+                flex: 1,
+                backgroundColor: managementCooldown.locked ? WK.tealMid : WK.green,
+                borderWidth: 2, borderColor: WK.border,
+                paddingVertical: 14, alignItems: 'center',
+                opacity: managementCooldown.locked ? 0.45 : 1,
+              }}
+            >
+              <PixelText size={9} color={managementCooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
+            </Pressable>
+            <Pressable
+              onPress={managementCooldown.locked ? undefined : handlePunish}
+              style={{
+                flex: 1,
+                backgroundColor: managementCooldown.locked ? WK.tealMid : WK.red,
+                borderWidth: 2, borderColor: WK.border,
+                paddingVertical: 14, alignItems: 'center',
+                opacity: managementCooldown.locked ? 0.45 : 1,
+              }}
+            >
+              <PixelText size={9} color={managementCooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
+            </Pressable>
           </View>
-        )}
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Pressable
-            onPress={managementCooldown.locked ? undefined : handleSupport}
-            style={{
-              flex: 1,
-              backgroundColor: managementCooldown.locked ? WK.tealMid : WK.green,
-              borderWidth: 2, borderColor: WK.border,
-              paddingVertical: 14, alignItems: 'center',
-              opacity: managementCooldown.locked ? 0.45 : 1,
-            }}
-          >
-            <PixelText size={9} color={managementCooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
-          </Pressable>
-          <Pressable
-            onPress={managementCooldown.locked ? undefined : handlePunish}
-            style={{
-              flex: 1,
-              backgroundColor: managementCooldown.locked ? WK.tealMid : WK.red,
-              borderWidth: 2, borderColor: WK.border,
-              paddingVertical: 14, alignItems: 'center',
-              opacity: managementCooldown.locked ? 0.45 : 1,
-            }}
-          >
-            <PixelText size={9} color={managementCooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
-          </Pressable>
         </View>
-      </View>
+      )}
 
       {/* ── Contract extension dialog ────────────────────────────────────────── */}
       <PixelDialog
