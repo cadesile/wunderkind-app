@@ -15,6 +15,11 @@ export interface StarterConfig {
   starterClubTier: string;
   /** ClubCountryCode values available in the country picker. Defaults to ['EN'] if absent. */
   enabledCountries?: string[];
+  /** 
+   * Global ability ranges per country and league tier.
+   * Format: { "EN": { "1": { "min": 75, "max": 100 } } }
+   */
+  leagueAbilityRanges?: Record<string, Record<number, { min: number; max: number }>>;
 }
 
 // ─── Club Status ───────────────────────────────────────────────────────────
