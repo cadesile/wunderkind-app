@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useScoutStore } from '@/stores/scoutStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { moraleLabel } from '@/utils/morale';
 import { formatCurrencyWhole, penceToPounds } from '@/utils/currency';
@@ -30,7 +30,7 @@ export default function ScoutDetailScreen() {
   const scout = useScoutStore((s) => s.scouts.find((sc) => sc.id === id));
   const cancelMission = useScoutStore((s) => s.cancelMission);
   const removeScout = useScoutStore((s) => s.removeScout);
-  const { academy, addBalance } = useAcademyStore();
+  const { club, addBalance } = useClubStore();
   const [missionOverlayVisible, setMissionOverlayVisible] = useState(false);
   const [releaseDialogVisible, setReleaseDialogVisible] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export default function ScoutDetailScreen() {
     if (!scout) return;
     const penaltyPence = Math.floor(scout.salary * 26 * 0.25);
     const penaltyPounds = Math.round(penaltyPence / 100);
-    if (penceToPounds(academy.balance ?? 0) < penaltyPounds) {
+    if (penceToPounds(club.balance ?? 0) < penaltyPounds) {
       setReleaseError(`INSUFFICIENT FUNDS — need £${penaltyPounds.toLocaleString()}`);
       setReleaseDialogVisible(false);
       return;
@@ -49,7 +49,7 @@ export default function ScoutDetailScreen() {
       amount: -penaltyPence,
       category: 'contract_termination',
       description: `Released ${scout.name} (25% early termination)`,
-      weekNumber: academy.weekNumber ?? 1,
+      weekNumber: club.weekNumber ?? 1,
     });
     removeScout(scout.id);
     router.back();

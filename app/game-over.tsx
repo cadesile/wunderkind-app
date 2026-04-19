@@ -2,7 +2,7 @@ import { View, ScrollView } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLossConditionStore, LossConditionType } from '@/stores/lossConditionStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
@@ -10,23 +10,23 @@ import { WK, pixelShadow } from '@/constants/theme';
 
 const FLAVOUR: Record<LossConditionType, { title: string; body: string }> = {
   insolvency: {
-    title: 'ACADEMY FOLDED',
-    body: "The academy's debts couldn't be repaid. The gates are locked. Another dream, over.",
+    title: 'CLUB FOLDED',
+    body: "The club's debts couldn't be repaid. The gates are locked. Another dream, over.",
   },
   talent_drain: {
-    title: 'ACADEMY CLOSED',
-    body: 'With no players left to develop, the academy fell silent. The pitch is empty.',
+    title: 'CLUB CLOSED',
+    body: 'With no players left to develop, the club fell silent. The pitch is empty.',
   },
 };
 
 export default function GameOverScreen() {
   const lossCondition = useLossConditionStore((s) => s.lossCondition);
   const requestNewGame = useLossConditionStore((s) => s.requestNewGame);
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
 
-  const weeksSurvived = academy.weekNumber ?? 1;
-  const totalEarnings = academy.totalCareerEarnings ?? 0;
-  const hofPoints = academy.hallOfFamePoints ?? 0;
+  const weeksSurvived = club.weekNumber ?? 1;
+  const totalEarnings = club.totalCareerEarnings ?? 0;
+  const hofPoints = club.hallOfFamePoints ?? 0;
 
   const flavour = lossCondition ? FLAVOUR[lossCondition] : FLAVOUR.insolvency;
 

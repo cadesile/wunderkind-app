@@ -5,7 +5,7 @@ import { Home, LayoutGrid, Building2, DollarSign, Store, Trophy, Settings, Refre
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
-import { SimulationService } from '@/engine/SimulationService';
+import { simulationService } from '@/engine/SimulationService';
 import { syncQueue } from '@/api/syncQueue';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
@@ -279,7 +279,7 @@ export default function TabLayout() {
       }
 
       // Batch simulate background fixtures
-      void SimulationService.runBatchSimulation();
+      void simulationService.runBatchSimulation();
 
     } finally {
       endTick();

@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
@@ -100,12 +100,12 @@ export default function PlayerDetailScreen() {
   const player = useSquadStore((s) => s.players.find((p) => p.id === id));
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const extendContract = useSquadStore((s) => s.extendContract);
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const academyBalance = useAcademyStore((s) => s.academy.balance);
-  const addBalance = useAcademyStore((s) => s.addBalance);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
+  const clubBalance = useClubStore((s) => s.club.balance);
+  const addBalance = useClubStore((s) => s.addBalance);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const analyticsUnlocked = useFacilityStore((s) => (s.levels['scouting_center'] ?? 0) > 0);
-  const academyName = useAcademyStore((s) => s.academy.name ?? 'the academy');
+  const clubName = useClubStore((s) => s.club.name ?? 'the club');
   const allGuardians = useGuardianStore((s) => s.guardians);
   const guardians = useMemo(
     () => allGuardians.filter((g) => g.playerId === id),
@@ -136,7 +136,7 @@ export default function PlayerDetailScreen() {
   const extensionCostPounds = player
     ? player.overallRating * 100 * ((player.extensionCount ?? 0) + 1)
     : 0;
-  const canAffordExtension = academyBalance >= extensionCostPounds * 100; // balance stored in pence
+  const canAffordExtension = clubBalance >= extensionCostPounds * 100; // balance stored in pence
 
   const [attrsExpanded, setAttrsExpanded]   = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
@@ -410,7 +410,7 @@ export default function PlayerDetailScreen() {
         {/* ── 6. Scout's Report ────────────────────────────────────────────────── */}
         <ScoutReportCard player={player} />
 
-        <SectionDivider label="ACADEMY" />
+        <SectionDivider label="CLUB" />
 
         {/* ── 7. Guardians — with loyalty chips ───────────────────────────────── */}
         {guardians.length > 0 && (
@@ -427,7 +427,7 @@ export default function PlayerDetailScreen() {
               <BodyText size={12} dim>{guardians.length === 1 ? '1 GUARDIAN' : `${guardians.length} GUARDIANS`}</BodyText>
             </View>
             {guardians.map((g, i) => {
-              const chip = loyaltyChip(g.loyaltyToAcademy);
+              const chip = loyaltyChip(g.loyaltyToClub);
               return (
                 <View key={g.id} style={{
                   paddingHorizontal: 14, paddingVertical: 12,
@@ -447,7 +447,7 @@ export default function PlayerDetailScreen() {
                   </View>
                   <View style={{ gap: 6 }}>
                     <BodyText size={13} style={{ lineHeight: 20 }}>
-                      {getLoyaltyNote(g.loyaltyToAcademy, academyName)}
+                      {getLoyaltyNote(g.loyaltyToClub, clubName)}
                     </BodyText>
                     <BodyText size={12} dim style={{ lineHeight: 18 }}>
                       {getDemandNote(g.demandLevel)}

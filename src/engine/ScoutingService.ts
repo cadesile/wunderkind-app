@@ -6,7 +6,7 @@ import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { MarketPlayer } from '@/types/market';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
-import { ACADEMY_CODE_TO_NATIONALITY } from '@/utils/nationality';
+import { CLUB_CODE_TO_NATIONALITY } from '@/utils/nationality';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -139,7 +139,7 @@ export function processMissions(): void {
       // Build allowed nationality set for this scout
       const availableRegions = getAvailableRegions(club.reputationTier, scout.scoutingRange);
       const domesticNationality = club.country
-        ? ACADEMY_CODE_TO_NATIONALITY[club.country]
+        ? CLUB_CODE_TO_NATIONALITY[club.country]
         : null;
       const poolNationalities = availableRegions
         ? availableRegions.flatMap((r) => r.nationalities)

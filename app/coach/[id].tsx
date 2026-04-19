@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useCoachStore } from '@/stores/coachStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { Relationship } from '@/types/player';
@@ -43,7 +43,7 @@ export default function CoachDetailScreen() {
   const router = useRouter();
   const coach = useCoachStore((s) => s.coaches.find((c) => c.id === id));
   const removeCoach = useCoachStore((s) => s.removeCoach);
-  const { academy, addBalance } = useAcademyStore();
+  const { club, addBalance } = useClubStore();
   const players = useSquadStore((s) => s.players);
   const [releaseDialogVisible, setReleaseDialogVisible] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function CoachDetailScreen() {
     if (!coach) return;
     const penaltyPence = Math.floor(coach.salary * 26 * 0.25);
     const penaltyPounds = Math.round(penaltyPence / 100);
-    if (penceToPounds(academy.balance ?? 0) < penaltyPounds) {
+    if (penceToPounds(club.balance ?? 0) < penaltyPounds) {
       setReleaseError(`INSUFFICIENT FUNDS — need £${penaltyPounds.toLocaleString()}`);
       setReleaseDialogVisible(false);
       return;
@@ -62,7 +62,7 @@ export default function CoachDetailScreen() {
       amount: -penaltyPence,
       category: 'contract_termination',
       description: `Released ${coach.name} (25% early termination)`,
-      weekNumber: academy.weekNumber ?? 1,
+      weekNumber: club.weekNumber ?? 1,
     });
     removeCoach(coach.id);
     router.back();

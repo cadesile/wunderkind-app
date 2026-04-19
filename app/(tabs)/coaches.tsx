@@ -5,7 +5,7 @@ import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useCoachStore } from '@/stores/coachStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { generateAppearance } from '@/engine/appearance';
 import { Avatar } from '@/components/ui/Avatar';
@@ -111,11 +111,11 @@ function ProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => voi
 
 export default function CoachesScreen() {
   const { coaches, removeCoach } = useCoachStore();
-  const { academy, addBalance } = useAcademyStore();
+  const { club, addBalance } = useClubStore();
   const { coaches: marketCoaches, hireCoach } = useMarketStore();
   const [showModal, setShowModal] = useState(false);
 
-  const weekNumber = academy.weekNumber ?? 1;
+  const weekNumber = club.weekNumber ?? 1;
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
   const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
   const [signError, setSignError] = useState<string | null>(null);
@@ -132,7 +132,7 @@ export default function CoachesScreen() {
   function signCoach(coach: MarketCoach) {
     // salary is in pence; balance is in whole pounds — convert before comparing/deducting
     const signingFeePounds = Math.round((coach.salary * 4) / 100);
-    if ((academy.balance ?? 0) < signingFeePounds) {
+    if ((club.balance ?? 0) < signingFeePounds) {
       setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
       return;
     }

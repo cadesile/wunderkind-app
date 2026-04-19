@@ -13,7 +13,7 @@ import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 import { getGameDateDisplay } from '@/utils/gameDate';
 import { WK } from '@/constants/theme';
-import { ACADEMY_COUNTRIES } from '@/utils/nationality';
+import { CLUB_COUNTRIES } from '@/utils/nationality';
 
 /**
  * Persistent top header rendered above all tab screens.
@@ -39,7 +39,7 @@ export function GlobalHeader() {
   const weekNumber = club.weekNumber ?? 1;
   const dateStr = getGameDateDisplay(weekNumber);
   const countryFlag = club.country
-    ? ACADEMY_COUNTRIES.find((c) => c.code === club.country)?.flag ?? null
+    ? CLUB_COUNTRIES.find((c) => c.code === club.country)?.flag ?? null
     : null;
 
   return (

@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Trash2, Users, ArrowLeftRight, Building, TrendingUp, Bell, BookOpen, Gem, Award } from 'lucide-react-native';
 import { useInboxStore, InboxMessage, InboxMessageType } from '@/stores/inboxStore';
 import { useNarrativeStore } from '@/stores/narrativeStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useGuardianStore } from '@/stores/guardianStore';
 import { useFinanceStore } from '@/stores/financeStore';
@@ -37,7 +37,7 @@ import { moraleLabel } from '@/utils/morale';
 // ─── Agent offer card (list item) ────────────────────────────────────────────
 
 function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer: (o: AgentOffer) => void }) {
-  const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const currentWeek = useClubStore((s) => s.club.weekNumber ?? 1);
   const weeksLeft   = offer.expiresWeek - currentWeek;
 
   return (
@@ -84,8 +84,8 @@ function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => 
     return () => useNavStore.getState().setBackFab(null);
   }, [stableOnBack]);
 
-  const currentWeek = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const investorId  = useAcademyStore((s) => s.academy.investorId);
+  const currentWeek = useClubStore((s) => s.club.weekNumber ?? 1);
+  const investorId  = useClubStore((s) => s.club.investorId);
   const investor    = useMarketStore((s) => s.investors.find((inv) => inv.id === investorId));
   const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
   const coaches = useCoachStore((s) => s.coaches);
@@ -428,7 +428,7 @@ function GuardianPlayerCard({ playerId }: { playerId: string }) {
 function GuardianOverview({ guardianIds, worstGuardianId }: { guardianIds: string[]; worstGuardianId?: string }) {
   const allGuardians = useGuardianStore((s) => s.guardians);
   const guardians = allGuardians.filter((g) => guardianIds.includes(g.id));
-  const academyName = useAcademyStore((s) => s.academy.name ?? 'the academy');
+  const clubName = useClubStore((s) => s.club.name ?? 'the club');
   if (guardians.length === 0) return null;
 
   function guardianRoleLabel(g: typeof guardians[0], i: number): string {
@@ -465,7 +465,7 @@ function GuardianOverview({ guardianIds, worstGuardianId }: { guardianIds: strin
 
       {/* Per-guardian rows */}
       {guardians.map((g, i) => {
-        const chip = loyaltyChip(g.loyaltyToAcademy);
+        const chip = loyaltyChip(g.loyaltyToClub);
         const isKeyConcern = g.id === worstGuardianId && guardians.length > 1;
         return (
           <View key={g.id} style={{
@@ -489,7 +489,7 @@ function GuardianOverview({ guardianIds, worstGuardianId }: { guardianIds: strin
             {/* Narrative body — same as player profile */}
             <View style={{ gap: 6 }}>
               <BodyText size={13} style={{ lineHeight: 20 }}>
-                {getLoyaltyNote(g.loyaltyToAcademy, academyName)}
+                {getLoyaltyNote(g.loyaltyToClub, clubName)}
               </BodyText>
               <BodyText size={12} dim style={{ lineHeight: 18 }}>
                 {getDemandNote(g.demandLevel)}
@@ -724,7 +724,7 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
   const updatePlayer = useSquadStore((s) => s.updatePlayer);
   const logInteraction = useInteractionStore((s) => s.logInteraction);
   const allRecords = useInteractionStore((s) => s.records);
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const [feedback, setFeedback] = useState<Record<string, 'SUPPORTED' | 'DISCIPLINED'>>({});
 
   function getCooldown(playerId: string) {
@@ -949,7 +949,7 @@ function InboxMessageDetail({
   onBack: () => void;
 }) {
   const { markRead, respond } = useInboxStore();
-  const { setInvestorId, setSponsorIds, addBalance, academy } = useAcademyStore();
+  const { setInvestorId, setSponsorIds, addBalance, club } = useClubStore();
 
   const stableOnBack = useCallback(onBack, []);
   useEffect(() => {
@@ -989,7 +989,7 @@ function InboxMessageDetail({
       });
     }
     if (message.type === 'sponsor' && message.entityId && sponsorMeta) {
-      setSponsorIds([...academy.sponsorIds, message.entityId]);
+      setSponsorIds([...club.sponsorIds, message.entityId]);
     }
     respond(message.id, 'accepted');
   }

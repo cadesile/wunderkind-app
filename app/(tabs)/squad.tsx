@@ -8,7 +8,7 @@ import { hapticTap } from '@/utils/haptics';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
@@ -221,7 +221,7 @@ function PlayersPane() {
 // ─── Group session handler (module scope — uses .getState(), not hooks) ───────
 
 function handleGroupSession(targetType: 'squad' | 'staff'): void {
-  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
   const moraleDelta = 8;
 
   if (targetType === 'squad') {
@@ -263,7 +263,7 @@ function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) =
   const cliques = useInteractionStore((s) => s.cliques);
   const allSquadPlayers = useSquadStore((s) => s.players);
   const activePlayers = useMemo(() => allSquadPlayers.filter((p) => p.isActive), [allSquadPlayers]);
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const groupSessionLog = useInteractionStore((s) => s.groupSessionLog);
   const [pendingSession, setPendingSession] = useState<'squad' | 'staff' | null>(null);
 

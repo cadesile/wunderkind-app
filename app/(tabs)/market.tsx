@@ -10,7 +10,7 @@ import { FlagText } from '@/components/ui/FlagText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useMarketStore } from '@/stores/marketStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { marketApi } from '@/api/endpoints/market';
@@ -23,8 +23,8 @@ import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { penceToPounds, formatPounds } from '@/utils/currency';
 import { randomBaseMorale } from '@/utils/morale';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
-import { TIER_ORDER } from '@/types/academy';
-import type { AcademyTier } from '@/types/academy';
+import { TIER_ORDER } from '@/types/club';
+import type { ClubTier } from '@/types/club';
 
 type MarketTab = 'COACHES' | 'SCOUTS';
 
@@ -49,9 +49,9 @@ function StatBar({ value, max = 100 }: { value: number; max?: number }) {
 // ─── Market coach card ────────────────────────────────────────────────────────
 
 function MarketCoachCard({ coach }: { coach: MarketCoach }) {
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const balance = useAcademyStore((s) => s.academy.balance ?? 0);
-  const reputationTier = useAcademyStore((s) => s.academy.reputationTier);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
+  const balance = useClubStore((s) => s.club.balance ?? 0);
+  const reputationTier = useClubStore((s) => s.club.reputationTier);
   const addCoach = useCoachStore((s) => s.addCoach);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
@@ -62,10 +62,10 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
   const signingCostPounds = Math.round((coach.salary * 4) / 100);
   const canAfford = balance >= signingCostPounds;
 
-  // Tier restriction: coach tier must not exceed current academy tier
-  const academyTierKey = (reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
-  const coachTierKey = (coach.tier ?? 'local') as AcademyTier;
-  const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[academyTierKey];
+  // Tier restriction: coach tier must not exceed current club tier
+  const clubTierKey = (reputationTier?.toLowerCase() ?? 'local') as ClubTier;
+  const coachTierKey = (coach.tier ?? 'local') as ClubTier;
+  const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[clubTierKey];
 
   async function handleHire() {
     if (isTierRestricted) {
@@ -78,7 +78,7 @@ function MarketCoachCard({ coach }: { coach: MarketCoach }) {
       await marketApi.assignEntity('coach', coach.id);
       const personality = generatePersonality();
       const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
-      useAcademyStore.getState().addBalance(-signingCostPounds);
+      useClubStore.getState().addBalance(-signingCostPounds);
       addCoach({
         id: coach.id,
         name: `${coach.firstName} ${coach.lastName}`,
@@ -222,9 +222,9 @@ const RANGE_BADGE_COLOR: Record<MarketScout['scoutingRange'], 'dim' | 'yellow' |
 };
 
 function MarketScoutCard({ scout }: { scout: MarketScout }) {
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
-  const balance = useAcademyStore((s) => s.academy.balance ?? 0);
-  const reputationTier = useAcademyStore((s) => s.academy.reputationTier);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
+  const balance = useClubStore((s) => s.club.balance ?? 0);
+  const reputationTier = useClubStore((s) => s.club.reputationTier);
   const addScout = useScoutStore((s) => s.addScout);
   const removeFromMarket = useMarketStore((s) => s.removeFromMarket);
   const [hiring, setHiring] = useState(false);
@@ -235,10 +235,10 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
   const signingCostPounds = Math.round((scout.salary * 4) / 100);
   const canAfford = balance >= signingCostPounds;
 
-  // Tier restriction: scout tier must not exceed current academy tier
-  const academyTierKey = (reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
-  const scoutTierKey = (scout.tier ?? 'local') as AcademyTier;
-  const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[academyTierKey];
+  // Tier restriction: scout tier must not exceed current club tier
+  const clubTierKey = (reputationTier?.toLowerCase() ?? 'local') as ClubTier;
+  const scoutTierKey = (scout.tier ?? 'local') as ClubTier;
+  const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[clubTierKey];
 
   async function handleHire() {
     if (isTierRestricted) {
@@ -250,7 +250,7 @@ function MarketScoutCard({ scout }: { scout: MarketScout }) {
     try {
       await marketApi.assignEntity('scout', scout.id);
       const { defaultMoraleMin: scoutMoraleMin, defaultMoraleMax: scoutMoraleMax } = useGameConfigStore.getState().config;
-      useAcademyStore.getState().addBalance(-signingCostPounds);
+      useClubStore.getState().addBalance(-signingCostPounds);
       addScout({
         id: scout.id,
         name: `${scout.firstName} ${scout.lastName}`,
@@ -915,13 +915,13 @@ export default function MarketScreen() {
   const [activeTab, setActiveTab] = useState<MarketTab>('COACHES');
   const [refreshing, setRefreshing] = useState(false);
   const { setMarketData } = useMarketStore();
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
-    typeof academy.balance === 'number' && !isNaN(academy.balance)
-      ? academy.balance
-      : academy.totalCareerEarnings * 100,
+    typeof club.balance === 'number' && !isNaN(club.balance)
+      ? club.balance
+      : club.totalCareerEarnings * 100,
   );
 
   // Pull-to-refresh always fetches fresh data, bypassing the store's 5-min cache

@@ -6,7 +6,7 @@ import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useWorldStore } from '@/stores/worldStore';
@@ -58,8 +58,8 @@ type CompTab = typeof COMP_TABS[number];
 export default function CompetitionsScreen() {
   const [activeTab, setActiveTab] = useState<CompTab>('LEAGUE');
 
-  const ampClubId       = useAcademyStore((s) => s.academy.id);
-  const ampName         = useAcademyStore((s) => s.academy.name);
+  const ampClubId       = useClubStore((s) => s.club.id);
+  const ampName         = useClubStore((s) => s.club.name);
   const league          = useLeagueStore((s) => s.league);
   const clubs           = useLeagueStore((s) => s.clubs);
   const fixtures        = useFixtureStore((s) => s.fixtures);
@@ -124,7 +124,7 @@ export default function CompetitionsScreen() {
 // ─── Rankings pane (ported verbatim from world.tsx LeaderboardPane) ──────────
 
 function RankingsPane() {
-  const academyName = useAcademyStore((s) => s.academy.name);
+  const clubName = useClubStore((s) => s.club.name);
 
   const {
     data,
@@ -134,9 +134,9 @@ function RankingsPane() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['leaderboard', 'academy_reputation'],
+    queryKey: ['leaderboard', 'club_reputation'],
     queryFn: ({ pageParam }) =>
-      getLeaderboard('academy_reputation', { page: pageParam as number, pageSize: 20 }),
+      getLeaderboard('club_reputation', { page: pageParam as number, pageSize: 20 }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.hasNextPage ? lastPage.page + 1 : undefined,
@@ -182,9 +182,9 @@ function RankingsPane() {
       <RankingsHeader />
       {entries.map((entry) => (
         <RankingsRow
-          key={entry.academyName}
+          key={entry.clubName}
           entry={entry}
-          isOwn={entry.academyName === academyName}
+          isOwn={entry.clubName === clubName}
         />
       ))}
       {hasNextPage && (
@@ -225,7 +225,7 @@ function RankingsHeader() {
       marginBottom: 4,
     }}>
       <PixelText size={7} color={WK.dim} style={{ width: 36 }}>#</PixelText>
-      <PixelText size={7} color={WK.dim} style={{ flex: 1 }}>ACADEMY</PixelText>
+      <PixelText size={7} color={WK.dim} style={{ flex: 1 }}>CLUB</PixelText>
       <PixelText size={7} color={WK.dim} style={{ width: 36, textAlign: 'right' }}>TIER</PixelText>
       <PixelText size={7} color={WK.dim} style={{ width: 36, textAlign: 'right' }}>REP</PixelText>
       <PixelText size={7} color={WK.dim} style={{ width: 64, textAlign: 'right' }}>EARN</PixelText>
@@ -256,7 +256,7 @@ function RankingsRow({ entry, isOwn }: { entry: LeaderboardEntry; isOwn: boolean
         {entry.rank}
       </VT323Text>
       <BodyText size={13} style={{ flex: 1, color: isOwn ? WK.yellow : WK.text }} numberOfLines={1}>
-        {entry.academyName}{isOwn ? ' ★' : ''}
+        {entry.clubName}{isOwn ? ' ★' : ''}
       </BodyText>
       <VT323Text size={16} color={tierColor} style={{ width: 36, textAlign: 'right' }}>
         {TIER_ABBR[tier]}

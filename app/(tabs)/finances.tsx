@@ -3,7 +3,7 @@ import { View, ScrollView, FlatList, Modal, Pressable, TextInput } from 'react-n
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PitchBackground } from '@/components/ui/PitchBackground';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useLoanStore, getLoanLimit } from '@/stores/loanStore';
 import { useSquadStore } from '@/stores/squadStore';
@@ -19,7 +19,7 @@ import { Loan } from '@/types/market';
 import { type FinancialCategory, type FinancialTransaction } from '@/types/finance';
 import { calculateWeeklyFinances } from '@/engine/finance';
 import { penceToPounds, formatCurrencyCompact, formatPounds } from '@/utils/currency';
-import useAcademyMetrics from '@/hooks/useAcademyMetrics';
+import useClubMetrics from '@/hooks/useClubMetrics';
 
 const FINANCE_TABS = ['BALANCE', 'INVESTORS', 'SPONSORS', 'LOANS', 'LEDGER'] as const;
 type FinanceTab = typeof FINANCE_TABS[number];
@@ -45,7 +45,7 @@ function FinanceRow({ label, value, accent }: { label: string; value: string; ac
 // ─── Balance pane ─────────────────────────────────────────────────────────────
 
 function BalancePane() {
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
   const sponsors = useMarketStore((s) => s.sponsors);
   const { totalWeeklyRepayment } = useLoanStore();
   const players = useSquadStore((s) => s.players);
@@ -54,15 +54,15 @@ function BalancePane() {
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
-    typeof academy.balance === 'number' && !isNaN(academy.balance) ? academy.balance : 0,
+    typeof club.balance === 'number' && !isNaN(club.balance) ? club.balance : 0,
   );
 
-  const activeSponsors = sponsors.filter((s) => academy.sponsorIds.includes(s.id));
+  const activeSponsors = sponsors.filter((s) => club.sponsorIds.includes(s.id));
   const weeklyRepayment = totalWeeklyRepayment();
 
   const record = calculateWeeklyFinances(
-    academy.weekNumber ?? 1,
-    academy,
+    club.weekNumber ?? 1,
+    club,
     players,
     coaches,
     facilityLevels,
@@ -72,7 +72,7 @@ function BalancePane() {
 
   // All values in whole pounds for consistent display
   const sponsorIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
-  const reputationIncome = academy.reputation; // reputation×100 pence ÷ 100 = reputation pounds
+  const reputationIncome = club.reputation; // reputation×100 pence ÷ 100 = reputation pounds
   // wage and salary are stored in pence — convert to pounds for display
   const playerWages = Math.round(players.reduce((sum, p) => sum + (p.wage ?? 0), 0) / 100);
   const coachSalaries = Math.round(coaches.reduce((sum, c) => sum + c.salary, 0) / 100);
@@ -170,16 +170,16 @@ function BalancePane() {
       }}>
         <BodyText size={13} dim style={{ marginBottom: 6 }}>TOTAL CAREER EARNINGS</BodyText>
         <PixelText size={18} color={WK.tealLight}>
-          £{academy.totalCareerEarnings.toLocaleString()}
+          £{club.totalCareerEarnings.toLocaleString()}
         </PixelText>
       </View>
 
       {/* Hall of fame */}
       <Card>
-        <PixelText size={8} upper style={{ marginBottom: 10 }}>Academy Standing</PixelText>
-        <FinanceRow label="REPUTATION" value={String(academy.reputation)} accent={WK.tealLight} />
-        <FinanceRow label="TIER" value={academy.reputationTier.toUpperCase()} accent={WK.yellow} />
-        <FinanceRow label="HALL OF FAME PTS" value={academy.hallOfFamePoints.toLocaleString()} />
+        <PixelText size={8} upper style={{ marginBottom: 10 }}>Club Standing</PixelText>
+        <FinanceRow label="REPUTATION" value={String(club.reputation)} accent={WK.tealLight} />
+        <FinanceRow label="TIER" value={club.reputationTier.toUpperCase()} accent={WK.yellow} />
+        <FinanceRow label="HALL OF FAME PTS" value={club.hallOfFamePoints.toLocaleString()} />
       </Card>
     </ScrollView>
   );
@@ -188,26 +188,26 @@ function BalancePane() {
 // ─── Investors pane ───────────────────────────────────────────────────────────
 
 function InvestorsPane() {
-  const academy = useAcademyStore((s) => s.academy);
-  const { addBalance, setInvestorId } = useAcademyStore();
+  const club = useClubStore((s) => s.club);
+  const { addBalance, setInvestorId } = useClubStore();
   const investors = useMarketStore((s) => s.investors);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
-  const { totalValuation } = useAcademyMetrics();
+  const { totalValuation } = useClubMetrics();
   const [showBuyout, setShowBuyout] = useState(false);
 
-  const assignedInvestor = investors.find((inv) => inv.id === academy.investorId) ?? null;
+  const assignedInvestor = investors.find((inv) => inv.id === club.investorId) ?? null;
 
-  // Buyout cost = equity% of total academy valuation (pence)
+  // Buyout cost = equity% of total club valuation (pence)
   const buyoutCostPence = assignedInvestor
     ? Math.round((assignedInvestor.equityTaken / 100) * totalValuation)
     : 0;
-  const canAfford = academy.balance >= buyoutCostPence;
+  const canAfford = club.balance >= buyoutCostPence;
 
   function handleBuyout() {
     if (!assignedInvestor || !canAfford) return;
     addBalance(-buyoutCostPence);
     addTransaction({
-      weekNumber: academy.weekNumber ?? 1,
+      weekNumber: club.weekNumber ?? 1,
       category: 'investor_buyout',
       amount: -buyoutCostPence,
       description: `Investor buyout — ${assignedInvestor.name} (${assignedInvestor.equityTaken}% equity)`,
@@ -247,7 +247,7 @@ function InvestorsPane() {
             {/* Ownership bar */}
             <View style={{ marginTop: 14 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <BodyText size={12} dim>ACADEMY OWNERSHIP</BodyText>
+                <BodyText size={12} dim>CLUB OWNERSHIP</BodyText>
                 <BodyText size={12} color={WK.green}>{100 - assignedInvestor.equityTaken}%</BodyText>
               </View>
               <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, flexDirection: 'row' }}>
@@ -255,7 +255,7 @@ function InvestorsPane() {
                 <View style={{ height: '100%', flex: 1, backgroundColor: WK.orange }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-                <BodyText size={11} dim>ACADEMY</BodyText>
+                <BodyText size={11} dim>CLUB</BodyText>
                 <BodyText size={11} color={WK.orange}>INVESTOR {assignedInvestor.equityTaken}%</BodyText>
               </View>
             </View>
@@ -313,13 +313,13 @@ function InvestorsPane() {
                 />
                 <FinanceRow
                   label="BALANCE AFTER"
-                  value={formatCurrencyCompact(academy.balance - buyoutCostPence)}
-                  accent={(academy.balance - buyoutCostPence) < 0 ? WK.red : WK.tealLight}
+                  value={formatCurrencyCompact(club.balance - buyoutCostPence)}
+                  accent={(club.balance - buyoutCostPence) < 0 ? WK.red : WK.tealLight}
                 />
 
                 <View style={{ marginTop: 8, marginBottom: 16, borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 12 }}>
                   <BodyText size={13} dim style={{ lineHeight: 20 }}>
-                    YOU WILL OWN 100% OF YOUR ACADEMY. THE INVESTOR WILL NO LONGER RECEIVE A CUT OF PLAYER SALES.
+                    YOU WILL OWN 100% OF YOUR CLUB. THE INVESTOR WILL NO LONGER RECEIVE A CUT OF PLAYER SALES.
                   </BodyText>
                 </View>
 
@@ -348,10 +348,10 @@ function InvestorsPane() {
 // ─── Sponsors pane ────────────────────────────────────────────────────────────
 
 function SponsorsPane() {
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
   const sponsors = useMarketStore((s) => s.sponsors);
 
-  const activeSponsors = sponsors.filter((s) => academy.sponsorIds.includes(s.id));
+  const activeSponsors = sponsors.filter((s) => club.sponsorIds.includes(s.id));
   const totalWeeklyIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
   return (
@@ -445,14 +445,14 @@ function LoanCard({ loan }: { loan: Loan }) {
 }
 
 function LoansPane() {
-  const academy = useAcademyStore((s) => s.academy);
-  const addBalance = useAcademyStore((s) => s.addBalance);
+  const club = useClubStore((s) => s.club);
+  const addBalance = useClubStore((s) => s.addBalance);
   const { loans, takeLoan, totalWeeklyRepayment } = useLoanStore();
   const [showModal, setShowModal] = useState(false);
   const [amountText, setAmountText] = useState('');
   const [loanError, setLoanError] = useState<string | null>(null);
 
-  const loanLimit = getLoanLimit(academy.reputation);
+  const loanLimit = getLoanLimit(club.reputation);
   const weeklyRepayment = totalWeeklyRepayment();
 
   function handleTakeLoan() {
@@ -462,7 +462,7 @@ function LoansPane() {
       setLoanError('Please enter a valid loan amount.');
       return;
     }
-    const result = takeLoan(amount, academy.weekNumber ?? 1, academy.reputation);
+    const result = takeLoan(amount, club.weekNumber ?? 1, club.reputation);
     if (result instanceof Error) {
       setLoanError(result.message);
       return;
@@ -791,13 +791,13 @@ function LedgerPane() {
 
 export default function FinanceHubScreen() {
   const [activeTab, setActiveTab] = useState<FinanceTab>('BALANCE');
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
-    typeof academy.balance === 'number' && !isNaN(academy.balance)
-      ? academy.balance
-      : academy.totalCareerEarnings * 100,
+    typeof club.balance === 'number' && !isNaN(club.balance)
+      ? club.balance
+      : club.totalCareerEarnings * 100,
   );
 
   return (

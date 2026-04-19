@@ -9,7 +9,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
@@ -34,11 +34,11 @@ import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
 import { ArchetypeBadge } from '@/components/ArchetypeBadge';
-import { TIER_ORDER } from '@/types/academy';
-import type { AcademyTier } from '@/types/academy';
+import { TIER_ORDER } from '@/types/club';
+import type { ClubTier } from '@/types/club';
 
-const ACADEMY_TABS = ['SQUAD', 'COACHES', 'SCOUTS', 'DRESSING ROOM'] as const;
-type AcademyTab = typeof ACADEMY_TABS[number];
+const CLUB_TABS = ['SQUAD', 'COACHES', 'SCOUTS', 'DRESSING ROOM'] as const;
+type ClubTab = typeof CLUB_TABS[number];
 
 // ─── Player card ──────────────────────────────────────────────────────────────
 
@@ -447,7 +447,7 @@ function SquadPane() {
 
 function CoachesPane() {
   const { coaches, removeCoach } = useCoachStore();
-  const { academy, addBalance } = useAcademyStore();
+  const { club, addBalance } = useClubStore();
   const marketCoaches = useMarketStore((s) => s.coaches);
   const hireCoach = useMarketStore((s) => s.hireCoach);
   const router = useRouter();
@@ -456,17 +456,17 @@ function CoachesPane() {
   const [pendingFire, setPendingFire] = useState<{ coach: Coach; penalty: number; penaltyPence: number } | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
 
-  const weekNumber = academy.weekNumber ?? 1;
+  const weekNumber = club.weekNumber ?? 1;
   const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
   const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
 
   // Show up to 3 signable market coaches (hide tier-restricted or unaffordable)
-  const academyTierKey = (academy.reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
+  const clubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
   const prospectCoaches = marketCoaches
     .filter((mc) => {
-      const coachTierKey = (mc.tier ?? 'local') as AcademyTier;
-      const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[academyTierKey];
-      const canAfford = (academy.balance ?? 0) >= Math.round((mc.salary * 4) / 100);
+      const coachTierKey = (mc.tier ?? 'local') as ClubTier;
+      const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[clubTierKey];
+      const canAfford = (club.balance ?? 0) >= Math.round((mc.salary * 4) / 100);
       return !isTierRestricted && canAfford;
     })
     .slice(0, 3);
@@ -478,7 +478,7 @@ function CoachesPane() {
 
   function signCoach(mc: MarketCoach) {
     const signingFeePounds = Math.round((mc.salary * 4) / 100);
-    if (academy.balance < signingFeePounds) {
+    if (club.balance < signingFeePounds) {
       setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
       return;
     }
@@ -497,7 +497,7 @@ function CoachesPane() {
   function confirmFireCoach() {
     if (!pendingFire) return;
     const { coach, penalty, penaltyPence } = pendingFire;
-    const currentBalancePounds = penceToPounds(academy.balance ?? 0);
+    const currentBalancePounds = penceToPounds(club.balance ?? 0);
     if (currentBalancePounds < penalty) {
       setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
       setPendingFire(null);
@@ -649,7 +649,7 @@ function CoachesPane() {
 
 function ScoutsPane() {
   const { scouts, removeScout } = useScoutStore();
-  const { academy, addBalance } = useAcademyStore();
+  const { club, addBalance } = useClubStore();
   const marketScouts = useMarketStore((s) => s.marketScouts);
   const hireScout = useMarketStore((s) => s.hireScout);
   const router = useRouter();
@@ -658,16 +658,16 @@ function ScoutsPane() {
   const [pendingFire, setPendingFire] = useState<{ scout: Scout; penalty: number; penaltyPence: number } | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
 
-  const weekNumber = academy.weekNumber ?? 1;
+  const weekNumber = club.weekNumber ?? 1;
   const totalSalary = scouts.reduce((s, sc) => s + sc.salary, 0);
 
   // Show up to 3 signable market scouts (hide tier-restricted or unaffordable)
-  const scoutAcademyTierKey = (academy.reputationTier?.toLowerCase() ?? 'local') as AcademyTier;
+  const scoutClubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
   const prospectScouts = marketScouts
     .filter((ms) => {
-      const scoutTierKey = (ms.tier ?? 'local') as AcademyTier;
-      const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[scoutAcademyTierKey];
-      const canAfford = (academy.balance ?? 0) >= Math.round((ms.salary * 4) / 100);
+      const scoutTierKey = (ms.tier ?? 'local') as ClubTier;
+      const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[scoutClubTierKey];
+      const canAfford = (club.balance ?? 0) >= Math.round((ms.salary * 4) / 100);
       return !isTierRestricted && canAfford;
     })
     .slice(0, 3);
@@ -679,7 +679,7 @@ function ScoutsPane() {
 
   function signScout(ms: MarketScout) {
     const signingFeePounds = Math.round((ms.salary * 4) / 100);
-    if (academy.balance < signingFeePounds) {
+    if (club.balance < signingFeePounds) {
       setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
       return;
     }
@@ -698,7 +698,7 @@ function ScoutsPane() {
   function confirmFireScout() {
     if (!pendingFire) return;
     const { scout, penalty, penaltyPence } = pendingFire;
-    const currentBalancePounds = penceToPounds(academy.balance ?? 0);
+    const currentBalancePounds = penceToPounds(club.balance ?? 0);
     if (currentBalancePounds < penalty) {
       setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
       setPendingFire(null);
@@ -866,7 +866,7 @@ function ScoutsPane() {
 // ─── Dressing Room ────────────────────────────────────────────────────────────
 
 function handleGroupSession(targetType: 'squad' | 'staff'): void {
-  const weekNumber = useAcademyStore.getState().academy.weekNumber ?? 1;
+  const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
   const moraleDelta = 8;
 
   if (targetType === 'squad') {
@@ -906,7 +906,7 @@ function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) =
   const cliques = useInteractionStore((s) => s.cliques);
   const allPlayers = useSquadStore((s) => s.players);
   const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
-  const weekNumber = useAcademyStore((s) => s.academy.weekNumber ?? 1);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const groupSessionLog = useInteractionStore((s) => s.groupSessionLog);
   const [pendingSession, setPendingSession] = useState<'squad' | 'staff' | null>(null);
 
@@ -1113,7 +1113,7 @@ function DangerStatusCard() {
       gap: 8,
       ...pixelShadow,
     }}>
-      <PixelText size={8} color={WK.red} upper>⚠ Academy Alerts</PixelText>
+      <PixelText size={8} color={WK.red} upper>⚠ Club Alerts</PixelText>
       {warnings.map((w, i) => (
         <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ width: 8, height: 8, backgroundColor: w.color, flexShrink: 0 }} />
@@ -1125,7 +1125,7 @@ function DangerStatusCard() {
 }
 
 function UpkeepWarningBanner() {
-  const balancePence = useAcademyStore((s) => s.academy.balance ?? 0);
+  const balancePence = useClubStore((s) => s.club.balance ?? 0);
   const levels    = useFacilityStore((s) => s.levels);
   const templates = useFacilityStore((s) => s.templates);
   const totalUpkeep = calculateTotalUpkeep(templates, levels); // pence
@@ -1154,27 +1154,27 @@ function UpkeepWarningBanner() {
   );
 }
 
-export default function AcademyHubScreen() {
-  const [activeTab, setActiveTab] = useState<AcademyTab>('SQUAD');
+export default function ClubHubScreen() {
+  const [activeTab, setActiveTab] = useState<ClubTab>('SQUAD');
   const [renameTarget, setRenameTarget] = useState<Clique | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameClique = useInteractionStore((s) => s.renameClique);
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
-    typeof academy.balance === 'number' && !isNaN(academy.balance)
-      ? academy.balance
-      : academy.totalCareerEarnings * 100,
+    typeof club.balance === 'number' && !isNaN(club.balance)
+      ? club.balance
+      : club.totalCareerEarnings * 100,
   );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
       <PitchBackground />
       <PixelTopTabBar
-        tabs={[...ACADEMY_TABS]}
+        tabs={[...CLUB_TABS]}
         active={activeTab}
-        onChange={(tab) => setActiveTab(tab as AcademyTab)}
+        onChange={(tab) => setActiveTab(tab as ClubTab)}
       />
 
       {/* Header */}
@@ -1188,7 +1188,7 @@ export default function AcademyHubScreen() {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        <PixelText size={10} upper>Academy</PixelText>
+        <PixelText size={10} upper>Club</PixelText>
         <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
       <UpkeepWarningBanner />

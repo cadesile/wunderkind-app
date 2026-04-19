@@ -6,7 +6,7 @@ import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { repairFacilityCost } from '@/types/facility';
 import type { FacilityTemplate } from '@/types/facility';
-import { useAcademyStore } from '@/stores/academyStore';
+import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
@@ -61,7 +61,7 @@ function FacilityCard({
   balance: number;
 }) {
   const { upgradeLevel, repairFacility } = useFacilityStore();
-  const { addBalance, academy } = useAcademyStore();
+  const { addBalance, club } = useClubStore();
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [repairModalVisible, setRepairModalVisible] = useState(false);
 
@@ -84,7 +84,7 @@ function FacilityCard({
       amount:      -upgradeCost,
       category:    'facility_upgrade',
       description: `Upgraded ${template.label} to level ${level + 1}`,
-      weekNumber:  academy.weekNumber ?? 1,
+      weekNumber:  club.weekNumber ?? 1,
     });
   }
 
@@ -287,13 +287,13 @@ function FacilityCard({
 
 export default function FacilitiesScreen() {
   const { templates, levels, conditions } = useFacilityStore();
-  const academy = useAcademyStore((s) => s.academy);
+  const club = useClubStore((s) => s.club);
   const [activeCategory, setActiveCategory] = useState<FacilityCategory>('TRAINING');
 
   const balance = penceToPounds(
-    typeof academy.balance === 'number' && !isNaN(academy.balance)
-      ? academy.balance
-      : academy.totalCareerEarnings * 100,
+    typeof club.balance === 'number' && !isNaN(club.balance)
+      ? club.balance
+      : club.totalCareerEarnings * 100,
   );
 
   const visibleTemplates = templates.filter((t) => t.category === activeCategory);

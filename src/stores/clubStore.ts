@@ -46,7 +46,7 @@ interface ClubState {
   markRepActivity: () => void;
 }
 
-const DEFAULT_ACADEMY: Club = {
+const DEFAULT_CLUB: Club = {
   id: 'club-1',
   name: 'Wunderkind Factory',
   foundedWeek: 1,
@@ -68,7 +68,7 @@ const DEFAULT_ACADEMY: Club = {
 export const useClubStore = create<ClubState>()(
   persist(
     (set) => ({
-      club: DEFAULT_ACADEMY,
+      club: DEFAULT_CLUB,
       managerPersonality: null,
       managerProfile: null,
       setName: (name) =>
