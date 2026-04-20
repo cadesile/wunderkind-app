@@ -105,6 +105,10 @@ export interface GameConfig {
   // ── Developer / Debug ────────────────────────────────────────────────
   /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
   debugLoggingEnabled: boolean;
+
+  // ── Staff ─────────────────────────────────────────────────────────────────
+  /** StaffRole enum values from the backend — used as filter options in the Hire screen. */
+  staffRoles: string[];
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -152,4 +156,6 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   guardianIgnoreSiblingLoyaltyTraitPenalty: 2,
 
   debugLoggingEnabled: false,
+
+  staffRoles: ['assistant_coach', 'coach', 'scout', 'manager', 'director_of_football', 'facility_manager', 'chairman'],
 };

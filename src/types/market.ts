@@ -129,6 +129,8 @@ export interface MarketCoach {
   lastName: string;
   nationality: string;
   role: CoachRole;
+  /** Raw StaffRole enum value from the backend (e.g. 'coach', 'assistant_coach'). Used for role-based filtering. */
+  rawRole: string;
   /** 1–20 */
   influence: number;
   /** Weekly, in pence */

@@ -202,6 +202,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
       firstName: c.firstName,
       lastName: c.lastName,
       nationality: c.nationality ?? '',
+      rawRole: c.role,
       role: mapCoachRole(c.role),
       influence: mapInfluence(c.coachingAbility),
       salary: c.weeklySalary,
