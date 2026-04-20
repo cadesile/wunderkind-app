@@ -1,5 +1,4 @@
 import type { Fixture } from '@/stores/fixtureStore';
-import type { ClubSnapshot } from '@/types/api';
 
 export interface StandingRow {
   clubId: string;
@@ -15,10 +14,13 @@ export interface StandingRow {
 
 export function computeStandings(
   fixtures: Fixture[],
-  clubs: ClubSnapshot[],
-  ampClubId: string
+  clubs: { id: string }[],
+  ampClubId?: string,
 ): StandingRow[] {
-  const allIds = new Set<string>([ampClubId, ...clubs.map((c) => c.id)]);
+  const allIds = new Set<string>([
+    ...(ampClubId ? [ampClubId] : []),
+    ...clubs.map((c) => c.id),
+  ]);
 
   const rows = new Map<string, StandingRow>();
   for (const id of allIds) {
@@ -30,7 +32,7 @@ export function computeStandings(
       lost: 0,
       goalsFor: 0,
       goalsAgainst: 0,
-      goalDifference: 0, // overwritten after accumulation loop
+      goalDifference: 0,
       points: 0,
     });
   }
@@ -39,8 +41,6 @@ export function computeStandings(
     if (fixture.result === null) continue;
     const { homeGoals, awayGoals } = fixture.result;
 
-    // Invariant: all fixture club IDs should be present in allIds.
-    // If not, that club's stats are silently skipped (caller's responsibility).
     const home = rows.get(fixture.homeClubId);
     if (home) {
       home.played++;

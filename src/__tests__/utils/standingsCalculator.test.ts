@@ -99,4 +99,17 @@ describe('computeStandings', () => {
     expect(amp.goalsAgainst).toBe(1);
     expect(amp.goalDifference).toBe(3);
   });
+
+  it('works without an AMP club — computes standings from clubs array only', () => {
+    const clubs = [makeClub('a'), makeClub('b'), makeClub('c')];
+    const fixtures = [makeFixture('f1', 'a', 'b', 2, 0)];
+    const rows = computeStandings(fixtures, clubs);
+    expect(rows).toHaveLength(3);
+    const a = rows.find((r) => r.clubId === 'a')!;
+    expect(a.won).toBe(1);
+    expect(a.points).toBe(3);
+    const b = rows.find((r) => r.clubId === 'b')!;
+    expect(b.lost).toBe(1);
+    expect(b.points).toBe(0);
+  });
 });
