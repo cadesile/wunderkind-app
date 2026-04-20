@@ -87,4 +87,14 @@ export interface Club {
    * Used to detect inactivity and trigger passive reputation decay.
    */
   lastRepActivityWeek: number;
+  /** Optional stadium name set by AMP in the Office → Club screen. */
+  stadiumName: string | null;
+  /** Tactical formation selected by AMP — matches backend Formation enum values. */
+  formation: '4-4-2' | '4-3-3' | '3-5-2' | '5-4-1' | '4-2-3-1';
+  /** Playing style selected by AMP — matches NPC club playingStyle values. */
+  playingStyle: 'POSSESSION' | 'DIRECT' | 'COUNTER' | 'HIGH_PRESS';
+  /** Primary kit colour as a 7-char hex string (e.g. '#E53935'). */
+  primaryColor: string;
+  /** Secondary kit colour as a 7-char hex string. */
+  secondaryColor: string;
 }

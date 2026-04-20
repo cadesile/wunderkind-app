@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './authStore';
 import { useEventChainStore } from './eventChainStore';
-import { useClubStore } from './clubStore';
+import { useClubStore, DEFAULT_CLUB } from './clubStore';
 import { useSquadStore } from './squadStore';
 import { useCoachStore } from './coachStore';
 import { useScoutStore } from './scoutStore';
@@ -46,24 +46,7 @@ export function resetInMemoryStores(): void {
   useAuthStore.getState().clearAuth();
 
   useClubStore.setState({
-    club: {
-      id: 'club-1',
-      name: '',
-      foundedWeek: 1,
-      weekNumber: 1,
-      reputation: 0,
-      reputationTier: 'Local',
-      totalCareerEarnings: 0,
-      hallOfFamePoints: 0,
-      squadSize: 0,
-      staffCount: 1,
-      balance: 0,
-      createdAt: '',
-      sponsorIds: [],
-      investorId: null,
-      country: null,
-      lastRepActivityWeek: 1,
-    },
+    club: DEFAULT_CLUB,
     managerPersonality: null,
   });
 

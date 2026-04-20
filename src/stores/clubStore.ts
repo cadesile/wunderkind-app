@@ -45,9 +45,13 @@ interface ClubState {
   updateManagerPersonality: (shifts: Partial<Pick<ManagerPersonality, 'temperament' | 'discipline' | 'ambition'>>) => void;
   /** Record that a rep-positive event occurred this week (signing, upgrade, breakthrough, transfer). */
   markRepActivity: () => void;
+  setStadiumName: (name: string | null) => void;
+  setFormation: (f: Club['formation']) => void;
+  setPlayingStyle: (s: Club['playingStyle']) => void;
+  setClubColors: (primary: string, secondary: string) => void;
 }
 
-const DEFAULT_CLUB: Club = {
+export const DEFAULT_CLUB: Club = {
   id: 'club-1',
   name: 'Wunderkind Factory',
   foundedWeek: 1,
@@ -64,6 +68,11 @@ const DEFAULT_CLUB: Club = {
   investorId: null,
   country: null,
   lastRepActivityWeek: 1,
+  stadiumName: null,
+  formation: '4-4-2',
+  playingStyle: 'DIRECT',
+  primaryColor: '#00897B',
+  secondaryColor: '#FFC107',
 };
 
 export const useClubStore = create<ClubState>()(
@@ -193,6 +202,14 @@ export const useClubStore = create<ClubState>()(
             lastRepActivityWeek: state.club.weekNumber,
           },
         })),
+      setStadiumName: (name) =>
+        set((state) => ({ club: { ...state.club, stadiumName: name } })),
+      setFormation: (f) =>
+        set((state) => ({ club: { ...state.club, formation: f } })),
+      setPlayingStyle: (style) =>
+        set((state) => ({ club: { ...state.club, playingStyle: style } })),
+      setClubColors: (primary, secondary) =>
+        set((state) => ({ club: { ...state.club, primaryColor: primary, secondaryColor: secondary } })),
     }),
     { name: 'club-store', storage: zustandStorage }
   )
