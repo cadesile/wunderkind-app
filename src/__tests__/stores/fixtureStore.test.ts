@@ -1,5 +1,6 @@
 import { LeagueSnapshot, ClubSnapshot } from '@/types/api';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import type { WorldLeague } from '@/types/world';
 
 beforeEach(() => {
   useFixtureStore.getState().clearSeason();
@@ -7,6 +8,10 @@ beforeEach(() => {
 
 function makeClub(id: string): ClubSnapshot {
   return { id, name: `Club ${id}`, reputation: 50, tier: 8, primaryColor: '#ff0000', secondaryColor: '#ffffff', stadiumName: null, facilities: {} };
+}
+
+function makeWorldLeague(id: string, clubIds: string[]): WorldLeague {
+  return { id, tier: 1, name: `League ${id}`, country: 'EN', promotionSpots: 2, reputationTier: 'elite', clubIds };
 }
 
 function makeLeague(season = 1, clubCount = 3): LeagueSnapshot {
@@ -92,5 +97,21 @@ describe('fixtureStore', () => {
     const state = useFixtureStore.getState();
     expect(state.fixtures).toEqual([]);
     expect(state.currentMatchday).toBe(0);
+  });
+
+  it('generateFixturesFromWorldLeague without ampClubId generates fixtures for NPC clubs only', () => {
+    const wl = makeWorldLeague('npc-league-1', ['npc-a', 'npc-b', 'npc-c']);
+    useFixtureStore.getState().generateFixturesFromWorldLeague(wl, 1);
+    const { fixtures } = useFixtureStore.getState();
+    expect(fixtures.length).toBeGreaterThan(0);
+    expect(fixtures.every((f) => f.leagueId === 'npc-league-1')).toBe(true);
+    expect(fixtures.some((f) => f.homeClubId === 'amp-id' || f.awayClubId === 'amp-id')).toBe(false);
+  });
+
+  it('generateFixturesFromWorldLeague with ampClubId includes AMP in fixtures', () => {
+    const wl = makeWorldLeague('amp-league-1', ['npc-x', 'npc-y']);
+    useFixtureStore.getState().generateFixturesFromWorldLeague(wl, 1, 'amp-id');
+    const { fixtures } = useFixtureStore.getState();
+    expect(fixtures.some((f) => f.homeClubId === 'amp-id' || f.awayClubId === 'amp-id')).toBe(true);
   });
 });
