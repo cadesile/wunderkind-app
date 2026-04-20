@@ -4,15 +4,13 @@ import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
 import { computeStandings } from '@/utils/standingsCalculator';
 import type { Fixture } from '@/stores/fixtureStore';
-import type { ClubSnapshot } from '@/types/api';
-
 const PROMOTION_GREEN = '#4CAF50';
 
 export interface LeagueTableProps {
   fixtures: Fixture[];
-  clubs: ClubSnapshot[];
-  ampClubId: string;
-  ampName: string;
+  clubs: { id: string; name: string }[];
+  ampClubId?: string;
+  ampName?: string;
   promotionSpots?: number | null;
   onClubPress?: (clubId: string) => void;
 }
@@ -22,7 +20,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
 
   const clubNameMap = useMemo(() => {
     const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
-    map.set(ampClubId, ampName);
+    if (ampClubId && ampName) map.set(ampClubId, ampName);
     return map;
   }, [clubs, ampClubId, ampName]);
 
@@ -50,7 +48,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
       <ScrollView style={{ flex: 1 }}>
         {rows.map((row, index) => {
           const pos = index + 1;
-          const isAmp = row.clubId === ampClubId;
+          const isAmp = !!ampClubId && row.clubId === ampClubId;
           const isPromotion = promotionSpots != null && pos <= promotionSpots;
           const name = clubNameMap.get(row.clubId) ?? row.clubId;
 
