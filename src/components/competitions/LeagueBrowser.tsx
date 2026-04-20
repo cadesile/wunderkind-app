@@ -5,7 +5,6 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 import { LeagueTable } from './LeagueTable';
-import { WorldClubList } from './WorldClubList';
 import type { LeagueSnapshot } from '@/types/api';
 import type { Fixture } from '@/stores/fixtureStore';
 import type { WorldLeague, WorldClub } from '@/types/world';
@@ -82,6 +81,9 @@ export function LeagueBrowser({
 
         const clubCount = isAmpLeague ? league.clubs.length : npcClubs.length;
 
+        // Filter fixtures to this league only
+        const leagueFixtures = fixtures.filter((f) => f.leagueId === lg.id);
+
         return (
           <View key={lg.id} style={{ marginBottom: 4 }}>
             <Pressable
@@ -147,7 +149,7 @@ export function LeagueBrowser({
               }}>
                 {isAmpLeague ? (
                   <LeagueTable
-                    fixtures={fixtures}
+                    fixtures={leagueFixtures}
                     clubs={league.clubs}
                     ampClubId={ampClubId}
                     ampName={ampName}
@@ -155,8 +157,10 @@ export function LeagueBrowser({
                     onClubPress={handleClubPress}
                   />
                 ) : (
-                  <WorldClubList
+                  <LeagueTable
+                    fixtures={leagueFixtures}
                     clubs={npcClubs}
+                    promotionSpots={lg.promotionSpots}
                     onClubPress={handleClubPress}
                   />
                 )}
