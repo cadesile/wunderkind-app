@@ -114,4 +114,12 @@ describe('fixtureStore', () => {
     const { fixtures } = useFixtureStore.getState();
     expect(fixtures.some((f) => f.homeClubId === 'amp-id' || f.awayClubId === 'amp-id')).toBe(true);
   });
+
+  it('generateFixturesFromWorldLeague is idempotent for same league and season', () => {
+    const wl = makeWorldLeague('idem-league', ['npc-1', 'npc-2', 'npc-3']);
+    useFixtureStore.getState().generateFixturesFromWorldLeague(wl, 1);
+    const countAfterFirst = useFixtureStore.getState().fixtures.length;
+    useFixtureStore.getState().generateFixturesFromWorldLeague(wl, 1);
+    expect(useFixtureStore.getState().fixtures.length).toBe(countAfterFirst);
+  });
 });
