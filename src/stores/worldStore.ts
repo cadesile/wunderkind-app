@@ -6,6 +6,8 @@ import type { WorldClub, WorldLeague, WorldPackResponse } from '@/types/world';
 import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { generateAppearance } from '@/engine/appearance';
+import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
 
 const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
@@ -41,6 +43,7 @@ export const useWorldStore = create<WorldState>()(
       setFromWorldPack: async (pack) => {
         const leagues: WorldLeague[] = [];
         const clubs: Record<string, WorldClub> = {};
+        const gameDate = getGameDate(1); // Default to Week 1 for world init age calculation
 
         // Build leagues + clubs, writing each league's club map to AsyncStorage with verification.
         // Throws on any write failure so the caller (useAuthFlow) is notified loudly.
@@ -58,6 +61,16 @@ export const useWorldStore = create<WorldState>()(
 
           const leagueClubMap: Record<string, WorldClub> = {};
           for (const club of leagueData.clubs) {
+            // Augment NPC players and staff with deterministic appearances
+            for (const p of club.players) {
+              const age = computePlayerAge(p.dateOfBirth, gameDate);
+              p.appearance = generateAppearance(p.id, 'PLAYER', age, p.personality);
+            }
+            for (const s of club.staff) {
+              const role = s.role === 'scout' ? 'SCOUT' : 'COACH';
+              s.appearance = generateAppearance(s.id, role, 35);
+            }
+
             clubs[club.id] = club;
             leagueClubMap[club.id] = club;
           }
@@ -131,12 +144,19 @@ export const useWorldStore = create<WorldState>()(
           };
 
           useLeagueStore.getState().setFromSync(syntheticLeague);
-          useFixtureStore.getState().generateFixturesFromWorldLeague(bottomLeague, ampClubId, 1);
+          useFixtureStore.getState().generateFixturesFromWorldLeague(bottomLeague, 1, ampClubId);
         } else if (!bottomLeague) {
           if (ampCountry) {
             console.warn(`[WorldStore] setFromWorldPack: no league found for AMP country "${ampCountry}" — league/fixture wiring skipped`);
           } else {
             console.warn('[WorldStore] setFromWorldPack: AMP club has no country set — league/fixture wiring skipped');
+          }
+        }
+
+        // Generate fixtures for every non-AMP league so Browse tables stay live
+        for (const league of leagues) {
+          if (league.id !== ampLeagueId) {
+            useFixtureStore.getState().generateFixturesFromWorldLeague(league, 1);
           }
         }
 
