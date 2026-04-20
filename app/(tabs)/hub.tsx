@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { View, FlatList, ScrollView, Modal, Pressable, TextInput } from 'react-native';
+import { SlidersHorizontal } from 'lucide-react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +38,7 @@ import { ArchetypeBadge } from '@/components/ArchetypeBadge';
 import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 
-const CLUB_TABS = ['SQUAD', 'COACHES', 'SCOUTS', 'DRESSING ROOM'] as const;
+const CLUB_TABS = ['SQUAD', 'STAFF', 'DRESSING ROOM'] as const;
 type ClubTab = typeof CLUB_TABS[number];
 
 // ─── Player card ──────────────────────────────────────────────────────────────
@@ -196,36 +197,7 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
   );
 }
 
-function CoachProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => void }) {
-  return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: WK.tealMid,
-      padding: 12,
-      marginBottom: 10,
-      ...pixelShadow,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <View style={{ flex: 1 }}>
-          <PixelText size={9} upper numberOfLines={1}>{coach.firstName} {coach.lastName}</PixelText>
-          <PixelText size={8} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-            <FlagText nationality={coach.nationality} size={12} />
-            <BodyText size={12} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</BodyText>
-          </View>
-        </View>
-        <Badge label={`INF ${coach.influence}`} color="green" />
-      </View>
-      <BodyText size={13} dim>SALARY: £{Math.round(coach.salary / 100).toLocaleString()}/wk</BodyText>
-      <View style={{ marginTop: 8 }}>
-        <Button label="SIGN" variant="yellow" fullWidth onPress={onSign} />
-      </View>
-    </View>
-  );
-}
-
-// ─── Scout cards ──────────────────────────────────────────────────────────────
+// ─── Scout Row ──────────────────────────────────────────────────────────────
 
 const RANGE_LABEL: Record<Scout['scoutingRange'], string> = {
   local: 'LOCAL',
@@ -279,37 +251,6 @@ function ScoutRow({ scout }: { scout: Scout }) {
         <Badge label={`${scout.successRate}%`} color="yellow" />
       </View>
     </Pressable>
-  );
-}
-
-function ScoutProspectCard({ scout, onSign }: { scout: MarketScout; onSign: () => void }) {
-  return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: WK.tealMid,
-      padding: 12,
-      marginBottom: 10,
-      ...pixelShadow,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-        <View style={{ flex: 1 }}>
-          <PixelText size={9} upper numberOfLines={1}>{scout.firstName} {scout.lastName}</PixelText>
-          <PixelText size={8} color={WK.tealLight} style={{ marginTop: 2 }}>
-            {RANGE_LABEL[scout.scoutingRange]} SCOUT
-          </PixelText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-            <FlagText nationality={scout.nationality} size={12} />
-            <BodyText size={12} dim>{scout.nationality}</BodyText>
-          </View>
-        </View>
-        <Badge label={`${scout.successRate}%`} color="green" />
-      </View>
-      <BodyText size={13} dim>SALARY: £{Math.round(scout.salary / 100).toLocaleString()}/wk</BodyText>
-      <View style={{ marginTop: 8 }}>
-        <Button label="RECRUIT" variant="yellow" fullWidth onPress={onSign} />
-      </View>
-    </View>
   );
 }
 
@@ -445,62 +386,75 @@ function SquadPane() {
   );
 }
 
-function CoachesPane() {
+// ─── Staff Pane ──────────────────────────────────────────────────────────────
+
+
+type StaffRoleFilter = 'ALL' | 'HEAD COACH' | 'FITNESS COACH' | 'YOUTH COACH' | 'GK COACH' | 'TACTICAL ANALYST' | 'SCOUT';
+
+const STAFF_FILTER_OPTIONS: StaffRoleFilter[] = [
+  'ALL',
+  'HEAD COACH',
+  'FITNESS COACH',
+  'YOUTH COACH',
+  'GK COACH',
+  'TACTICAL ANALYST',
+  'SCOUT',
+];
+
+function StaffPane() {
   const { coaches, removeCoach } = useCoachStore();
+  const { scouts } = useScoutStore();
   const { club, addBalance } = useClubStore();
-  const marketCoaches = useMarketStore((s) => s.coaches);
-  const hireCoach = useMarketStore((s) => s.hireCoach);
   const router = useRouter();
-  const [showModal, setShowModal] = useState(false);
-  const [signError, setSignError] = useState<string | null>(null);
-  const [pendingFire, setPendingFire] = useState<{ coach: Coach; penalty: number; penaltyPence: number } | null>(null);
+  const weekNumber = club.weekNumber ?? 1;
+
+  const [filterRole, setFilterRole] = useState<StaffRoleFilter>('ALL');
+  const [showFilter, setShowFilter] = useState(false);
+  const [pendingFireCoach, setPendingFireCoach] = useState<{
+    coach: Coach;
+    penalty: number;
+    penaltyPence: number;
+  } | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
 
-  const weekNumber = club.weekNumber ?? 1;
-  const totalInfluence = coaches.reduce((s, c) => s + c.influence, 0);
-  const totalSalary = coaches.reduce((s, c) => s + c.salary, 0);
+  type HiredStaffItem =
+    | { kind: 'coach'; data: Coach }
+    | { kind: 'scout'; data: Scout };
 
-  // Show up to 3 signable market coaches (hide tier-restricted or unaffordable)
-  const clubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
-  const prospectCoaches = marketCoaches
-    .filter((mc) => {
-      const coachTierKey = (mc.tier ?? 'local') as ClubTier;
-      const isTierRestricted = TIER_ORDER[coachTierKey] > TIER_ORDER[clubTierKey];
-      const canAfford = (club.balance ?? 0) >= Math.round((mc.salary * 4) / 100);
-      return !isTierRestricted && canAfford;
-    })
-    .slice(0, 3);
+  const allStaff: HiredStaffItem[] = [
+    ...coaches.map((c) => ({ kind: 'coach' as const, data: c })),
+    ...scouts.map((s) => ({ kind: 'scout' as const, data: s })),
+  ];
 
-  function openScout() {
-    setSignError(null);
-    setShowModal(true);
-  }
-
-  function signCoach(mc: MarketCoach) {
-    const signingFeePounds = Math.round((mc.salary * 4) / 100);
-    if (club.balance < signingFeePounds) {
-      setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
-      return;
-    }
-    setSignError(null);
-    addBalance(-signingFeePounds);
-    hireCoach(mc.id, weekNumber);
-  }
+  const filtered =
+    filterRole === 'ALL'
+      ? allStaff
+      : allStaff.filter((item) => {
+          if (filterRole === 'SCOUT') return item.kind === 'scout';
+          const roleMap: Record<string, string> = {
+            'HEAD COACH': 'Head Coach',
+            'FITNESS COACH': 'Fitness Coach',
+            'YOUTH COACH': 'Youth Coach',
+            'GK COACH': 'GK Coach',
+            'TACTICAL ANALYST': 'Tactical Analyst',
+          };
+          return item.kind === 'coach' && item.data.role === roleMap[filterRole];
+        });
 
   function fireCoach(coach: Coach) {
     const penaltyPence = Math.floor(coach.salary * 26 * 0.25);
     const penaltyPounds = Math.round(penaltyPence / 100);
     setFireError(null);
-    setPendingFire({ coach, penalty: penaltyPounds, penaltyPence });
+    setPendingFireCoach({ coach, penalty: penaltyPounds, penaltyPence });
   }
 
   function confirmFireCoach() {
-    if (!pendingFire) return;
-    const { coach, penalty, penaltyPence } = pendingFire;
-    const currentBalancePounds = penceToPounds(club.balance ?? 0);
+    if (!pendingFireCoach) return;
+    const { coach, penalty, penaltyPence } = pendingFireCoach;
+    const currentBalancePounds = Math.round((club.balance ?? 0) / 100);
     if (currentBalancePounds < penalty) {
       setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
-      setPendingFire(null);
+      setPendingFireCoach(null);
       return;
     }
     addBalance(-penalty * 100);
@@ -511,354 +465,120 @@ function CoachesPane() {
       weekNumber,
     });
     removeCoach(coach.id);
-    setPendingFire(null);
+    setPendingFireCoach(null);
   }
 
-  const COACH_COLS: ColumnDef<Coach>[] = [
-    {
-      key: 'name',
-      label: 'NAME',
-      flex: 2.5,
-      sortValue: (c) => c.name,
-      render: (c) => <BodyText size={13} upper numberOfLines={1}>{shortName(c.name)}</BodyText>,
-    },
-    {
-      key: 'nationality',
-      label: 'NAT',
-      flex: 1,
-      align: 'center',
-      sortValue: (c) => c.nationality,
-      render: (c) => <FlagText nationality={c.nationality} size={16} />,
-    },
-    {
-      key: 'role',
-      label: 'ROLE',
-      flex: 2,
-      sortValue: (c) => c.role,
-      render: (c) => <PixelText size={8} color={WK.tealLight} numberOfLines={1}>{c.role.toUpperCase()}</PixelText>,
-    },
-    {
-      key: 'influence',
-      label: 'INF',
-      flex: 1,
-      align: 'center',
-      sortValue: (c) => c.influence,
-      render: (c) => <Badge label={`${c.influence}`} color="yellow" />,
-    },
-    {
-      key: 'salary',
-      label: 'WAGE',
-      flex: 1.5,
-      align: 'right',
-      sortValue: (c) => c.salary,
-      render: (c) => <PixelText size={9} color={WK.orange}>£{Math.round(c.salary / 100).toLocaleString()}</PixelText>,
-    },
-  ];
+  const totalWeeklyCost = coaches.reduce((s, c) => s + c.salary, 0) +
+    scouts.reduce((s, sc) => s + sc.salary, 0);
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Stats strip */}
-      <View style={{ flexDirection: 'row', margin: 10, gap: 10 }}>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={8} dim>TOTAL INFLUENCE</PixelText>
-          <PixelText size={14} color={WK.tealLight} style={{ marginTop: 4 }}>{totalInfluence}</PixelText>
-        </Card>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={8} dim>WEEKLY COST</PixelText>
-          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{Math.round(totalSalary / 100).toLocaleString()}</PixelText>
-        </Card>
+      {/* Stats bar */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+      }}>
+        <BodyText size={11} dim>
+          {coaches.length} COACH{coaches.length !== 1 ? 'ES' : ''} · {scouts.length} SCOUT{scouts.length !== 1 ? 'S' : ''}
+        </BodyText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <BodyText size={11} dim>£{Math.round(totalWeeklyCost / 100).toLocaleString()}/wk</BodyText>
+          <Pressable
+            onPress={() => { hapticTap(); setShowFilter(true); }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <SlidersHorizontal size={14} color={filterRole !== 'ALL' ? WK.yellow : WK.dim} />
+            <PixelText size={7} color={filterRole !== 'ALL' ? WK.yellow : WK.dim}>FILTER</PixelText>
+          </Pressable>
+        </View>
       </View>
 
-      <View style={{ marginHorizontal: 10, marginBottom: 10 }}>
-        <Button label="◈ RECRUIT COACHES" variant="green" fullWidth onPress={openScout} />
-      </View>
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => `${item.kind}-${item.data.id}`}
+        contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
+        renderItem={({ item }) =>
+          item.kind === 'coach'
+            ? <CoachRow coach={item.data} onFire={() => fireCoach(item.data)} />
+            : <ScoutRow scout={item.data} />
+        }
+        ListEmptyComponent={
+          <BodyText size={12} dim style={{ textAlign: 'center', marginTop: 32 }}>
+            NO STAFF — HIRE FROM OFFICE
+          </BodyText>
+        }
+      />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: FAB_CLEARANCE }}>
-        <SortableTable
-          columns={COACH_COLS}
-          data={coaches}
-          defaultSortKey="influence"
-          defaultSortDir="desc"
-          onRowPress={(c) => { hapticTap(); router.push(`/coach/${c.id}`); }}
-          emptyMessage="NO COACHES SIGNED"
-        />
-      </ScrollView>
-
-      <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
+      {/* Filter overlay */}
+      <Modal visible={showFilter} transparent animationType="fade" onRequestClose={() => setShowFilter(false)}>
         <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => setShowModal(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }}
+          onPress={() => setShowFilter(false)}
         >
-          <Pressable onPress={() => {}} style={{ width: '90%', maxHeight: '80%' }}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{
               backgroundColor: WK.tealCard,
-              borderWidth: 3,
-              borderColor: WK.yellow,
+              borderTopWidth: 3,
+              borderTopColor: WK.border,
               padding: 16,
-              ...pixelShadow,
+              paddingBottom: 32,
             }}>
-              <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 14 }}>Review Prospects</PixelText>
-              <BodyText size={13} dim style={{ textAlign: 'center', marginBottom: 14 }}>SIGNING FEE = 4 WKS SALARY</BodyText>
-              {prospectCoaches.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                  <PixelText size={7} dim>NO COACHES AVAILABLE</PixelText>
-                  <PixelText size={6} dim style={{ marginTop: 6 }}>Check back after advancing a week</PixelText>
-                  <View style={{ marginTop: 12 }}>
-                    <Button label="CLOSE" variant="teal" onPress={() => setShowModal(false)} />
-                  </View>
-                </View>
-              ) : (
-                <>
-                  {signError && (
-                    <BodyText size={13} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
-                      {signError}
-                    </BodyText>
-                  )}
-                  {prospectCoaches.map((c) => (
-                    <CoachProspectCard key={c.id} coach={c} onSign={() => signCoach(c)} />
-                  ))}
-                  <Button label="CLOSE" variant="teal" fullWidth onPress={() => setShowModal(false)} />
-                </>
-              )}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                <PixelText size={9} upper>FILTER BY TYPE</PixelText>
+                <Pressable onPress={() => setShowFilter(false)}>
+                  <PixelText size={9} color={WK.dim}>✕</PixelText>
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {STAFF_FILTER_OPTIONS.map((role) => (
+                  <Pressable
+                    key={role}
+                    onPress={() => { hapticTap(); setFilterRole(role); setShowFilter(false); }}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      backgroundColor: filterRole === role ? WK.yellow : WK.tealMid,
+                      borderWidth: 2,
+                      borderColor: filterRole === role ? WK.yellow : WK.border,
+                    }}
+                  >
+                    <PixelText size={7} color={filterRole === role ? WK.border : WK.text}>
+                      {role}
+                    </PixelText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      <PixelDialog
-        visible={!!pendingFire}
-        title="Release Coach?"
-        message={pendingFire
-          ? `Release ${pendingFire.coach.name}?\n\nEarly termination fee: £${pendingFire.penalty.toLocaleString()}\n(25% of 26 remaining weeks)`
-          : ''}
-        onClose={() => setPendingFire(null)}
-        onConfirm={confirmFireCoach}
-        confirmLabel="RELEASE"
-        confirmVariant="red"
-      />
-
-      <PixelDialog
-        visible={!!fireError}
-        title="Insufficient Funds"
-        message={fireError ?? ''}
-        onClose={() => setFireError(null)}
-      />
-    </View>
-  );
-}
-
-function ScoutsPane() {
-  const { scouts, removeScout } = useScoutStore();
-  const { club, addBalance } = useClubStore();
-  const marketScouts = useMarketStore((s) => s.marketScouts);
-  const hireScout = useMarketStore((s) => s.hireScout);
-  const router = useRouter();
-  const [showModal, setShowModal] = useState(false);
-  const [signError, setSignError] = useState<string | null>(null);
-  const [pendingFire, setPendingFire] = useState<{ scout: Scout; penalty: number; penaltyPence: number } | null>(null);
-  const [fireError, setFireError] = useState<string | null>(null);
-
-  const weekNumber = club.weekNumber ?? 1;
-  const totalSalary = scouts.reduce((s, sc) => s + sc.salary, 0);
-
-  // Show up to 3 signable market scouts (hide tier-restricted or unaffordable)
-  const scoutClubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
-  const prospectScouts = marketScouts
-    .filter((ms) => {
-      const scoutTierKey = (ms.tier ?? 'local') as ClubTier;
-      const isTierRestricted = TIER_ORDER[scoutTierKey] > TIER_ORDER[scoutClubTierKey];
-      const canAfford = (club.balance ?? 0) >= Math.round((ms.salary * 4) / 100);
-      return !isTierRestricted && canAfford;
-    })
-    .slice(0, 3);
-
-  function openRecruit() {
-    setSignError(null);
-    setShowModal(true);
-  }
-
-  function signScout(ms: MarketScout) {
-    const signingFeePounds = Math.round((ms.salary * 4) / 100);
-    if (club.balance < signingFeePounds) {
-      setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
-      return;
-    }
-    setSignError(null);
-    addBalance(-signingFeePounds);
-    hireScout(ms.id, weekNumber);
-  }
-
-  function fireScout(scout: Scout) {
-    const penaltyPence = Math.floor(scout.salary * 26 * 0.25);
-    const penaltyPounds = Math.round(penaltyPence / 100);
-    setFireError(null);
-    setPendingFire({ scout, penalty: penaltyPounds, penaltyPence });
-  }
-
-  function confirmFireScout() {
-    if (!pendingFire) return;
-    const { scout, penalty, penaltyPence } = pendingFire;
-    const currentBalancePounds = penceToPounds(club.balance ?? 0);
-    if (currentBalancePounds < penalty) {
-      setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
-      setPendingFire(null);
-      return;
-    }
-    addBalance(-penalty * 100);
-    useFinanceStore.getState().addTransaction({
-      amount: -penaltyPence,
-      category: 'contract_termination',
-      description: `Released ${scout.name} (25% early termination)`,
-      weekNumber,
-    });
-    removeScout(scout.id);
-    setPendingFire(null);
-  }
-
-  const SCOUT_COLS: ColumnDef<Scout>[] = [
-    {
-      key: 'name',
-      label: 'NAME',
-      flex: 2.5,
-      sortValue: (s) => s.name,
-      render: (s) => <BodyText size={13} upper numberOfLines={1}>{shortName(s.name)}</BodyText>,
-    },
-    {
-      key: 'nationality',
-      label: 'NAT',
-      flex: 1,
-      align: 'center',
-      sortValue: (s) => s.nationality,
-      render: (s) => <FlagText nationality={s.nationality} size={16} />,
-    },
-    {
-      key: 'scoutingRange',
-      label: 'SPEC',
-      flex: 1.5,
-      sortValue: (s) => s.scoutingRange,
-      render: (s) => <PixelText size={8} color={WK.tealLight}>{RANGE_LABEL[s.scoutingRange]}</PixelText>,
-    },
-    {
-      key: 'salary',
-      label: 'WAGE',
-      flex: 1.5,
-      align: 'right',
-      sortValue: (s) => s.salary,
-      render: (s) => <PixelText size={9} color={WK.orange}>£{Math.round(s.salary / 100).toLocaleString()}</PixelText>,
-    },
-    {
-      key: 'status',
-      label: 'STATUS',
-      flex: 1.5,
-      align: 'center',
-      sortValue: (s) => (s.activeMission?.status === 'active' ? 1 : 0),
-      render: (s) => {
-        const onMission = s.activeMission?.status === 'active';
-        return (
-          <View style={{
-            backgroundColor: onMission ? WK.yellow + '33' : WK.tealDark,
-            borderWidth: 1,
-            borderColor: onMission ? WK.yellow : WK.dim,
-            paddingHorizontal: 5,
-            paddingVertical: 2,
-          }}>
-            <PixelText size={8} color={onMission ? WK.yellow : WK.dim}>
-              {onMission ? 'ACTIVE' : 'FREE'}
-            </PixelText>
-          </View>
-        );
-      },
-    },
-  ];
-
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Stats strip */}
-      <View style={{ flexDirection: 'row', margin: 10, gap: 10 }}>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={8} dim>SCOUTS</PixelText>
-          <PixelText size={14} color={WK.tealLight} style={{ marginTop: 4 }}>{scouts.length}</PixelText>
-        </Card>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={8} dim>WEEKLY COST</PixelText>
-          <PixelText size={10} color={WK.orange} style={{ marginTop: 4 }}>£{Math.round(totalSalary / 100).toLocaleString()}</PixelText>
-        </Card>
-      </View>
-
-      <View style={{ marginHorizontal: 10, marginBottom: 10 }}>
-        <Button label="◈ RECRUIT SCOUTS" variant="green" fullWidth onPress={openRecruit} />
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: FAB_CLEARANCE }}>
-        <SortableTable
-          columns={SCOUT_COLS}
-          data={scouts}
-          defaultSortKey="salary"
-          defaultSortDir="desc"
-          onRowPress={(s) => { hapticTap(); router.push(`/scout/${s.id}`); }}
-          emptyMessage="NO SCOUTS RECRUITED"
+      {/* Fire confirmation */}
+      {pendingFireCoach && (
+        <PixelDialog
+          visible
+          title="RELEASE STAFF"
+          message={`Release ${pendingFireCoach.coach.name}?\n\nEarly termination fee: £${pendingFireCoach.penalty.toLocaleString()}\n(25% of 26 remaining weeks)`}
+          confirmLabel="RELEASE"
+          confirmVariant="red"
+          onConfirm={confirmFireCoach}
+          onClose={() => setPendingFireCoach(null)}
         />
-      </ScrollView>
+      )}
 
-      <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => setShowModal(false)}
-        >
-          <Pressable onPress={() => {}} style={{ width: '90%', maxHeight: '80%' }}>
-            <View style={{
-              backgroundColor: WK.tealCard,
-              borderWidth: 3,
-              borderColor: WK.yellow,
-              padding: 16,
-              ...pixelShadow,
-            }}>
-              <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 14 }}>Scout Prospects</PixelText>
-              <BodyText size={13} dim style={{ textAlign: 'center', marginBottom: 14 }}>SIGNING FEE = 4 WKS SALARY</BodyText>
-              {prospectScouts.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                  <PixelText size={7} dim>NO SCOUTS AVAILABLE</PixelText>
-                  <PixelText size={6} dim style={{ marginTop: 6 }}>Check back after advancing a week</PixelText>
-                  <View style={{ marginTop: 12 }}>
-                    <Button label="CLOSE" variant="teal" onPress={() => setShowModal(false)} />
-                  </View>
-                </View>
-              ) : (
-                <>
-                  {signError && (
-                    <BodyText size={13} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>
-                      {signError}
-                    </BodyText>
-                  )}
-                  {prospectScouts.map((s) => (
-                    <ScoutProspectCard key={s.id} scout={s} onSign={() => signScout(s)} />
-                  ))}
-                  <Button label="CLOSE" variant="teal" fullWidth onPress={() => setShowModal(false)} />
-                </>
-              )}
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <PixelDialog
-        visible={!!pendingFire}
-        title="Release Scout?"
-        message={pendingFire
-          ? `Release ${pendingFire.scout.name}?\n\nEarly termination fee: £${pendingFire.penalty.toLocaleString()}\n(25% of 26 remaining weeks)`
-          : ''}
-        onClose={() => setPendingFire(null)}
-        onConfirm={confirmFireScout}
-        confirmLabel="RELEASE"
-        confirmVariant="red"
-      />
-
-      <PixelDialog
-        visible={!!fireError}
-        title="Insufficient Funds"
-        message={fireError ?? ''}
-        onClose={() => setFireError(null)}
-      />
+      {fireError && (
+        <PixelDialog
+          visible
+          title="ERROR"
+          message={fireError}
+          onConfirm={() => setFireError(null)}
+          onClose={() => setFireError(null)}
+        />
+      )}
     </View>
   );
 }
@@ -1195,8 +915,7 @@ export default function ClubHubScreen() {
       <DangerStatusCard />
 
       {activeTab === 'SQUAD' && <SquadPane />}
-      {activeTab === 'COACHES' && <CoachesPane />}
-      {activeTab === 'SCOUTS' && <ScoutsPane />}
+      {activeTab === 'STAFF' && <StaffPane />}
       {activeTab === 'DRESSING ROOM' && (
         <DressingRoomPane
           onRenamePress={(clique) => { setRenameTarget(clique); setRenameValue(clique.name); }}
