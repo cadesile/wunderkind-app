@@ -37,7 +37,7 @@ const NAV_TABS_BASE: NavTabDef[] = [
   { name: 'hub',        Icon: LayoutGrid },
   { name: 'facilities', Icon: Building2 },
   { name: 'finances',   Icon: DollarSign },
-  { name: 'market',     Icon: Store },
+  { name: 'office',     Icon: Store },
   { name: 'competitions', Icon: Trophy },
 ];
 
@@ -382,7 +382,7 @@ export default function TabLayout() {
         <Tabs.Screen name="hub"        options={{ title: 'HUB' }} />
         <Tabs.Screen name="facilities" options={{ title: 'BUILD' }} />
         <Tabs.Screen name="finances"   options={{ title: 'FINANCE' }} />
-        <Tabs.Screen name="market"     options={{ title: 'MARKET' }} />
+        <Tabs.Screen name="office"     options={{ title: 'OFFICE' }} />
         <Tabs.Screen name="competitions" options={{ title: 'COMPETITIONS' }} />
 
         {/* Hidden routes — no tab button, deep-link suppressed */}
