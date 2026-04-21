@@ -26,7 +26,8 @@ import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 
-type MarketTab = 'COACHES' | 'SCOUTS';
+const OFFICE_TABS = ['CLUB', 'HIRE'] as const;
+type OfficeTab = typeof OFFICE_TABS[number];
 
 // ─── Stat bar ─────────────────────────────────────────────────────────────────
 
@@ -909,10 +910,186 @@ function ScoutsPane({ onRefresh, refreshing }: { onRefresh: () => void; refreshi
   );
 }
 
+const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '5-4-1', '4-2-3-1'] as const;
+const PLAYING_STYLES = ['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'] as const;
+const KIT_COLORS = [
+  '#E53935', '#1565C0', '#2E7D32', '#F9A825',
+  '#6A1B9A', '#00838F', '#BF360C', '#0D47A1',
+  '#880E4F', '#37474F', '#F5F5F5', '#212121',
+];
+
+function ClubPane() {
+  const {
+    club, managerProfile,
+    setName, setStadiumName, setFormation, setPlayingStyle, setClubColors,
+  } = useClubStore();
+
+  const [clubNameDraft, setClubNameDraft] = useState(club.name);
+  const [stadiumDraft, setStadiumDraft] = useState(club.stadiumName ?? '');
+
+  function commitClubName() {
+    const trimmed = clubNameDraft.trim();
+    if (trimmed) setName(trimmed);
+    else setClubNameDraft(club.name);
+  }
+
+  function commitStadiumName() {
+    const trimmed = stadiumDraft.trim();
+    setStadiumName(trimmed || null);
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: FAB_CLEARANCE }}>
+
+      {/* AMP identity — avatar + name (read-only, set at onboarding) */}
+      {managerProfile && (
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 14,
+          backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+          padding: 12, marginBottom: 16, ...pixelShadow,
+        }}>
+          <Avatar appearance={managerProfile.appearance} role="COACH" size={52} />
+          <View style={{ flex: 1 }}>
+            <PixelText size={9} upper>{managerProfile.name}</PixelText>
+            <PixelText size={7} color={WK.dim} style={{ marginTop: 2 }}>{managerProfile.nationality}</PixelText>
+          </View>
+          <Badge label="AMP" color="yellow" />
+        </View>
+      )}
+
+      {/* Club Name */}
+      <View style={{ marginBottom: 16 }}>
+        <PixelText size={8} dim style={{ marginBottom: 6 }}>CLUB NAME</PixelText>
+        <TextInput
+          value={clubNameDraft}
+          onChangeText={setClubNameDraft}
+          onBlur={commitClubName}
+          returnKeyType="done"
+          onSubmitEditing={commitClubName}
+          style={{
+            backgroundColor: WK.tealMid, color: WK.text,
+            borderWidth: 2, borderColor: WK.border,
+            padding: 10, fontFamily: 'monospace', fontSize: 14,
+          }}
+        />
+      </View>
+
+      {/* Stadium Name */}
+      <View style={{ marginBottom: 16 }}>
+        <PixelText size={8} dim style={{ marginBottom: 6 }}>STADIUM NAME</PixelText>
+        <TextInput
+          value={stadiumDraft}
+          onChangeText={setStadiumDraft}
+          onBlur={commitStadiumName}
+          returnKeyType="done"
+          onSubmitEditing={commitStadiumName}
+          placeholder="e.g. The Factory Ground"
+          placeholderTextColor={WK.dim}
+          style={{
+            backgroundColor: WK.tealMid, color: WK.text,
+            borderWidth: 2, borderColor: WK.border,
+            padding: 10, fontFamily: 'monospace', fontSize: 14,
+          }}
+        />
+      </View>
+
+      {/* Formation */}
+      <View style={{ marginBottom: 16 }}>
+        <PixelText size={8} dim style={{ marginBottom: 8 }}>FORMATION</PixelText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {FORMATIONS.map((f) => (
+            <Pressable
+              key={f}
+              onPress={() => { setFormation(f); }}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10,
+                backgroundColor: club.formation === f ? WK.yellow : WK.tealMid,
+                borderWidth: 2,
+                borderColor: club.formation === f ? WK.yellow : WK.border,
+                ...pixelShadow,
+              }}
+            >
+              <PixelText size={9} color={club.formation === f ? WK.border : WK.text}>{f}</PixelText>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Playing Style */}
+      <View style={{ marginBottom: 16 }}>
+        <PixelText size={8} dim style={{ marginBottom: 8 }}>PLAYING STYLE</PixelText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {PLAYING_STYLES.map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => { setPlayingStyle(s); }}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10,
+                backgroundColor: club.playingStyle === s ? WK.yellow : WK.tealMid,
+                borderWidth: 2,
+                borderColor: club.playingStyle === s ? WK.yellow : WK.border,
+                ...pixelShadow,
+              }}
+            >
+              <PixelText size={8} color={club.playingStyle === s ? WK.border : WK.text}>
+                {s.replace('_', ' ')}
+              </PixelText>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Kit Colours */}
+      <View style={{ marginBottom: 8 }}>
+        <PixelText size={8} dim style={{ marginBottom: 8 }}>PRIMARY COLOUR</PixelText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {KIT_COLORS.map((color) => (
+            <Pressable
+              key={`p-${color}`}
+              onPress={() => { setClubColors(color, club.secondaryColor); }}
+              style={{
+                width: 40, height: 40,
+                backgroundColor: color,
+                borderWidth: club.primaryColor === color ? 3 : 1,
+                borderColor: club.primaryColor === color ? WK.yellow : WK.border,
+              }}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={{ marginBottom: 20 }}>
+        <PixelText size={8} dim style={{ marginBottom: 8 }}>SECONDARY COLOUR</PixelText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {KIT_COLORS.map((color) => (
+            <Pressable
+              key={`s-${color}`}
+              onPress={() => { setClubColors(club.primaryColor, color); }}
+              style={{
+                width: 40, height: 40,
+                backgroundColor: color,
+                borderWidth: club.secondaryColor === color ? 3 : 1,
+                borderColor: club.secondaryColor === color ? WK.yellow : WK.border,
+              }}
+            />
+          ))}
+        </View>
+
+        {/* Colour preview strip */}
+        <View style={{ flexDirection: 'row', marginTop: 14, gap: 0 }}>
+          <View style={{ flex: 1, height: 24, backgroundColor: club.primaryColor, borderWidth: 2, borderColor: WK.border }} />
+          <View style={{ flex: 1, height: 24, backgroundColor: club.secondaryColor, borderWidth: 2, borderColor: WK.border, borderLeftWidth: 0 }} />
+        </View>
+      </View>
+
+    </ScrollView>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export default function MarketScreen() {
-  const [activeTab, setActiveTab] = useState<MarketTab>('COACHES');
+export default function OfficeScreen() {
+  const [activeTab, setActiveTab] = useState<OfficeTab>('CLUB');
   const [refreshing, setRefreshing] = useState(false);
   const { setMarketData } = useMarketStore();
   const club = useClubStore((s) => s.club);
@@ -943,9 +1120,9 @@ export default function MarketScreen() {
 
       {/* Tab navigation */}
       <PixelTopTabBar
-        tabs={['COACHES', 'SCOUTS']}
+        tabs={[...OFFICE_TABS]}
         active={activeTab}
-        onChange={(t) => setActiveTab(t as MarketTab)}
+        onChange={(t) => setActiveTab(t as OfficeTab)}
       />
 
       {/* Title section */}
@@ -959,33 +1136,23 @@ export default function MarketScreen() {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        <PixelText size={10} upper>Market</PixelText>
+        <PixelText size={10} upper>Office</PixelText>
         <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
 
-      {/* Entity count strip */}
-      {/* <View style={{ flexDirection: 'row', marginHorizontal: 10, marginTop: 10, gap: 10 }}>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={6} dim>PLAYERS</PixelText>
-          <PixelText size={14} color={WK.tealLight} style={{ marginTop: 4 }}>{players.length}</PixelText>
-        </Card>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={6} dim>COACHES</PixelText>
-          <PixelText size={14} color={WK.yellow} style={{ marginTop: 4 }}>{coaches.length}</PixelText>
-        </Card>
-        <Card style={{ flex: 1, alignItems: 'center' }}>
-          <PixelText size={6} dim>SCOUTS</PixelText>
-          <PixelText size={14} color={WK.orange} style={{ marginTop: 4 }}>{marketScouts.length}</PixelText>
-        </Card>
-      </View> */}
-
       {/* Pane content */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'COACHES' && (
-          <CoachesPane onRefresh={handleRefresh} refreshing={refreshing} />
-        )}
-        {activeTab === 'SCOUTS' && (
-          <ScoutsPane onRefresh={handleRefresh} refreshing={refreshing} />
+        {activeTab === 'CLUB' && <ClubPane />}
+        {activeTab === 'HIRE' && (
+          <View style={{ flex: 1 }}>
+            <PixelTopTabBar
+              tabs={['COACHES', 'SCOUTS']}
+              active="COACHES" // Temporary until Task 9
+              onChange={() => {}} 
+            />
+            {/* We'll replace this with HirePane in Task 9 */}
+            <CoachesPane onRefresh={handleRefresh} refreshing={refreshing} />
+          </View>
         )}
       </View>
     </SafeAreaView>
