@@ -10,9 +10,11 @@ import { simulationService } from './SimulationService';
 import { generateAgentOffer } from './agentOffers';
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
 import { processScoutingTasks, processMissions, refreshMarketOffers } from './ScoutingService';
+import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { processMoraleAndRelationships } from './MoraleEngine';
 import { processSocialGraph } from './SocialGraphEngine';
 import { processGuardianTick } from './GuardianEngine';
+import { computeSponsorOffer, getSponsorOfferProbability, getInvestorOfferProbability } from './sponsorEngine';
 import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
@@ -27,7 +29,7 @@ import { useAltercationStore } from '@/stores/altercationStore';
 import { useEventChainStore } from '@/stores/eventChainStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { WeeklyTick, AltercationBlock } from '@/types/game';
-import { FacilityLevels } from '@/types/facility';
+import { FacilityLevels, repairFacilityCost } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
 import { TIER_OVR_CEILING } from '@/types/club';
@@ -87,6 +89,52 @@ export function processWeeklyTick(): WeeklyTick {
 
   // Expire stale chain boosts before evaluating any events this tick
   useEventChainStore.getState().expireChains(weekNumber);
+
+  // ── 0a. Sponsor contract expiry ───────────────────────────────────────────────
+  // Run before finances so expired contracts don't generate income this tick.
+  {
+    const { removeSponsorContract } = useClubStore.getState();
+    const expired = (useClubStore.getState().club.sponsorContracts ?? []).filter((c) => c.endWeek <= weekNumber);
+    for (const contract of expired) {
+      removeSponsorContract(contract.id);
+      const sponsor = allSponsors.find((s) => s.id === contract.id);
+      const sponsorName = sponsor?.name ?? 'your sponsor';
+
+      // Expiry notification
+      addMessage({
+        id: `sponsor-expired-${contract.id}-wk${weekNumber}`,
+        type: 'system',
+        week: weekNumber,
+        subject: 'Sponsorship Deal Ended',
+        body: `Your sponsorship deal with ${sponsorName} has come to an end. The club will no longer receive their weekly contribution.`,
+        isRead: false,
+      });
+
+      // 50/50 renewal offer
+      if (Math.random() < 0.5 && sponsor) {
+        const renewConfig = useGameConfigStore.getState().config;
+        const offer = computeSponsorOffer(sponsor.companySize, club.reputation, renewConfig);
+        const renewWeeklyPounds = Math.round(offer.weeklyPaymentPence / 100);
+        addMessage({
+          id: `sponsor-renewal-${contract.id}-wk${weekNumber}`,
+          type: 'sponsor',
+          week: weekNumber,
+          subject: 'Renewal Offer',
+          body: `${sponsorName} has offered to renew their sponsorship. They are offering £${renewWeeklyPounds.toLocaleString()} per week for ${offer.contractWeeks} weeks.`,
+          isRead: false,
+          requiresResponse: true,
+          entityId: sponsor.id,
+          metadata: {
+            sponsorId: sponsor.id,
+            sponsorName: sponsor.name,
+            weeklyPayment: offer.weeklyPaymentPence,
+            contractWeeks: offer.contractWeeks,
+            companySize: sponsor.companySize,
+          },
+        });
+      }
+    }
+  }
 
   // ── 0. Narrative simulation tick ──────────────────────────────────────────────
   // Processes active multi-week effects and potentially fires a story event.
@@ -350,6 +398,12 @@ export function processWeeklyTick(): WeeklyTick {
   // Balance tracks spendable cash — net is in pence, stored directly in pence
   addBalance(financialSummary.net);
 
+  // Facility income — calculated every advance, scaled by condition + reputation
+  const facilityIncomePence = calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation);
+  if (facilityIncomePence > 0) {
+    addBalance(facilityIncomePence);
+  }
+
   // HoF tracker: positive sponsor income only
   if (sponsorIncome > 0) {
     addEarnings(sponsorIncome);
@@ -366,24 +420,28 @@ export function processWeeklyTick(): WeeklyTick {
       .filter((item) => WAGE_LABELS.has(item.label))
       .reduce((sum, item) => sum + item.amount, 0) / 100,
   );
-  const upkeepPounds = Math.round(
+  const maintenancePounds = Math.round(
     financialSummary.breakdown
-      .filter((item) => !WAGE_LABELS.has(item.label))
+      .filter((item) => !WAGE_LABELS.has(item.label) && item.label !== 'Loan repayment')
       .reduce((sum, item) => sum + item.amount, 0) / 100,
   );
   const reputationIncome = Math.floor(club.reputation); // 0–100 scale → whole pounds
+  const facilityIncomePounds = Math.round(facilityIncomePence / 100);
 
   if (wagesPounds > 0) {
-    addTransaction({ amount: -wagesPounds,    category: 'wages',           description: `Week ${nextWeek} payroll`,              weekNumber: nextWeek });
+    addTransaction({ amount: -wagesPounds,       category: 'wages',  description: `Week ${nextWeek} payroll`,              weekNumber: nextWeek });
   }
-  if (upkeepPounds > 0) {
-    addTransaction({ amount: -upkeepPounds,   category: 'upkeep',          description: `Week ${nextWeek} maintenance & loans`,   weekNumber: nextWeek });
+  if (maintenancePounds > 0) {
+    addTransaction({ amount: -maintenancePounds, category: 'upkeep', description: `Week ${nextWeek} facility maintenance`, weekNumber: nextWeek });
   }
   if (sponsorIncome > 0) {
-    addTransaction({ amount: sponsorIncome,   category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`,         weekNumber: nextWeek });
+    addTransaction({ amount: sponsorIncome,       category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`,         weekNumber: nextWeek });
   }
   if (reputationIncome > 0) {
-    addTransaction({ amount: reputationIncome, category: 'earnings',       description: `Week ${nextWeek} reputation income`,     weekNumber: nextWeek });
+    addTransaction({ amount: reputationIncome,    category: 'earnings',        description: `Week ${nextWeek} reputation income`,     weekNumber: nextWeek });
+  }
+  if (facilityIncomePounds > 0) {
+    addTransaction({ amount: facilityIncomePounds, category: 'matchday_income', description: `Week ${nextWeek} facility income`,       weekNumber: nextWeek });
   }
 
   clearOldTransactions();
@@ -811,6 +869,48 @@ export function processWeeklyTick(): WeeklyTick {
   // ── 8b. Advance week + facility decay ────────────────────────────────────────
   // Decay runs after benefits have been applied, so this week's condition is used in full
   useFacilityStore.getState().decayCondition();
+
+  // ── 8c. Facility manager auto-repair ─────────────────────────────────────────
+  // If a facility_manager is on staff and balance covers the cost, automatically
+  // repair all degraded facilities (condition < 100) at end of the weekly tick.
+  const facilityManager = coaches.find((c) => c.role === 'facility_manager');
+  if (facilityManager) {
+    const { templates: repairTemplates, levels: repairLevels, conditions: repairConditions } = useFacilityStore.getState();
+    const repairedFacilities: string[] = [];
+
+    for (const template of repairTemplates) {
+      const lvl = repairLevels[template.slug] ?? 0;
+      const cond = repairConditions[template.slug] ?? 100;
+      if (lvl === 0 || cond >= 100) continue;
+
+      const costPounds = repairFacilityCost(lvl, cond, template.baseCost);
+      if (costPounds === 0) continue;
+
+      const currentBalance = useClubStore.getState().club.balance; // pence
+      if (currentBalance >= costPounds * 100) {
+        useFacilityStore.getState().repairFacility(template.slug);
+        repairedFacilities.push(template.label);
+        addTransaction({
+          amount: -costPounds,
+          category: 'upkeep',
+          description: `Auto-repair: ${template.label}`,
+          weekNumber: nextWeek,
+        });
+      }
+    }
+
+    if (repairedFacilities.length > 0) {
+      addMessage({
+        id: `facility-auto-repair-wk${weekNumber}`,
+        type: 'system',
+        week: weekNumber,
+        subject: 'Facilities Auto-Repaired',
+        body: `${facilityManager.name} handled repairs this week: ${repairedFacilities.join(', ')}.`,
+        isRead: false,
+      });
+    }
+  }
+
   incrementWeek();
 
   // ── 8c. Bi-weekly market pool refresh ─────────────────────────────────────────
