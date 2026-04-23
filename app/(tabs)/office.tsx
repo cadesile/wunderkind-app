@@ -41,6 +41,23 @@ function formatStaffRole(role: string): string {
   return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Maps a staff role to the GameConfig field that caps it. */
+function getRoleCap(
+  role: string,
+  config: ReturnType<typeof useGameConfigStore.getState>['config'],
+): number {
+  switch (role) {
+    case 'manager':              return config.maxManagersPerClub;
+    case 'director_of_football': return config.maxDirectorsOfFootballPerClub;
+    case 'facility_manager':     return config.maxFacilityManagersPerClub;
+    case 'chairman':             return config.maxChairmensPerClub;
+    case 'scout':                return config.maxScoutsPerClub;
+    default:                     return config.maxCoachesPerClub; // coach / assistant_coach
+  }
+}
+
+type CapBlock = { name: string; role: string; nationality?: string; influence?: number; appearance?: any; morale?: number; age?: number; personality?: any };
+
 function HirePane({
   selectedRole,
   setSelectedRole,
@@ -56,14 +73,35 @@ function HirePane({
   const isLoading    = useMarketStore((s) => s.isLoading);
 
   const { club, addBalance } = useClubStore();
-  const staffRoles = useGameConfigStore((s) => s.config.staffRoles);
+  const hiredCoaches = useCoachStore((s) => s.coaches);
+  const hiredScouts  = useScoutStore((s) => s.scouts);
+  const config       = useGameConfigStore((s) => s.config);
+  const staffRoles   = config.staffRoles;
+  const archetypes   = useArchetypeStore((s) => s.archetypes);
 
   const weekNumber  = club.weekNumber ?? 1;
   const clubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
 
   const [showRoleFilter, setShowRoleFilter] = useState(false);
-  const [signError, setSignError] = useState<string | null>(null);
-  const [tierPopup, setTierPopup] = useState<string | null>(null);
+  const [signError, setSignError]           = useState<string | null>(null);
+  const [tierPopup, setTierPopup]           = useState<string | null>(null);
+  const [capPopup, setCapPopup]             = useState<CapBlock | null>(null);
+
+  /** Returns existing hires for a role, or null if under cap. */
+  function getCapBlock(role: string): CapBlock | null {
+    const cap = getRoleCap(role, config);
+    const coachesOfRole = hiredCoaches.filter((c) => c.role === role);
+    const scoutsOfRole  = role === 'scout' ? hiredScouts : [];
+    const total = coachesOfRole.length + scoutsOfRole.length;
+    if (total < cap) return null;
+    // Return the first existing hire for display in the popup
+    if (coachesOfRole.length > 0) {
+      const c = coachesOfRole[0];
+      return { name: c.name, role: c.role, nationality: c.nationality, influence: c.influence, appearance: c.appearance, morale: c.morale, age: c.age, personality: c.personality };
+    }
+    const s = scoutsOfRole[0];
+    return { name: s.name, role: s.role, nationality: s.nationality };
+  }
 
   const roleOptions = useMemo(() => {
     const roles = ['ALL', ...staffRoles];
@@ -92,6 +130,8 @@ function HirePane({
   });
 
   function signCoach(mc: MarketCoach) {
+    const block = getCapBlock(mc.role);
+    if (block) { setCapPopup(block); return; }
     const fee = Math.round((mc.salary * 4) / 100);
     if ((club.balance ?? 0) < fee) {
       setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
@@ -102,6 +142,8 @@ function HirePane({
   }
 
   function signScout(ms: MarketScout) {
+    const block = getCapBlock(ms.role);
+    if (block) { setCapPopup(block); return; }
     const fee = Math.round((ms.salary * 4) / 100);
     if ((club.balance ?? 0) < fee) {
       setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
@@ -276,6 +318,80 @@ function HirePane({
           onConfirm={() => setTierPopup(null)}
           onClose={() => setTierPopup(null)}
         />
+      )}
+
+      {/* Role cap popup — shows current hire when slot is full */}
+      {capPopup && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setCapPopup(null)}>
+          <Pressable
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 24 }}
+            onPress={() => setCapPopup(null)}
+          >
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+                padding: 20, ...pixelShadow,
+              }}>
+                <PixelText size={9} upper style={{ marginBottom: 4 }}>ROLE OCCUPIED</PixelText>
+                <BodyText size={12} dim style={{ marginBottom: 16 }}>
+                  This role is already filled. Release the current hire before signing a replacement.
+                </BodyText>
+
+                {/* Mini-card for current hire */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12,
+                  backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.border,
+                  padding: 12,
+                }}>
+                  <Avatar
+                    appearance={capPopup.appearance}
+                    role="COACH"
+                    size={48}
+                    morale={capPopup.morale}
+                    age={capPopup.age}
+                  />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <BodyText size={13} upper numberOfLines={1}>{capPopup.name}</BodyText>
+                    <PixelText size={7} color={WK.tealLight}>
+                      {formatStaffRole(capPopup.role).toUpperCase()}
+                    </PixelText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                      {capPopup.nationality ? <FlagText nationality={capPopup.nationality} size={11} /> : null}
+                      {capPopup.influence !== undefined && (
+                        <Badge label={`INF ${capPopup.influence}`} color="yellow" />
+                      )}
+                      {capPopup.personality && (() => {
+                        const arch = getArchetypeForPlayer(
+                          { personality: capPopup.personality } as unknown as Player,
+                          archetypes,
+                        );
+                        return arch ? (
+                          <View style={{
+                            paddingHorizontal: 5, paddingVertical: 2,
+                            borderWidth: 2, borderColor: WK.border,
+                            backgroundColor: WK.tealDark,
+                          }}>
+                            <PixelText size={6} color={WK.yellow}>{arch.name.toUpperCase()}</PixelText>
+                          </View>
+                        ) : null;
+                      })()}
+                    </View>
+                  </View>
+                </View>
+
+                <Pressable
+                  onPress={() => setCapPopup(null)}
+                  style={{
+                    marginTop: 16, paddingVertical: 10, alignItems: 'center',
+                    backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.border,
+                  }}
+                >
+                  <PixelText size={8}>DISMISS</PixelText>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       )}
     </View>
   );
