@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, FlatList, RefreshControl, Modal, TextInput, ScrollView, Pressable } from 'react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ import { penceToPounds, formatPounds } from '@/utils/currency';
 import { hapticTap } from '@/utils/haptics';
 import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
+import type { StaffRole } from '@/types/coach';
 
 const OFFICE_TABS = ['CLUB', 'HIRE'] as const;
 type OfficeTab = typeof OFFICE_TABS[number];
@@ -37,7 +38,13 @@ function formatStaffRole(role: string): string {
   return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function HirePane() {
+function HirePane({
+  selectedRole,
+  setSelectedRole,
+}: {
+  selectedRole: string;
+  setSelectedRole: (role: string) => void;
+}) {
   const coaches      = useMarketStore((s) => s.coaches);
   const marketScouts = useMarketStore((s) => s.marketScouts);
   const hireCoach    = useMarketStore((s) => s.hireCoach);
@@ -51,12 +58,15 @@ function HirePane() {
   const weekNumber  = club.weekNumber ?? 1;
   const clubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
 
-  const [selectedRole, setSelectedRole] = useState<string>('ALL');
   const [showRoleFilter, setShowRoleFilter] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
   const [tierPopup, setTierPopup] = useState<string | null>(null);
 
-  const roleOptions = ['ALL', ...staffRoles];
+  const roleOptions = useMemo(() => {
+    const roles = ['ALL', ...staffRoles];
+    if (!roles.includes('scout')) roles.push('scout');
+    return roles;
+  }, [staffRoles]);
 
   const allItems: HireItem[] = [
     ...coaches.map((c) => ({ kind: 'coach' as const, data: c })),
@@ -67,8 +77,7 @@ function HirePane() {
     selectedRole === 'ALL'
       ? allItems
       : allItems.filter((item) => {
-          if (item.kind === 'scout') return selectedRole === 'scout';
-          return item.data.rawRole === selectedRole;
+          return item.data.role === selectedRole;
         });
 
   const visibleItems = filtered.map((item) => {
@@ -147,7 +156,7 @@ function HirePane() {
                   <Avatar appearance={undefined} role="COACH" size={44} />
                   <View style={{ flex: 1 }}>
                     <BodyText size={14} upper numberOfLines={1}>{mc.firstName} {mc.lastName}</BodyText>
-                    <PixelText size={8} color={WK.tealLight}>{formatStaffRole(mc.rawRole).toUpperCase()}</PixelText>
+                    <PixelText size={8} color={WK.tealLight}>{formatStaffRole(mc.role).toUpperCase()}</PixelText>
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                       <FlagText nationality={mc.nationality} size={11} />
                       <BodyText size={11} dim>· £{Math.round(mc.salary / 100).toLocaleString()}/wk</BodyText>
@@ -279,14 +288,38 @@ const KIT_COLORS = [
   '#880E4F', '#37474F', '#F5F5F5', '#212121',
 ];
 
-function ClubPane() {
+function SectionCard({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <PixelText size={7} dim style={{ marginBottom: 6 }}>{label}</PixelText>
+      <View style={{
+        backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+        padding: 14, ...pixelShadow,
+      }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+// Roles capped at 1 per club — shown as individual cards in the CLUB pane.
+const SINGLETON_ROLES: { role: StaffRole; label: string }[] = [
+  { role: 'manager',              label: 'MANAGER' },
+  { role: 'director_of_football', label: 'DIRECTOR OF FOOTBALL' },
+  { role: 'facility_manager',     label: 'FACILITY MANAGER' },
+  { role: 'chairman',             label: 'CHAIRMAN' },
+];
+
+function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => void }) {
   const {
     club, managerProfile,
     setName, setStadiumName, setFormation, setPlayingStyle, setClubColors,
   } = useClubStore();
+  const coaches = useCoachStore((s) => s.coaches);
 
   const [clubNameDraft, setClubNameDraft] = useState(club.name);
   const [stadiumDraft, setStadiumDraft] = useState(club.stadiumName ?? '');
+  const [kitSlot, setKitSlot] = useState<'primary' | 'secondary'>('primary');
 
   function commitClubName() {
     const trimmed = clubNameDraft.trim();
@@ -299,45 +332,46 @@ function ClubPane() {
     setStadiumName(trimmed || null);
   }
 
+  function handleSwatchPress(color: string) {
+    hapticTap();
+    if (kitSlot === 'primary') setClubColors(color, club.secondaryColor);
+    else setClubColors(club.primaryColor, color);
+  }
+
+  const inputStyle = {
+    backgroundColor: WK.tealMid, color: WK.text,
+    borderWidth: 2, borderColor: WK.border,
+    padding: 10, fontFamily: 'monospace', fontSize: 14,
+  } as const;
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: FAB_CLEARANCE }}>
 
-      {/* AMP identity — avatar + name (read-only, set at onboarding) */}
-      {managerProfile && (
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 14,
-          backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
-          padding: 12, marginBottom: 16, ...pixelShadow,
-        }}>
-          <Avatar appearance={managerProfile.appearance} role="COACH" size={52} />
-          <View style={{ flex: 1 }}>
-            <PixelText size={9} upper>{managerProfile.name}</PixelText>
-            <BodyText size={11} dim style={{ marginTop: 2 }}>{managerProfile.nationality}</BodyText>
-          </View>
-          <Badge label="AMP" color="yellow" />
-        </View>
-      )}
-
-      {/* Club Name */}
-      <View style={{ marginBottom: 16 }}>
-        <PixelText size={8} dim style={{ marginBottom: 6 }}>CLUB NAME</PixelText>
+      {/* ── IDENTITY ── */}
+      <SectionCard label="IDENTITY">
+        {managerProfile && (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+              <Avatar appearance={managerProfile.appearance} role="COACH" size={52} />
+              <View style={{ flex: 1 }}>
+                <PixelText size={9} upper>{managerProfile.name}</PixelText>
+                <BodyText size={11} dim style={{ marginTop: 2 }}>{managerProfile.nationality}</BodyText>
+              </View>
+              <Badge label="AMP" color="yellow" />
+            </View>
+            <View style={{ height: 2, backgroundColor: WK.border, marginBottom: 14 }} />
+          </>
+        )}
+        <PixelText size={7} dim style={{ marginBottom: 6 }}>CLUB NAME</PixelText>
         <TextInput
           value={clubNameDraft}
           onChangeText={setClubNameDraft}
           onBlur={commitClubName}
           returnKeyType="done"
           onSubmitEditing={commitClubName}
-          style={{
-            backgroundColor: WK.tealMid, color: WK.text,
-            borderWidth: 2, borderColor: WK.border,
-            padding: 10, fontFamily: 'monospace', fontSize: 14,
-          }}
+          style={{ ...inputStyle, marginBottom: 12 }}
         />
-      </View>
-
-      {/* Stadium Name */}
-      <View style={{ marginBottom: 16 }}>
-        <PixelText size={8} dim style={{ marginBottom: 6 }}>STADIUM NAME</PixelText>
+        <PixelText size={7} dim style={{ marginBottom: 6 }}>STADIUM</PixelText>
         <TextInput
           value={stadiumDraft}
           onChangeText={setStadiumDraft}
@@ -346,18 +380,14 @@ function ClubPane() {
           onSubmitEditing={commitStadiumName}
           placeholder="e.g. The Factory Ground"
           placeholderTextColor={WK.dim}
-          style={{
-            backgroundColor: WK.tealMid, color: WK.text,
-            borderWidth: 2, borderColor: WK.border,
-            padding: 10, fontFamily: 'monospace', fontSize: 14,
-          }}
+          style={inputStyle}
         />
-      </View>
+      </SectionCard>
 
-      {/* Formation */}
-      <View style={{ marginBottom: 16 }}>
-        <PixelText size={8} dim style={{ marginBottom: 8 }}>FORMATION</PixelText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {/* ── TACTICS ── */}
+      <SectionCard label="TACTICS">
+        <PixelText size={7} dim style={{ marginBottom: 8 }}>FORMATION</PixelText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
           {FORMATIONS.map((f) => (
             <Pressable
               key={f}
@@ -374,11 +404,7 @@ function ClubPane() {
             </Pressable>
           ))}
         </View>
-      </View>
-
-      {/* Playing Style */}
-      <View style={{ marginBottom: 16 }}>
-        <PixelText size={8} dim style={{ marginBottom: 8 }}>PLAYING STYLE</PixelText>
+        <PixelText size={7} dim style={{ marginBottom: 8 }}>PLAYING STYLE</PixelText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {PLAYING_STYLES.map((s) => (
             <Pressable
@@ -398,50 +424,96 @@ function ClubPane() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </SectionCard>
 
-      {/* Kit Colours */}
-      <View style={{ marginBottom: 8 }}>
-        <PixelText size={8} dim style={{ marginBottom: 8 }}>PRIMARY COLOUR</PixelText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {KIT_COLORS.map((color) => (
+      {/* ── KIT COLOURS ── */}
+      <SectionCard label="KIT COLOURS">
+        {/* Segmented slot toggle */}
+        <View style={{ flexDirection: 'row', marginBottom: 14 }}>
+          {(['primary', 'secondary'] as const).map((slot, i) => (
             <Pressable
-              key={`p-${color}`}
-              onPress={() => { hapticTap(); setClubColors(color, club.secondaryColor); }}
+              key={slot}
+              onPress={() => { hapticTap(); setKitSlot(slot); }}
               style={{
-                width: 40, height: 40,
-                backgroundColor: color,
-                borderWidth: club.primaryColor === color ? 3 : 1,
-                borderColor: club.primaryColor === color ? WK.yellow : WK.border,
+                flex: 1, paddingVertical: 9, alignItems: 'center',
+                backgroundColor: kitSlot === slot ? WK.yellow : WK.tealMid,
+                borderWidth: 2, borderColor: WK.border,
+                borderRightWidth: i === 0 ? 1 : 2,
               }}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={{ marginBottom: 20 }}>
-        <PixelText size={8} dim style={{ marginBottom: 8 }}>SECONDARY COLOUR</PixelText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {KIT_COLORS.map((color) => (
-            <Pressable
-              key={`s-${color}`}
-              onPress={() => { hapticTap(); setClubColors(club.primaryColor, color); }}
-              style={{
-                width: 40, height: 40,
-                backgroundColor: color,
-                borderWidth: club.secondaryColor === color ? 3 : 1,
-                borderColor: club.secondaryColor === color ? WK.yellow : WK.border,
-              }}
-            />
+            >
+              <PixelText size={7} color={kitSlot === slot ? WK.border : WK.text}>
+                {slot === 'primary' ? 'PRIMARY' : 'SECONDARY'}
+              </PixelText>
+            </Pressable>
           ))}
         </View>
 
-        {/* Colour preview strip */}
-        <View style={{ flexDirection: 'row', marginTop: 14, gap: 0 }}>
-          <View style={{ flex: 1, height: 24, backgroundColor: club.primaryColor, borderWidth: 2, borderColor: WK.border }} />
-          <View style={{ flex: 1, height: 24, backgroundColor: club.secondaryColor, borderWidth: 2, borderColor: WK.border, borderLeftWidth: 0 }} />
+        {/* Shared swatch grid */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+          {KIT_COLORS.map((color) => {
+            const isSelected = kitSlot === 'primary'
+              ? club.primaryColor === color
+              : club.secondaryColor === color;
+            return (
+              <Pressable
+                key={color}
+                onPress={() => handleSwatchPress(color)}
+                style={{
+                  width: 44, height: 44,
+                  backgroundColor: color,
+                  borderWidth: isSelected ? 3 : 1,
+                  borderColor: isSelected ? WK.yellow : WK.border,
+                }}
+              />
+            );
+          })}
         </View>
-      </View>
+
+        {/* Preview strip */}
+        <View style={{ flexDirection: 'row' }}>
+          <View style={{ flex: 1, height: 48, backgroundColor: club.primaryColor, borderWidth: 2, borderColor: WK.border }} />
+          <View style={{ flex: 1, height: 48, backgroundColor: club.secondaryColor, borderWidth: 2, borderColor: WK.border, borderLeftWidth: 0 }} />
+        </View>
+      </SectionCard>
+
+      {/* ── KEY STAFF ── */}
+      <SectionCard label="KEY STAFF">
+        {SINGLETON_ROLES.map(({ role, label }, idx) => {
+          const hired = coaches.find((c) => c.role === role);
+          return (
+            <View
+              key={role}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 10,
+                borderTopWidth: idx === 0 ? 0 : 2,
+                borderTopColor: WK.border,
+              }}
+            >
+              <PixelText size={7} dim>{label}</PixelText>
+              {hired ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <FlagText nationality={hired.nationality ?? ''} size={11} />
+                  <BodyText size={12} upper>{hired.name}</BodyText>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => { hapticTap(); onNavigateToHire(role); }}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 4,
+                    paddingHorizontal: 10, paddingVertical: 6,
+                    backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.yellow,
+                  }}
+                >
+                  <PixelText size={7} color={WK.yellow}>HIRE →</PixelText>
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+      </SectionCard>
 
     </ScrollView>
   );
@@ -451,7 +523,13 @@ function ClubPane() {
 
 export default function OfficeScreen() {
   const [activeTab, setActiveTab] = useState<OfficeTab>('CLUB');
+  const [selectedRole, setSelectedRole] = useState<string>('ALL');
   const club = useClubStore((s) => s.club);
+
+  function navigateToHire(role: string) {
+    setSelectedRole(role);
+    setActiveTab('HIRE');
+  }
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
@@ -468,7 +546,10 @@ export default function OfficeScreen() {
       <PixelTopTabBar
         tabs={[...OFFICE_TABS]}
         active={activeTab}
-        onChange={(t) => setActiveTab(t as OfficeTab)}
+        onChange={(t) => {
+          if (t !== 'HIRE') setSelectedRole('ALL');
+          setActiveTab(t as OfficeTab);
+        }}
       />
 
       {/* Title section */}
@@ -483,13 +564,16 @@ export default function OfficeScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Office</PixelText>
-        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
+        {activeTab === 'HIRE'
+          ? <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
+          : <Badge label={(club.reputationTier ?? 'LOCAL').toUpperCase()} color="yellow" />
+        }
       </View>
 
       {/* Pane content */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'CLUB' && <ClubPane />}
-        {activeTab === 'HIRE' && <HirePane />}
+        {activeTab === 'CLUB' && <ClubPane onNavigateToHire={navigateToHire} />}
+        {activeTab === 'HIRE' && <HirePane selectedRole={selectedRole} setSelectedRole={setSelectedRole} />}
       </View>
     </SafeAreaView>
   );

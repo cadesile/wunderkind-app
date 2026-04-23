@@ -122,6 +122,18 @@ export interface GameConfig {
   // ── Staff ─────────────────────────────────────────────────────────────────
   /** StaffRole enum values from the backend — used as filter options in the Hire screen. */
   staffRoles: import('./coach').StaffRole[];
+  /** Maximum number of coaches (role: coach / assistant_coach) allowed per club. */
+  maxCoachesPerClub: number;
+  /** Maximum number of managers allowed per club. */
+  maxManagersPerClub: number;
+  /** Maximum number of directors of football allowed per club. */
+  maxDirectorsOfFootballPerClub: number;
+  /** Maximum number of facility managers allowed per club. */
+  maxFacilityManagersPerClub: number;
+  /** Maximum number of chairmen allowed per club. */
+  maxChairmensPerClub: number;
+  /** Maximum number of scouts allowed per club. */
+  maxScoutsPerClub: number;
 
   // ── Offer probabilities (per reputation tier, 0–1) ────────────────────────
   /** Weekly probability of a sponsor offer when club is Local tier. */
@@ -197,6 +209,12 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   leaguePositionDecreasePercent: 5,
 
   staffRoles: [],
+  maxCoachesPerClub: 15,
+  maxManagersPerClub: 1,
+  maxDirectorsOfFootballPerClub: 1,
+  maxFacilityManagersPerClub: 1,
+  maxChairmensPerClub: 1,
+  maxScoutsPerClub: 3,
 
   sponsorProbabilityLocal:    1,
   sponsorProbabilityRegional: 1,
