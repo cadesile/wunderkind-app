@@ -23,7 +23,10 @@ import { penceToPounds, formatPounds } from '@/utils/currency';
 import { hapticTap } from '@/utils/haptics';
 import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
-import type { StaffRole } from '@/types/coach';
+import type { StaffRole, Coach } from '@/types/coach';
+import { useArchetypeStore } from '@/stores/archetypeStore';
+import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
+import type { Player } from '@/types/player';
 
 const OFFICE_TABS = ['CLUB', 'HIRE'] as const;
 type OfficeTab = typeof OFFICE_TABS[number];
@@ -310,6 +313,91 @@ const SINGLETON_ROLES: { role: StaffRole; label: string }[] = [
   { role: 'chairman',             label: 'CHAIRMAN' },
 ];
 
+function KeyStaffSection({
+  coaches,
+  onNavigateToHire,
+}: {
+  coaches: Coach[];
+  onNavigateToHire: (role: string) => void;
+}) {
+  const archetypes = useArchetypeStore((s) => s.archetypes);
+
+  return (
+    <SectionCard label="KEY STAFF">
+      {SINGLETON_ROLES.map(({ role, label }, idx) => {
+        const hired = coaches.find((c) => c.role === role);
+
+        if (!hired) {
+          return (
+            <View
+              key={role}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 10,
+                borderTopWidth: idx === 0 ? 0 : 2,
+                borderTopColor: WK.border,
+              }}
+            >
+              <PixelText size={7} dim>{label}</PixelText>
+              <Pressable
+                onPress={() => { hapticTap(); onNavigateToHire(role); }}
+                style={{
+                  paddingHorizontal: 10, paddingVertical: 6,
+                  backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.yellow,
+                }}
+              >
+                <PixelText size={7} color={WK.yellow}>HIRE →</PixelText>
+              </Pressable>
+            </View>
+          );
+        }
+
+        const archetype = getArchetypeForPlayer(hired as unknown as Player, archetypes);
+
+        return (
+          <View
+            key={role}
+            style={{
+              paddingVertical: 12,
+              borderTopWidth: idx === 0 ? 0 : 2,
+              borderTopColor: WK.border,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Avatar
+                appearance={hired.appearance}
+                role="COACH"
+                size={52}
+                morale={hired.morale}
+                age={hired.age}
+              />
+              <View style={{ flex: 1, gap: 3 }}>
+                <BodyText size={14} upper numberOfLines={1}>{hired.name}</BodyText>
+                <PixelText size={7} color={WK.tealLight}>{label}</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                  <FlagText nationality={hired.nationality ?? ''} size={11} />
+                  <Badge label={`INF ${hired.influence}`} color="yellow" />
+                  {archetype && (
+                    <View style={{
+                      paddingHorizontal: 5, paddingVertical: 2,
+                      borderWidth: 2, borderColor: WK.border,
+                      backgroundColor: WK.tealMid,
+                    }}>
+                      <PixelText size={6} color={WK.yellow}>{archetype.name.toUpperCase()}</PixelText>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </SectionCard>
+  );
+}
+
 function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => void }) {
   const {
     club, managerProfile,
@@ -385,43 +473,7 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
       </SectionCard>
 
       {/* ── KEY STAFF ── */}
-      <SectionCard label="KEY STAFF">
-        {SINGLETON_ROLES.map(({ role, label }, idx) => {
-          const hired = coaches.find((c) => c.role === role);
-          return (
-            <View
-              key={role}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingVertical: 10,
-                borderTopWidth: idx === 0 ? 0 : 2,
-                borderTopColor: WK.border,
-              }}
-            >
-              <PixelText size={7} dim>{label}</PixelText>
-              {hired ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <FlagText nationality={hired.nationality ?? ''} size={11} />
-                  <BodyText size={12} upper>{hired.name}</BodyText>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => { hapticTap(); onNavigateToHire(role); }}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 4,
-                    paddingHorizontal: 10, paddingVertical: 6,
-                    backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.yellow,
-                  }}
-                >
-                  <PixelText size={7} color={WK.yellow}>HIRE →</PixelText>
-                </Pressable>
-              )}
-            </View>
-          );
-        })}
-      </SectionCard>
+      <KeyStaffSection coaches={coaches} onNavigateToHire={onNavigateToHire} />
 
       {/* ── TACTICS ── */}
       <SectionCard label="TACTICS">
