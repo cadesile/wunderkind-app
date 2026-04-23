@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Club, ReputationTier, ManagerPersonality, ManagerProfile } from '@/types/club';
+import { Club, ReputationTier, ManagerPersonality, ManagerProfile, SponsorContract } from '@/types/club';
 import { zustandStorage } from '@/utils/storage';
 import type { ClubStatusResponse, SyncAcceptedResponse } from '@/types/api';
 
@@ -23,6 +23,16 @@ interface ClubState {
   setBalance: (balance: number) => void;
   setCreatedAt: (date: string) => void;
   setSponsorIds: (ids: string[]) => void;
+  /**
+   * Register a newly accepted sponsorship contract.
+   * Keeps sponsorIds in sync so legacy reads still work.
+   */
+  addSponsorContract: (contract: SponsorContract) => void;
+  /**
+   * Remove an expired or terminated sponsorship contract.
+   * Keeps sponsorIds in sync.
+   */
+  removeSponsorContract: (id: string) => void;
   setInvestorId: (id: string | null) => void;
   setCountry: (country: Club['country']) => void;
   incrementWeek: () => void;
@@ -65,6 +75,7 @@ export const DEFAULT_CLUB: Club = {
   balance: 0,
   createdAt: '',
   sponsorIds: [],
+  sponsorContracts: [],
   investorId: null,
   country: null,
   lastRepActivityWeek: 1,
@@ -116,6 +127,22 @@ export const useClubStore = create<ClubState>()(
         set((state) => ({ club: { ...state.club, createdAt: date } })),
       setSponsorIds: (ids) =>
         set((state) => ({ club: { ...state.club, sponsorIds: ids } })),
+      addSponsorContract: (contract) =>
+        set((state) => ({
+          club: {
+            ...state.club,
+            sponsorContracts: [...(state.club.sponsorContracts ?? []), contract],
+            sponsorIds: [...state.club.sponsorIds, contract.id],
+          },
+        })),
+      removeSponsorContract: (id) =>
+        set((state) => ({
+          club: {
+            ...state.club,
+            sponsorContracts: (state.club.sponsorContracts ?? []).filter((c) => c.id !== id),
+            sponsorIds: state.club.sponsorIds.filter((sid) => sid !== id),
+          },
+        })),
       setInvestorId: (id) =>
         set((state) => ({ club: { ...state.club, investorId: id } })),
       setCountry: (country) =>
