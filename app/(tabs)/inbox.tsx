@@ -949,7 +949,7 @@ function InboxMessageDetail({
   onBack: () => void;
 }) {
   const { markRead, respond } = useInboxStore();
-  const { setInvestorId, setSponsorIds, addBalance, club } = useClubStore();
+  const { setInvestorId, addBalance, addSponsorContract, club } = useClubStore();
 
   const stableOnBack = useCallback(onBack, []);
   useEffect(() => {
@@ -989,7 +989,19 @@ function InboxMessageDetail({
       });
     }
     if (message.type === 'sponsor' && message.entityId && sponsorMeta) {
-      setSponsorIds([...club.sponsorIds, message.entityId]);
+      if ((club.sponsorContracts ?? []).length < 10) {
+        addSponsorContract({
+          id: message.entityId,
+          weeklyPayment: sponsorMeta.weeklyPayment,          // pence
+          endWeek: message.week + sponsorMeta.contractWeeks,
+        });
+        useFinanceStore.getState().addTransaction({
+          amount: 0,
+          category: 'sponsor_payment',
+          description: `Signed: ${sponsorMeta.sponsorName} (£${Math.round(sponsorMeta.weeklyPayment / 100).toLocaleString()}/wk)`,
+          weekNumber: message.week,
+        });
+      }
     }
     respond(message.id, 'accepted');
   }
@@ -1014,12 +1026,12 @@ function InboxMessageDetail({
         {message.type === 'sponsor' && sponsorMeta && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
             <PixelText size={16} variant="vt323" color={WK.tealLight} style={{ marginBottom: 10 }}>OFFER DETAILS</PixelText>
-            <OfferRow label="WEEKLY INCOME" value={`£${sponsorMeta.weeklyPayment.toLocaleString()}`} />
+            <OfferRow label="WEEKLY INCOME" value={`£${Math.round(sponsorMeta.weeklyPayment / 100).toLocaleString()}`} />
             <OfferRow label="CONTRACT LENGTH" value={`${sponsorMeta.contractWeeks} WEEKS`} />
             <OfferRow label="SPONSOR SIZE" value={String(sponsorMeta.companySize)} />
             <View style={{ marginTop: 8 }}>
               <PixelText size={13} variant="vt323" dim>
-                TOTAL VALUE: £{(sponsorMeta.weeklyPayment * sponsorMeta.contractWeeks).toLocaleString()}
+                TOTAL VALUE: £{(Math.round(sponsorMeta.weeklyPayment / 100) * sponsorMeta.contractWeeks).toLocaleString()}
               </PixelText>
             </View>
           </View>
