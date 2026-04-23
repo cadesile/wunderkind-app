@@ -106,9 +106,40 @@ export interface GameConfig {
   /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
   debugLoggingEnabled: boolean;
 
+  // ── League Finances ───────────────────────────────────────────────────
+  /** Per-season income range for SMALL company sponsors (pence). */
+  smallSponsorMin: number;
+  smallSponsorMax: number;
+  /** Per-season income range for MEDIUM company sponsors (pence). */
+  mediumSponsorMin: number;
+  mediumSponsorMax: number;
+  /** Per-season income range for LARGE company sponsors (pence). */
+  largeSponsorMin: number;
+  largeSponsorMax: number;
+  /** % reduction per finishing position for leaguePositionPot distribution. */
+  leaguePositionDecreasePercent: number;
+
   // ── Staff ─────────────────────────────────────────────────────────────────
   /** StaffRole enum values from the backend — used as filter options in the Hire screen. */
-  staffRoles: string[];
+  staffRoles: import('./coach').StaffRole[];
+
+  // ── Offer probabilities (per reputation tier, 0–1) ────────────────────────
+  /** Weekly probability of a sponsor offer when club is Local tier. */
+  sponsorProbabilityLocal: number;
+  /** Weekly probability of a sponsor offer when club is Regional tier. */
+  sponsorProbabilityRegional: number;
+  /** Weekly probability of a sponsor offer when club is National tier. */
+  sponsorProbabilityNational: number;
+  /** Weekly probability of a sponsor offer when club is Elite tier. */
+  sponsorProbabilityElite: number;
+  /** Weekly probability of an investor offer when club is Local tier. */
+  investorProbabilityLocal: number;
+  /** Weekly probability of an investor offer when club is Regional tier. */
+  investorProbabilityRegional: number;
+  /** Weekly probability of an investor offer when club is National tier. */
+  investorProbabilityNational: number;
+  /** Weekly probability of an investor offer when club is Elite tier. */
+  investorProbabilityElite: number;
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -157,5 +188,22 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
 
   debugLoggingEnabled: false,
 
-  staffRoles: ['assistant_coach', 'coach', 'scout', 'manager', 'director_of_football', 'facility_manager', 'chairman'],
+  smallSponsorMin: 1000000,
+  smallSponsorMax: 5000000,
+  mediumSponsorMin: 10000000,
+  mediumSponsorMax: 30000000,
+  largeSponsorMin: 50000000,
+  largeSponsorMax: 200000000,
+  leaguePositionDecreasePercent: 5,
+
+  staffRoles: [],
+
+  sponsorProbabilityLocal:    1,
+  sponsorProbabilityRegional: 1,
+  sponsorProbabilityNational: 1,
+  sponsorProbabilityElite:    1,
+  investorProbabilityLocal:    0.2,
+  investorProbabilityRegional: 0.12,
+  investorProbabilityNational: 0.06,
+  investorProbabilityElite:    0.02,
 };
