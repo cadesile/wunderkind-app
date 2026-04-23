@@ -15,6 +15,12 @@ export interface StarterConfig {
   starterClubTier: string;
   /** ClubCountryCode values available in the country picker. Defaults to ['EN'] if absent. */
   enabledCountries?: string[];
+  /**
+   * Starting facility levels for a new club.
+   * Keys are facility slugs (e.g. "training_pitch"), values are the initial level (1+).
+   * Slugs absent from the map default to level 0.
+   */
+  defaultFacilities?: Record<string, number>;
   /** 
    * Global ability ranges per country and league tier.
    * Format: { "EN": { "1": { "min": 75, "max": 100 } } }
@@ -102,7 +108,7 @@ export interface ApiStaffCoach {
   lastName: string;
   dateOfBirth?: string;
   nationality?: string;
-  role: 'head_coach' | 'assistant_coach' | 'fitness_coach' | 'analyst';
+  role: import('./coach').StaffRole;
   coachingAbility: number;
   scoutingRange: number;
   /** Weekly salary in pence */
@@ -118,6 +124,7 @@ export interface ApiStaffScout {
   name: string;
   dateOfBirth?: string;
   nationality: string;
+  role: import('./coach').StaffRole;
   /** 0–100 scouting range */
   scoutingRange: number;
   /** Weekly salary in pence */
@@ -214,6 +221,12 @@ export interface LeagueSnapshot {
   season: number;
   promotionSpots: number | null;
   reputationTier: 'local' | 'regional' | 'national' | 'elite' | null;
+  /**
+   * Maximum reputation (0–100) a club in this league can attain.
+   * Sent by the backend as part of the worldpack league config.
+   * null = no cap enforced (e.g. unassigned league or legacy data).
+   */
+  reputationCap: number | null;
   tvDeal: number | null;
   sponsorPot: number;
   prizeMoney: number | null;

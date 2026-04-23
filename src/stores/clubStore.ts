@@ -98,7 +98,10 @@ export const useClubStore = create<ClubState>()(
         set((state) => ({ club: { ...state.club, name } })),
       setReputation: (delta) =>
         set((state) => {
-          const next = Math.max(0, Math.min(100, state.club.reputation + delta));
+          const { useLeagueStore } = require('@/stores/leagueStore');
+          const leagueCap: number | null = useLeagueStore.getState().league?.reputationCap ?? null;
+          const ceiling = leagueCap !== null ? Math.min(100, leagueCap) : 100;
+          const next = Math.max(0, Math.min(ceiling, state.club.reputation + delta));
           return {
             club: {
               ...state.club,
