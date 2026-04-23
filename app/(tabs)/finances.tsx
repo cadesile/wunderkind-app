@@ -18,6 +18,7 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { Loan } from '@/types/market';
 import { type FinancialCategory, type FinancialTransaction } from '@/types/finance';
 import { calculateWeeklyFinances } from '@/engine/finance';
+import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { penceToPounds, formatCurrencyCompact, formatPounds } from '@/utils/currency';
 import useClubMetrics from '@/hooks/useClubMetrics';
 
@@ -46,18 +47,18 @@ function FinanceRow({ label, value, accent }: { label: string; value: string; ac
 
 function BalancePane() {
   const club = useClubStore((s) => s.club);
-  const sponsors = useMarketStore((s) => s.sponsors);
   const { totalWeeklyRepayment } = useLoanStore();
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
   const facilityLevels = useFacilityStore((s) => s.levels);
+  const facilityConditions = useFacilityStore((s) => s.conditions);
+  const facilityTemplates = useFacilityStore((s) => s.templates);
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
     typeof club.balance === 'number' && !isNaN(club.balance) ? club.balance : 0,
   );
 
-  const activeSponsors = sponsors.filter((s) => club.sponsorIds.includes(s.id));
   const weeklyRepayment = totalWeeklyRepayment();
 
   const record = calculateWeeklyFinances(
@@ -66,12 +67,16 @@ function BalancePane() {
     players,
     coaches,
     facilityLevels,
-    activeSponsors,
+    [],
     weeklyRepayment,
+    facilityTemplates,
   );
 
   // All values in whole pounds for consistent display
-  const sponsorIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
+  const sponsorIncome = (club.sponsorContracts ?? []).reduce(
+    (sum, c) => sum + Math.round(c.weeklyPayment / 100),
+    0,
+  );
   const reputationIncome = club.reputation; // reputation×100 pence ÷ 100 = reputation pounds
   // wage and salary are stored in pence — convert to pounds for display
   const playerWages = Math.round(players.reduce((sum, p) => sum + (p.wage ?? 0), 0) / 100);
@@ -82,8 +87,11 @@ function BalancePane() {
       .filter((b) => b.label.includes('maintenance'))
       .reduce((sum, b) => sum + b.amount, 0) / 100,
   );
+  const facilityIncome = Math.round(
+    calculateMatchdayIncome(facilityTemplates, facilityLevels, facilityConditions, club.reputation) / 100,
+  );
   // displayNet computed entirely in pounds (record.net mixes pence/pounds units)
-  const displayNet = sponsorIncome + reputationIncome - playerWages - coachSalaries - facilityMaint - weeklyRepayment;
+  const displayNet = sponsorIncome + reputationIncome + facilityIncome - playerWages - coachSalaries - facilityMaint - weeklyRepayment;
   const netColor = displayNet >= 0 ? WK.green : WK.red;
 
   return (
@@ -121,6 +129,11 @@ function BalancePane() {
           label="REPUTATION INCOME"
           value={`+£${reputationIncome.toLocaleString()}`}
           accent={WK.green}
+        />
+        <FinanceRow
+          label="FACILITY INCOME"
+          value={`+£${facilityIncome.toLocaleString()}`}
+          accent={facilityIncome > 0 ? WK.green : WK.dim}
         />
         <FinanceRow
           label="PLAYER WAGES"
@@ -349,10 +362,14 @@ function InvestorsPane() {
 
 function SponsorsPane() {
   const club = useClubStore((s) => s.club);
-  const sponsors = useMarketStore((s) => s.sponsors);
+  const allSponsors = useMarketStore((s) => s.sponsors);
+  const weekNumber = club.weekNumber ?? 1;
 
-  const activeSponsors = sponsors.filter((s) => club.sponsorIds.includes(s.id));
-  const totalWeeklyIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
+  const contracts = club.sponsorContracts ?? [];
+  const totalWeeklyIncome = contracts.reduce(
+    (sum, c) => sum + Math.round(c.weeklyPayment / 100),
+    0,
+  );
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: FAB_CLEARANCE }}>
@@ -363,54 +380,66 @@ function SponsorsPane() {
           value={`+£${totalWeeklyIncome.toLocaleString()}`}
           accent={WK.green}
         />
-        <FinanceRow label="ACTIVE SPONSORS" value={String(activeSponsors.length)} />
+        <FinanceRow label="ACTIVE SPONSORS" value={String(contracts.length)} />
       </Card>
 
-      {activeSponsors.length === 0 ? (
+      {contracts.length === 0 ? (
         <View style={{ alignItems: 'center', paddingTop: 40 }}>
           <PixelText size={8} dim>NO ACTIVE SPONSORS</PixelText>
         </View>
       ) : (
-        activeSponsors.map((sponsor) => (
-          <View key={sponsor.id} style={{
-            backgroundColor: WK.tealCard,
-            borderWidth: 3,
-            borderColor: WK.border,
-            padding: 14,
-            ...pixelShadow,
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-              <PixelText size={8} upper style={{ flex: 1 }}>{sponsor.name}</PixelText>
-              <PixelText size={7} color={WK.dim}>{sponsor.companySize}</PixelText>
-            </View>
-            <FinanceRow
-              label="WEEKLY PAYMENT"
-              value={`+£${sponsor.weeklyPayment.toLocaleString()}`}
-              accent={WK.green}
-            />
-            <FinanceRow
-              label="CONTRACT LENGTH"
-              value={`${sponsor.contractWeeks} WKS`}
-            />
-            <FinanceRow
-              label="TOTAL VALUE"
-              value={`£${(sponsor.weeklyPayment * sponsor.contractWeeks).toLocaleString()}`}
-              accent={WK.yellow}
-            />
+        contracts.map((contract) => {
+          const sponsor = allSponsors.find((s) => s.id === contract.id);
+          const name = sponsor?.name ?? contract.id;
+          const size = sponsor?.companySize ?? '—';
+          const weeksRemaining = Math.max(0, contract.endWeek - weekNumber);
+          const totalContractWeeks = contract.endWeek - (weekNumber - weeksRemaining);
+          const progressPct = totalContractWeeks > 0 ? (1 - weeksRemaining / totalContractWeeks) * 100 : 100;
+          const weeklyPounds = Math.round(contract.weeklyPayment / 100);
 
-            {/* Contract term bar (static — no startWeek tracked) */}
-            <View style={{ marginTop: 10 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <BodyText size={12} dim>CONTRACT TERM</BodyText>
-                <BodyText size={12} dim>{sponsor.contractWeeks} WKS</BodyText>
+          return (
+            <View key={contract.id} style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: WK.border,
+              padding: 14,
+              ...pixelShadow,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <PixelText size={8} upper style={{ flex: 1 }}>{name}</PixelText>
+                <PixelText size={7} color={WK.dim}>{size}</PixelText>
               </View>
-              <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-                <View style={{ height: '100%', width: '100%', backgroundColor: WK.tealLight }} />
+              <FinanceRow
+                label="WEEKLY PAYMENT"
+                value={`+£${weeklyPounds.toLocaleString()}`}
+                accent={WK.green}
+              />
+              <FinanceRow
+                label="WEEKS REMAINING"
+                value={`${weeksRemaining} WKS`}
+              />
+              <FinanceRow
+                label="TOTAL REMAINING"
+                value={`£${(weeklyPounds * weeksRemaining).toLocaleString()}`}
+                accent={WK.yellow}
+              />
+              {/* Contract progress bar */}
+              <View style={{ marginTop: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <BodyText size={12} dim>CONTRACT TERM</BodyText>
+                  <BodyText size={12} dim>{weeksRemaining} WKS LEFT</BodyText>
+                </View>
+                <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                  <View style={{
+                    height: '100%',
+                    width: `${Math.min(100, progressPct)}%`,
+                    backgroundColor: weeksRemaining <= 8 ? WK.orange : WK.tealLight,
+                  }} />
+                </View>
               </View>
-              <BodyText size={11} dim style={{ marginTop: 4 }}>ACTIVE CONTRACT</BodyText>
             </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
