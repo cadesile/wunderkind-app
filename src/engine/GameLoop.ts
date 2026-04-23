@@ -385,28 +385,29 @@ export function processWeeklyTick(): WeeklyTick {
   processWeeklyRepayments();
 
   // ── 6. Finances ───────────────────────────────────────────────────────────────
-  // Resolve this club's active sponsors from market data
-  const activeSponsors = allSponsors.filter((s) =>
-    club.sponsorIds.includes(s.id)
-  );
-  const sponsorIncome = activeSponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
+  // Sponsor income comes from active contracts (pence), not the market pool's static weeklyPayment.
+  // Re-read from store so expiry processing in step 0a is reflected.
+  const activeContracts = useClubStore.getState().club.sponsorContracts ?? [];
+  const sponsorIncomePence = activeContracts.reduce((sum, c) => sum + c.weeklyPayment, 0);
 
+  // Pass empty sponsors array — income is handled separately below.
   const financialSummary = calculateWeeklyFinances(
-    weekNumber, club, players, coaches, levels, activeSponsors, weeklyLoanRepayment, facilityTemplates,
+    weekNumber, club, players, coaches, levels, [], weeklyLoanRepayment, facilityTemplates,
   );
 
   // Balance tracks spendable cash — net is in pence, stored directly in pence
   addBalance(financialSummary.net);
 
+  // Add sponsor income separately (contracts are source of truth)
+  if (sponsorIncomePence > 0) {
+    addBalance(sponsorIncomePence);
+    addEarnings(sponsorIncomePence);
+  }
+
   // Facility income — calculated every advance, scaled by condition + reputation
   const facilityIncomePence = calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation);
   if (facilityIncomePence > 0) {
     addBalance(facilityIncomePence);
-  }
-
-  // HoF tracker: positive sponsor income only
-  if (sponsorIncome > 0) {
-    addEarnings(sponsorIncome);
   }
 
   // ── Ledger: record categorised transactions ────────────────────────────────
@@ -434,8 +435,8 @@ export function processWeeklyTick(): WeeklyTick {
   if (maintenancePounds > 0) {
     addTransaction({ amount: -maintenancePounds, category: 'upkeep', description: `Week ${nextWeek} facility maintenance`, weekNumber: nextWeek });
   }
-  if (sponsorIncome > 0) {
-    addTransaction({ amount: sponsorIncome,       category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`,         weekNumber: nextWeek });
+  if (sponsorIncomePence > 0) {
+    addTransaction({ amount: Math.round(sponsorIncomePence / 100), category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`, weekNumber: nextWeek });
   }
   if (reputationIncome > 0) {
     addTransaction({ amount: reputationIncome,    category: 'earnings',        description: `Week ${nextWeek} reputation income`,     weekNumber: nextWeek });
@@ -960,14 +961,18 @@ export function processWeeklyTick(): WeeklyTick {
   }
 
   // ── 9a. Sponsor offers ────────────────────────────────────────────────────────
-  // ~3% chance per week. Offer size reflects current reputation tier.
-  // Does not fire if a sponsor offer is already pending a response.
+  // Probability and payment driven by GameConfig. No offer if pending or at cap (10 sponsors).
   const hasPendingSponsorOffer = inboxMessages.some(
     (m) => m.type === 'sponsor' && m.requiresResponse && !m.response
   );
-  if (!hasPendingSponsorOffer && Math.random() < 0.15) {
+  const currentSponsorCount = (useClubStore.getState().club.sponsorContracts ?? []).length;
+  const sponsorOfferProb = getSponsorOfferProbability(club.reputationTier, config);
+
+  if (!hasPendingSponsorOffer && currentSponsorCount < 10 && Math.random() < sponsorOfferProb) {
     const rep = club.reputation;
-    const availableSponsors = allSponsors.filter((s) => !club.sponsorIds.includes(s.id));
+    const activeContractIds = new Set((useClubStore.getState().club.sponsorContracts ?? []).map((c) => c.id));
+    const availableSponsors = allSponsors.filter((s) => !activeContractIds.has(s.id));
+
     let eligibleSizes: CompanySize[];
     if (rep >= 75)      eligibleSizes = ['LARGE'];
     else if (rep >= 40) eligibleSizes = ['MEDIUM', 'LARGE'];
@@ -980,21 +985,22 @@ export function processWeeklyTick(): WeeklyTick {
       : null;
 
     if (sponsor) {
-      const weeklyPounds = Math.round(sponsor.weeklyPayment / 100);
+      const offer = computeSponsorOffer(sponsor.companySize, rep, config);
+      const weeklyPounds = Math.round(offer.weeklyPaymentPence / 100);
       addMessage({
         id: `sponsor-offer-wk${weekNumber}-${sponsor.id}`,
         type: 'sponsor',
         week: weekNumber,
         subject: 'Sponsorship Offer',
-        body: `${sponsor.name} has approached your club with a sponsorship proposal. They are offering £${weeklyPounds.toLocaleString()} per week for ${sponsor.contractWeeks} weeks. Your growing reputation has caught their attention.`,
+        body: `${sponsor.name} has approached your club with a sponsorship proposal. They are offering £${weeklyPounds.toLocaleString()} per week for ${offer.contractWeeks} weeks. Your growing reputation has caught their attention.`,
         isRead: false,
         requiresResponse: true,
         entityId: sponsor.id,
         metadata: {
           sponsorId: sponsor.id,
           sponsorName: sponsor.name,
-          weeklyPayment: weeklyPounds,
-          contractWeeks: sponsor.contractWeeks,
+          weeklyPayment: offer.weeklyPaymentPence,
+          contractWeeks: offer.contractWeeks,
           companySize: sponsor.companySize,
         },
       });
@@ -1012,7 +1018,7 @@ export function processWeeklyTick(): WeeklyTick {
     !club.investorId &&
     !hasPendingInvestorOffer &&
     club.reputation >= 5 &&
-    Math.random() < 0.08
+    Math.random() < getInvestorOfferProbability(club.reputationTier, config)
   ) {
     const rep = club.reputation;
     // Equity ceiling by tier: Regional→SMALL (≤10%), National→MEDIUM (≤20%), Elite→any
