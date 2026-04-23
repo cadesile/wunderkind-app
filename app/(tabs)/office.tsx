@@ -384,6 +384,45 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
         />
       </SectionCard>
 
+      {/* ── KEY STAFF ── */}
+      <SectionCard label="KEY STAFF">
+        {SINGLETON_ROLES.map(({ role, label }, idx) => {
+          const hired = coaches.find((c) => c.role === role);
+          return (
+            <View
+              key={role}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 10,
+                borderTopWidth: idx === 0 ? 0 : 2,
+                borderTopColor: WK.border,
+              }}
+            >
+              <PixelText size={7} dim>{label}</PixelText>
+              {hired ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <FlagText nationality={hired.nationality ?? ''} size={11} />
+                  <BodyText size={12} upper>{hired.name}</BodyText>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => { hapticTap(); onNavigateToHire(role); }}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 4,
+                    paddingHorizontal: 10, paddingVertical: 6,
+                    backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.yellow,
+                  }}
+                >
+                  <PixelText size={7} color={WK.yellow}>HIRE →</PixelText>
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+      </SectionCard>
+
       {/* ── TACTICS ── */}
       <SectionCard label="TACTICS">
         <PixelText size={7} dim style={{ marginBottom: 8 }}>FORMATION</PixelText>
@@ -476,44 +515,6 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
         </View>
       </SectionCard>
 
-      {/* ── KEY STAFF ── */}
-      <SectionCard label="KEY STAFF">
-        {SINGLETON_ROLES.map(({ role, label }, idx) => {
-          const hired = coaches.find((c) => c.role === role);
-          return (
-            <View
-              key={role}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingVertical: 10,
-                borderTopWidth: idx === 0 ? 0 : 2,
-                borderTopColor: WK.border,
-              }}
-            >
-              <PixelText size={7} dim>{label}</PixelText>
-              {hired ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <FlagText nationality={hired.nationality ?? ''} size={11} />
-                  <BodyText size={12} upper>{hired.name}</BodyText>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => { hapticTap(); onNavigateToHire(role); }}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 4,
-                    paddingHorizontal: 10, paddingVertical: 6,
-                    backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.yellow,
-                  }}
-                >
-                  <PixelText size={7} color={WK.yellow}>HIRE →</PixelText>
-                </Pressable>
-              )}
-            </View>
-          );
-        })}
-      </SectionCard>
 
     </ScrollView>
   );
