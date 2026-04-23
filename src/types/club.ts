@@ -61,6 +61,16 @@ export interface ManagerPersonality {
   ambition: number;    // 0–100
 }
 
+/** A single active sponsorship contract — source of truth for income + display. */
+export interface SponsorContract {
+  /** Matches the Sponsor.id from the market data pool. */
+  id: string;
+  /** Agreed weekly payment in **pence**. */
+  weeklyPayment: number;
+  /** Game week at which this contract expires (exclusive — tick processes expiry when weekNumber >= endWeek). */
+  endWeek: number;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -78,6 +88,8 @@ export interface Club {
   createdAt: string;
   /** IDs of active sponsor contracts from market data */
   sponsorIds: string[];
+  /** Active sponsorship contracts — replaces bare sponsorIds for income + display. */
+  sponsorContracts: SponsorContract[];
   /** ID of assigned investor, or null */
   investorId: string | null;
   /** Club home country — restricts market/scouting at Local reputation tier */
