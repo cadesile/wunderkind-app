@@ -27,8 +27,9 @@ import type { StaffRole, Coach } from '@/types/coach';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import type { Player } from '@/types/player';
+import FansScreen from '../office/fans';
 
-const OFFICE_TABS = ['CLUB', 'HIRE'] as const;
+const OFFICE_TABS = ['CLUB', 'HIRE', 'FANS'] as const;
 type OfficeTab = typeof OFFICE_TABS[number];
 
 // ─── Hire Pane (Unified Market) ───────────────────────────────────────────────
@@ -743,6 +744,7 @@ export default function OfficeScreen() {
       <View style={{ flex: 1 }}>
         {activeTab === 'CLUB' && <ClubPane onNavigateToHire={navigateToHire} />}
         {activeTab === 'HIRE' && <HirePane selectedRole={selectedRole} setSelectedRole={setSelectedRole} />}
+        {activeTab === 'FANS' && <FansScreen />}
       </View>
     </SafeAreaView>
   );

@@ -24,6 +24,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { Badge } from '@/components/ui/Badge';
 import { PitchBackground } from '@/components/ui/PitchBackground';
+import { FanFavoriteCard } from '@/components/FanFavoriteCard';
 import { WK, pixelShadow } from '@/constants/theme';
 import { InboxMessage } from '@/stores/inboxStore';
 
@@ -330,6 +331,11 @@ export function ClubDashboard() {
           </BodyText>
         </View>
       </SectionCard>
+
+      {/* ── Fan Base ────────────────────────────────────────────────────── */}
+      <View style={{ marginHorizontal: 10 }}>
+        <FanFavoriteCard />
+      </View>
 
       {/* ── Card 2: Financial Status ──────────────────────────────────────── */}
       <View style={{
