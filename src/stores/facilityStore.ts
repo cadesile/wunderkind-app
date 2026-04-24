@@ -99,9 +99,18 @@ export const useFacilityStore = create<FacilityState>()(
 
         // Award reputation for the upgrade
         const { useClubStore } = require('@/stores/clubStore');
-        const { setReputation, markRepActivity } = useClubStore.getState();
+        const { setReputation, markRepActivity, club } = useClubStore.getState();
         setReputation(template.reputationBonus);
         markRepActivity();
+
+        // Emit Fan Event
+        const { useFanStore } = require('@/stores/fanStore');
+        useFanStore.getState().addEvent({
+          type: 'facility_upgrade',
+          description: `Upgraded ${template.label} to Level ${levels[slug] + 1}`,
+          impact: 10,
+          weekNumber: club.weekNumber ?? 1,
+        });
 
         return true;
       },

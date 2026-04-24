@@ -224,6 +224,20 @@ export const useSquadStore = create<SquadState>()(
         if (!player) return { success: false, error: 'Player not found' };
         const playerName = player.name;
 
+        // Emit Fan Event BEFORE removing from local state
+        const { useFanStore } = require('@/stores/fanStore');
+        const { useClubStore } = require('@/stores/clubStore');
+        const fanStore = useFanStore.getState();
+        const currentWeek = useClubStore.getState().club.weekNumber ?? 1;
+        const isFavorite = fanStore.fanFavoriteId === playerId;
+
+        fanStore.addEvent({
+          type: isFavorite ? 'player_sold_favorite' : 'player_sold',
+          description: isFavorite ? `Sold Fan Favorite: ${playerName}` : `Sold player: ${playerName}`,
+          impact: isFavorite ? -25 : -5,
+          weekNumber: currentWeek,
+        });
+
         // Remove locally — local state is authoritative
         set((state) => ({ players: state.players.filter((p) => p.id !== playerId) }));
 
