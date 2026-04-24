@@ -38,8 +38,12 @@ interface FacilityState {
   setTemplates: (templates: FacilityTemplate[]) => void;
 
   upgradeLevel: (slug: string) => boolean;
-  /** Sets technical_zone to level 1; all others start at 0. Called once during bootstrap. */
-  initAllLevels: () => void;
+  /**
+   * Initialises facility levels from the starter-config `defaultFacilities` map.
+   * Slugs not present in the map default to 0. Falls back to `technical_zone: 1`
+   * if no map is provided (legacy / offline path).
+   */
+  initAllLevels: (defaultFacilities?: Record<string, number>) => void;
   /** Decays all built facilities by their weekly rate. Called at end of each game tick. */
   decayCondition: () => void;
   /** Restores facility condition to 100%. Deducts cost from club balance. */
@@ -115,12 +119,21 @@ export const useFacilityStore = create<FacilityState>()(
         return true;
       },
 
-      initAllLevels: () => {
+      initAllLevels: (defaultFacilities?) => {
         const templates = get().templates;
-        set({
-          levels:     { ...defaultLevels(templates), technical_zone: 1 },
-          conditions: defaultConditions(templates),
-        });
+        const base = defaultLevels(templates);
+        if (defaultFacilities && Object.keys(defaultFacilities).length > 0) {
+          // Apply each slug from the backend config; clamp to the template's maxLevel
+          for (const [slug, level] of Object.entries(defaultFacilities)) {
+            const template = templates.find((t) => t.slug === slug);
+            const max = template?.maxLevel ?? 10;
+            base[slug] = Math.min(level, max);
+          }
+        } else {
+          // Legacy fallback: training pitch at level 1
+          base['technical_zone'] = 1;
+        }
+        set({ levels: base, conditions: defaultConditions(templates) });
       },
 
       decayCondition: () =>

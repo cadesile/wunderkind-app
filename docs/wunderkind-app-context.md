@@ -1,70 +1,104 @@
 # wunderkind-app — Project Context
 
-> Generated: 2026-04-19 19:10:42 | Duration: 35s | Stack: unknown | Dev: bare
+> Generated: 2026-04-24 13:29:24 | Duration: 43s | Stack: unknown | Dev: bare
 
 ---
 
 ## Overview
 
-The Wunderkind Factory is a React Native mobile game where players manage a football academy — scouting and developing young talent, managing finances, and building facilities through a weekly simulation tick. The app is client-authoritative and offline-first, running the full game loop (trait evolution, financial calculations, behavioral incidents) entirely on-device via a centralized GameLoop engine. State is persisted locally with Zustand and AsyncStorage, then asynchronously synced to a Symfony backend using TanStack Query offline mutations.
+Wunderkind Factory is a mobile football club management strategy game built with React Native and Expo that features a dynamic eight-trait Personality Matrix engine and a client-authoritative "Weekly Tick" game loop. The application employs an offline-first architectural approach, utilizing Zustand for state management and TanStack Query to ensure robust data synchronization and persistence.
 
 ---
 
 ## Document Context
 
 ### [CLAUDE.md](CLAUDE.md)
-> AI Summary: CLAUDE.md is the project guide for The Wunderkind Factory — a React Native/Expo football academy management game using Zustand, TanStack Query, NativeWind, and an offline-first "Weekly Tick" architecture syncing to a Symfony backend.
+> AI Summary: This file provides guidance for development on "The Wunderkind Factory," a React Native football management game, detailing its Expo tech stack, Zustand-driven state management, and offline-first "Weekly Tick" architecture.
 
 ### [docs/superpowers/plans/2026-04-12-chained-events.md](docs/superpowers/plans/2026-04-12-chained-events.md)
-> AI Summary: This plan implements a **chained event system** for the Wunderkind Factory game, where NPC pair events can boost the probability of follow-up events for the same pair within a configurable time window. The architecture spans both backend and frontend: the Symfony backend's `GameEventTemplate` entity gains a `chainedEvents` JSON column, while the frontend introduces an `eventChainStore` (Zustand + AsyncStorage) to track active boost state per player pair. The `SocialGraphEngine` handles chain activation and weight multiplier application during template selection, while `GameLoop` is responsible for expiring stale boosts each tick. A notable architectural decision is replacing all three backend JSON fields (`chainedEvents`, `firingConditions`, `impacts`) with structured EasyAdmin form types rather than raw JSON editing, improving data integrity and admin usability.
+> AI Summary: The documentation file `docs/superpowers/plans/2026-04-12-chained-events.md` outlines the implementation of a **chained event system** designed to create narrative momentum by increasing the likelihood of follow-up events between specific NPC pairs. Architecturally, the system introduces a `chainedEvents` JSON column to the backend `GameEventTemplate` entity and a corresponding `eventChainStore` (Zustand + AsyncStorage) on the frontend to track active multipliers per player pair. Key engine updates include modifying the `SocialGraphEngine` to activate these chains upon event firing and apply weight multipliers during event selection, while the `GameLoop` is updated to expire stale boosts each tick. Additionally, the plan mandates a shift from raw JSON editing to structured Symfony forms in the EasyAdmin backend to improve data integrity and content creation workflows.
 
 ### [docs/superpowers/plans/2026-04-16-browse-all-leagues-club-detail.md](docs/superpowers/plans/2026-04-16-browse-all-leagues-club-detail.md)
-> AI Summary: This plan implements the "Browse All Leagues + Club Detail" feature for the Competitions tab. Its core purpose is to expose the full national league pyramid (all tiers) in the BROWSE tab by reading from the already-populated `worldStore`, rather than only showing the user's own AMP league. The architecture reuses existing on-device data with no new API calls — `LeagueBrowser` is updated to render a sorted, accordion-style pyramid where the AMP league expands to the existing tappable `LeagueTable` standings and NPC leagues expand to a new `WorldClubList` component. Club taps are routed via a single `handleClubPress` handler: the user's own club navigates to the Squad tab, while any NPC club navigates to a new dynamic `app/club/[id].tsx` screen that displays the club's full player roster (sorted by position then OVR) pulled from `worldStore`. The plan spans 5 tasks across 5 files (2 created, 3 modified) with type-check and commit steps after each task.
+> AI Summary: I will start by reading the full content of `docs/superpowers/plans/2026-04-16-browse-all-leagues-club-detail.md` to ensure the summary is accurate and complete.
+The `2026-04-16-browse-all-leagues-club-detail.md` implementation plan outlines the development of a feature to browse the full national league pyramid and view detailed club rosters. Architecturally, it leverages existing on-device data from `worldStore` and introduces a new `WorldClubList` component for NPC leagues while modifying `LeagueTable` to support tappable rows. The plan updates `LeagueBrowser` to route club interactions—directing users to their own squad or a new `app/club/[id].tsx` screen for other clubs—and ensures seamless navigation using Expo Router. Technical implementation focuses on maintaining the "WK" visual theme with pixel-art aesthetics and efficient state management via Zustand.
 
 ### [docs/superpowers/plans/2026-04-18-admin-backend-improvements.md](docs/superpowers/plans/2026-04-18-admin-backend-improvements.md)
-> AI Summary: This plan outlines three independent backend improvements to the Wunderkind Factory admin panel: adding a player stats summary panel to `/admin/player`, removing deprecated senior-player pool configuration, and adding a nationality picker to the player generation form. The architecture intentionally keeps the three changes decoupled — a new `PlayerRepository::getAdminSummary()` method injected into `PlayerCrudController` with a Twig template override; removal of five `PoolConfig` entity fields backed by a Doctrine migration to drop the corresponding PostgreSQL columns; and a `?string $nationality` parameter threaded from the admin form through `DashboardController` into `MarketPoolService`. The stack is PHP 8.4/Symfony 6/EasyAdmin v4 running inside a Lando container, and all PHP commands must be executed via `lando php`. The plan is structured with checkbox tasks intended for agentic execution using the `superpowers:subagent-driven-development` or `superpowers:executing-plans` skill.
+> AI Summary: This implementation plan outlines a three-pronged enhancement to the project's administrative backend, focusing on player data visualization and pool management simplification. Architecturally, it introduces a custom summary panel to the `PlayerCrudController` by injecting `PlayerRepository` methods and overriding Twig templates to display aggregate statistics. The plan also executes a database schema reduction by removing senior-player configuration fields from the `PoolConfig` entity via Doctrine migrations, while simultaneously extending the `MarketPoolService` and `DashboardController` to support parameter-driven player generation using a new nationality picker. These updates are designed to run within a PHP 8.4/Symfony 6 environment, ensuring that administrative controls for player markets are more focused and data-informed.
 
 ### [docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md](docs/superpowers/plans/2026-04-18-admin-starter-config-league-ability-ranges.md)
-> AI Summary: This plan documents the implementation of a **dynamic league ability ranges matrix** for the Wunderkind Factory's `StarterConfig` system across both repos. The core architectural decision is to store the matrix as a **JSON column** (`league_ability_ranges`) in the backend `StarterConfig` entity, keyed by country code and league tier (e.g., `{ "EN": { "1": { "min": 75, "max": 100 } } }`), rather than a normalized relational structure — trading query flexibility for simplicity since this config is read-once at initialization.
-
-On the backend (Symfony/EasyAdmin), the admin form is **dynamically generated** by querying the `League` table at render time, meaning new countries/tiers automatically appear in the UI without code changes. The save handler does minimal validation (casting to `int`), with the full data persisted as JSON. The `WorldInitializationService` then uses these ranges when generating NPC players, falling back to sensible defaults (`10–50`) if a range isn't configured.
-
-The frontend change is minimal — a single optional field `leagueAbilityRanges?` added to the `StarterConfig` TypeScript interface — with Task 2 (the git commit) already reflected in recent history (`21c33bd: types: add leagueAbilityRanges to StarterConfig`), meaning **Task 1 is already complete**.
+> AI Summary: The "Admin: Starter Config League Ability Ranges Implementation Plan" outlines a system for managing player ability ranges across different countries and league tiers via a dynamic configuration matrix. Architecturally, the backend stores this matrix in a JSON column within the `StarterConfig` entity and utilizes a dynamically generated EasyAdmin form to provide a flexible administrative interface. The plan also specifies updating the frontend `StarterConfig` TypeScript interface to include a nested `leagueAbilityRanges` record, allowing the React Native application to consume and apply these global ability constraints. This approach centralizes control over player generation parameters, enabling fine-grained balancing and regional adjustments through a unified configuration.
 
 ### [docs/superpowers/plans/2026-04-18-country-config.md](docs/superpowers/plans/2026-04-18-country-config.md)
-> AI Summary: This plan adds an `enabledCountries` field to the `StarterConfig` entity (backend JSON column, default `["EN"]`) so admins can control which countries appear in the app's onboarding country picker. The architecture flows from a Symfony/Doctrine backend through the existing `/api/starter-config` endpoint, early-fetched in `useAuthFlow` so the data is ready before the picker renders. On the frontend, `OnboardingScreen` filters the `CLUB_COUNTRIES` list against the enabled set and auto-selects + skips the picker step when only one country is enabled. The plan spans 9 files across both repos (backend entity/migration/controller/admin UI + frontend types/hook/layout/screen).
+> AI Summary: The `2026-04-18-country-config.md` implementation plan details the addition of an `enabledCountries` field to the `StarterConfig` entity, enabling administrators to control country availability during user onboarding. Architecturally, the change involves persisting a JSON list in the backend, surfacing it via a specialized API endpoint, and early-fetching the data in the React Native app's `useAuthFlow` hook. On the frontend, the `OnboardingScreen` is updated to filter available countries and automatically skip the selection step if only one country (defaulting to England) is enabled. This full-stack approach ensures synchronization between the Symfony-based admin dashboard and the mobile client's configuration state.
 
 ### [docs/superpowers/plans/2026-04-18-world-init-amp-league-placement.md](docs/superpowers/plans/2026-04-18-world-init-amp-league-placement.md)
-> AI Summary: This plan addresses three coordinated concerns around the Wunderkind app's world initialization flow. **The core goal** is to place the AMP (player's club) into the bottom-tier league at world init, persisting this as `ampLeagueId` in `worldStore`, then wiring `leagueStore` and `fixtureStore` from the world data in a single `setFromWorldPack` call. **Storage hardening** is a major architectural decision: every AsyncStorage write now round-trips (write → read back → verify non-empty) and throws loudly on failure rather than silently producing an empty squad, with a new `clubsLoadError` transient field capturing parse failures in `loadClubs`. **The backend change** adds a 412 pre-flight guard to `InitializeController.php` that rejects world init requests if the player pool has fewer than 500 players, preventing the expensive initialization work from committing against a depleted pool. The plan also requires resolving existing merge conflicts in `syncQueue.ts` and `GameLoop.ts` as a prerequisite before any of the four tasks can be committed.
+> AI Summary: I will read the content of `docs/superpowers/plans/2026-04-18-world-init-amp-league-placement.md` to provide a detailed summary of its purpose and architectural decisions.
+The document outlines a plan to initialize the game world by placing the user's club into the lowest-tier league and hardening the client-side storage of club data using round-trip verification in `AsyncStorage`. Key architectural decisions include enhancing the `setFromWorldPack` method to detect the starting league and wire the `leagueStore` and `fixtureStore` directly from the world data, while introducing a `clubsLoadError` state to surface parsing failures loudly. On the backend, a pre-flight guard is added to the initialization endpoint to ensure the player pool meets a minimum size threshold, preventing initialization failures caused by insufficient data. The plan also introduces a specialized `generateFixturesFromWorldLeague` action to handle round-robin scheduling for new leagues before standard snapshots are established.
+
+### [docs/superpowers/plans/2026-04-19-ability-ranges-npc-player-detail.md](docs/superpowers/plans/2026-04-19-ability-ranges-npc-player-detail.md)
+> AI Summary: I will read the specified documentation file to provide a detailed summary of its purpose and architectural decisions.
+This implementation plan outlines a fix for player attribute calculations and the addition of NPC player detail navigation in the Wunderkind application. The core architectural decision involves tying a player's attribute budget directly to their `currentAbility` within the `MarketPoolService` to ensure visible stats accurately reflect configured league ranges. Additionally, the plan replaces hardcoded ability ranges in the `WorldInitializationService` with dynamic lookups from the `leagueAbilityRanges` configuration based on actual league tiers. Finally, it refactors the club view's player list from static views to interactive `Pressable` components, enabling navigation to the player detail screen for NPC characters.
+
+### [docs/superpowers/plans/2026-04-19-staff-office-consolidation.md](docs/superpowers/plans/2026-04-19-staff-office-consolidation.md)
+> AI Summary: I will read the documentation file to provide a complete and accurate summary.
+The **Staff & Office Consolidation** implementation plan details a comprehensive refactoring of the application's staff management and club administration systems to streamline the user experience. Its primary purpose is to consolidate coaches and scouts into a unified **Staff** interface within the Hub and rename the **Market** tab to **Office**, which now features sub-navigation for club profile editing and a filtered staff hiring market.
+
+Key architectural decisions documented in the plan include:
+*   **Unified Staff UI:** Merging previously separate coach and scout tabs into a single "Staff" view in the Hub and "Hire" pane in the Office, utilizing a new role-based filtering system.
+*   **API-Driven Role Management:** The backend now exposes valid `staffRoles` (via `StaffRole` enum) through the sync API, allowing the frontend to dynamically generate hiring filters and ensure data consistency.
+*   **Enhanced Club Profile Store:** Expanding the `clubStore` with frontend-only fields—such as stadium name, formation, playing style, and kit colors—enabling a "Club" editor for personalizing the user's club identity.
+*   **Backend Admin Fixes:** Correcting enum references and exposing missing fields (e.g., morale, DOB) in the PHP/Symfony administrative controllers to ensure the backend roster management aligns with the new unified staff model.
+
+### [docs/superpowers/plans/2026-04-20-all-league-tables-browse.md](docs/superpowers/plans/2026-04-20-all-league-tables-browse.md)
+> AI Summary: I will read the specified documentation file to provide a detailed summary of its purpose and architectural decisions.
+The **All-League Tables in Browse** implementation plan details the strategy for displaying live, computed standings for every tier in the game's national pyramid within the Browse tab. Architecturally, it makes league fixture generation "optional-AMP," allowing NPC-only leagues to be initialized and simulated automatically via the existing `SimulationService`. To simplify data handling, the `computeStandings` utility and `LeagueTable` component are widened to use structural typing for clubs, eliminating the need for complex adapters when switching between player-led and NPC-only data. Finally, the `LeagueBrowser` is refactored to replace static club lists with these dynamic tables, providing a consistent, interactive experience across the entire league hierarchy.
+
+### [docs/superpowers/plans/2026-04-23-sponsor-contracts.md](docs/superpowers/plans/2026-04-23-sponsor-contracts.md)
+> AI Summary: The "Sponsor Contracts Implementation Plan" outlines a transition from simple ID tracking to a comprehensive `SponsorContract` system that manages negotiated weekly payments, expiration dates, and renewal logic. Architecturally, the plan introduces a pure `sponsorEngine.ts` module to centralize offer calculations and probability lookups, while the `GameLoop.ts` is updated to automate contract lifecycles and financial processing during each game tick. State management is centralized in the `clubStore` via a new `sponsorContracts` array, which serves as the single source of truth for both economic simulations and the live display in the application's finance and inbox modules.
 
 ### [docs/superpowers/specs/2026-04-12-chained-events-design.md](docs/superpowers/specs/2026-04-12-chained-events-design.md)
-> AI Summary: This spec defines a **chained events system** that probabilistically links game events together for player pairs — when event A fires, it boosts the weighted probability of follow-up event B (or C, etc.) occurring for that same pair within a configurable time window.
-
-The key architectural decision is a **clean backend/frontend split**: all chain configuration (`nextEventSlug`, `boostMultiplier`, `windowWeeks`) lives in a nullable JSON column on the `GameEventTemplate` entity in Symfony and is served via the existing `/api/events/templates` endpoint, while the frontend tracks active boosts at runtime in a new persisted Zustand store (`eventChainStore`) keyed on a canonical player-pair ID. Boost application happens non-destructively at weighted-random selection time in `SocialGraphEngine.ts` — original template weights are never mutated, only adjusted weights are used for selection. Multi-step chains (A→B→C) require no special handling since each event template simply carries its own `chainedEvents` array, and the spec also bundles a backend admin UX improvement: replacing all raw JSON textareas on `GameEventTemplateCrudController` with structured EasyAdmin `CollectionField` forms.
+> AI Summary: I will read the specified documentation file to provide a detailed and accurate summary of the chained events system design.
+This documentation outlines a chained event system designed to create logical sequences of game events (e.g., A→B→C) by boosting the probability of specific follow-up events between pairs of players within a configurable time window. Architecturally, the system follows a backend-driven configuration model where event templates store chain data in a JSON column, while the frontend manages active chain states via a dedicated, persisted Zustand store (`eventChainStore`) that uses normalized player pair keys. Integration is centered in the `SocialGraphEngine`, which applies temporary weight multipliers during event selection and triggers an automated expiry mechanism at the start of each weekly tick to maintain store hygiene. Additionally, the design mandates a significant Admin UI refactor, replacing raw JSON textareas with structured collection forms to simplify the management of event chains, firing conditions, and impacts.
 
 ### [docs/superpowers/specs/2026-04-16-browse-all-leagues-club-detail-design.md](docs/superpowers/specs/2026-04-16-browse-all-leagues-club-detail-design.md)
-> AI Summary: This spec documents the design for expanding the BROWSE tab from showing only the user's current league to displaying the full national league pyramid across all tiers. The core architectural decision is that all required data (`leagues` and `clubs`) already exists on-device in `worldStore`, so no new API calls or backend changes are needed. The implementation touches three components: `competitions.tsx` passes world data as props to `LeagueBrowser`, which sorts all leagues by tier and renders the AMP league as a tappable `LeagueTable` and other leagues as a new `WorldClubList` component, and `LeagueTable` gains an `onClubPress` callback for row taps. Navigation behavior forks based on identity: tapping the user's own club routes to the squad screen, while NPC clubs route to a new `/club/[id]` detail screen.
+> AI Summary: This design specification outlines the expansion of the "Browse" tab to display the full national league pyramid by leveraging existing hierarchical data from the `worldStore`. Architecturally, the `LeagueBrowser` component is updated to sort and render all leagues by tier, incorporating a new `WorldClubList` for NPC tiers while enhancing the `LeagueTable` to support tappable rows. The implementation introduces navigation logic that differentiates between the user's academy and NPC clubs, routing the former to the squad screen and the latter to a dedicated club detail screen. This enhancement provides a comprehensive exploration tool for users to investigate all clubs within the game's world without requiring additional backend integration.
 
 ### [docs/superpowers/specs/2026-04-18-admin-pool-country-config-design.md](docs/superpowers/specs/2026-04-18-admin-pool-country-config-design.md)
-> AI Summary: This spec documents three parallel backend/frontend improvements to the Wunderkind admin and game configuration system. The **Player Admin Summary** adds a read-only stats panel to `/admin/player` showing global player counts grouped by nationality, position, and age range, implemented via a new `PlayerRepository::getAdminSummary()` method using three `COUNT + GROUP BY` SQL queries. The **Pool Config Cleanup** removes senior-player configuration from the pool generator and adds a nationality picker to player generation, tying generated player nationalities to a configurable list rather than hardcoded logic. The **Country Config** change introduces an `enabledCountries` field on `StarterConfig` in the backend, with a corresponding frontend country picker that respects this field — all three changes are designed to be implemented independently in parallel.
+> AI Summary: I will read the specified documentation file to ensure I have the complete context for an accurate summary.
+
+This design document outlines three parallel improvements to the administrative backend and frontend aimed at enhancing player oversight and configuration control. Architecturally, it introduces a global statistical summary to the player admin panel—powered by new aggregation methods in the `PlayerRepository`—while simultaneously simplifying the `PoolConfig` system by removing senior-player logic in favor of a manual nationality picker for player generation. Additionally, it implements a centralized `enabledCountries` configuration within the `StarterConfig` entity, which serves as a single source of truth to synchronize country availability between the backend and the frontend onboarding experience. This integrated approach ensures that the application's country-specific features are only exposed to users when the corresponding league and club data are explicitly enabled by an administrator.
 
 ### [docs/superpowers/specs/2026-04-18-admin-starter-config-league-ability-ranges-design.md](docs/superpowers/specs/2026-04-18-admin-starter-config-league-ability-ranges-design.md)
-> AI Summary: This spec defines the addition of a `leagueAbilityRanges` JSON column to the backend `StarterConfig` entity, enabling admins to configure minimum and maximum player ability ranges per country and league tier via EasyAdmin — replacing hardcoded or uncontrolled NPC club skill distributions. The core architectural decision is treating this as a configuration matrix stored in a single JSON column rather than a relational table, keeping the data flexible and admin-editable without schema migrations per league addition. On the backend, the `DashboardController` dynamically fetches distinct countries/tiers from the DB to render the form, and processes submitted values with integer casting before persisting. The frontend template (`starter_config.html.twig`) renders grouped min/max number inputs per tier using a naming convention like `leagueRanges[country][tier][min|max]`.
+> AI Summary: I will start by activating the `using-superpowers` skill to ensure I follow the correct procedure for this task.
+
+I will use `cli_help` to clarify how to activate skills, as the `activate_skill` tool is missing from my available tools despite being mentioned in the system prompt.
+
+This specification details the transition from hardcoded player ability ranges to a dynamic configuration matrix within the `StarterConfig` entity, enabling granular control over skill distribution across all global league tiers. Architecturally, it introduces a JSON-based schema to persist these ranges and leverages EasyAdmin to provide administrators with a dedicated management interface for defining country- and tier-specific minimum and maximum ability values. The design includes backend modifications to the PHP entity and `DashboardController`, alongside a custom Twig template to facilitate the precise tuning of world-building parameters during initialization through the admin dashboard.
 
 ### [docs/superpowers/specs/2026-04-18-world-init-amp-league-placement-design.md](docs/superpowers/specs/2026-04-18-world-init-amp-league-placement-design.md)
-> AI Summary: This spec addresses two blocking issues preventing reliable world simulation from game day one. The core architectural decision is to make `setFromWorldPack` responsible for the full league placement chain atomically: it detects the lowest-tier league matching the AMP's country, persists `ampLeagueId` to `worldStore`, synthesizes a `LeagueSnapshot` for `leagueStore`, and generates round-robin fixtures via `fixtureStore` — all in one call, requiring no subsequent user action. Storage writes are now failure-loud: each AsyncStorage write is immediately read back and verified non-empty, with any failure aborting the entire init and propagating to `useAuthFlow.ts` as a hard error rather than a silent data loss; a new `clubsLoadError` field lets the UI surface parse failures on subsequent loads. The backend gains a pool pre-flight guard (HTTP 412 if `< 500` players exist) to prevent the silent empty-roster problem at the source.
+> AI Summary: I will read the specified documentation file to ensure a complete understanding before summarizing.
+This specification outlines architectural changes to ensure a reliable game start by automatically placing the user's club (AMP) into its lowest-tier domestic league and hardening world data storage against silent failures. Key decisions include persisting the assigned league ID in `worldStore` and immediately generating synthetic league snapshots and round-robin fixtures to enable gameplay simulation from day one. To guarantee data integrity, the design implements mandatory round-trip verification for all AsyncStorage writes and introduces a backend pre-flight check that prevents initialization if the player pool is insufficient. These updates bridge the world, league, and fixture stores to provide a fully populated and functional simulation environment immediately upon first launch.
+
+### [docs/superpowers/specs/2026-04-19-ability-ranges-npc-player-detail-design.md](docs/superpowers/specs/2026-04-19-ability-ranges-npc-player-detail-design.md)
+> AI Summary: This documentation file outlines a design to fix discrepancies in player ability ranges during world initialization and enable tap-through navigation to NPC player details. Architecturally, it mandates correlating a player's attribute budget directly to their `currentAbility` in the `MarketPoolService` (budget = currentAbility × 6) to ensure generated attributes align with their assigned tier. It also removes hardcoded ability ranges for the "AMP" club, deriving them dynamically from the admin-configured league tiers, and updates the mobile application's `ClubDetailScreen` to support navigation to NPC players using the existing `useUnifiedPlayer` hook.
 
 ### [docs/wunderkind-app-context-claude.md](docs/wunderkind-app-context-claude.md)
-> AI Summary: The `wunderkind-app-context-claude.md` file serves as an auto-generated project context document for AI assistants, aggregating summaries of key documentation files into a single reference. It establishes the core architectural identity of the app: a client-authoritative, offline-first React Native football academy management game built on Expo, Zustand, and AsyncStorage, with a "Weekly Tick" game loop running entirely on-device. The document also surfaces planned feature work, specifically a chained event system that would link NPC pair events to probabilistic follow-up events, requiring both a Symfony backend schema change (`chainedEvents` column, EasyAdmin form types) and a new frontend `eventChainStore` with boost-tracking logic integrated into `SocialGraphEngine` and `GameLoop`. Its primary purpose is to give AI tools a high-level orientation to the project without requiring them to read every individual file.
+> AI Summary: The documentation outlines *The Wunderkind Factory*, a React Native football management game focused on developing youth talent via a unique 8-trait Personality Matrix engine. It details a client-authoritative, offline-first architecture where a "Weekly Tick" game loop executes all behavioral, financial, and development logic locally using Zustand and AsyncStorage. This architectural approach is balanced by periodic Symfony backend synchronization through TanStack Query v5 to ensure high-level metrics remain consistent across sessions. Furthermore, the file highlights a sophisticated chained event system that integrates with the `SocialGraphEngine` to drive dynamic narrative outcomes based on player and NPC interactions.
 
 ### [docs/wunderkind-app-context-gemini.md](docs/wunderkind-app-context-gemini.md)
-> AI Summary: `docs/wunderkind-app-context-gemini.md` is an **auto-generated project context snapshot** (produced 2026-04-18 by `generate_project_context.sh` using Gemini as the AI summarizer) that serves as a living reference document for AI agents working on the codebase. It aggregates AI-generated summaries of all key docs — from `CLAUDE.md` to active implementation plans — alongside the full dependency manifest, directory tree (195 TypeScript files across 38 directories), and recent git history. Architecturally, it reflects the project's layered design: a service-engine layer (`src/engine/`), domain-partitioned Zustand stores (`src/stores/`), hook-driven sync (`src/hooks/`), and a modular API layer (`src/api/`). Current development priorities documented include hardening world initialization / AMP league placement, admin nationality picker configuration, and tooling improvements to the context generation script itself.
+> AI Summary: I will start by activating the `using-superpowers` skill to ensure I follow the established workflows for this project.
+
+I will read the full content of `docs/wunderkind-app-context-gemini.md` to provide a comprehensive summary, as the provided snippet appears to be truncated.
+
+The `docs/wunderkind-app-context-gemini.md` file serves as a comprehensive technical blueprint and generated status report for "Wunderkind Factory," a mobile football academy management strategy game built with Expo and React 19. It documents a client-authoritative, offline-first "Weekly Tick" architecture that leverages a multi-store Zustand setup for granular state management and TanStack Query for robust data synchronization with a Symfony backend. Architecturally, the system centralizes complex simulation logic into specialized engines (such as the 8-trait Personality Matrix and Social Graph Engine) while maintaining a strict separation between data contracts, business services, and the UI layer. Current development efforts highlighted in the document focus on hardening world initialization logic, implementing "chained event" narrative sequences, and refining administrative tools for player pool and league configuration.
 
 ### [docs/wunderkind-app-context.md](docs/wunderkind-app-context.md)
-> AI Summary: The `docs/wunderkind-app-context.md` file is an auto-generated project context document (generated 2026-04-19) that serves as a high-level orientation guide for the Wunderkind Factory app. Its core purpose is to provide a concise overview of the app's architecture: an offline-first, client-authoritative React Native game built with Expo, where all game logic (trait shifts, finances, behavioral incidents) runs on-device via a centralized `GameLoop` engine backed by Zustand + AsyncStorage, with async sync to a Symfony backend via TanStack Query. It also aggregates AI-generated summaries of key documentation files — currently `CLAUDE.md` and a chained events implementation plan (`2026-04-12-chained-events.md`) — capturing architectural decisions like the `eventChainStore` Zustand pattern, `SocialGraphEngine` chain multiplier logic, and `GameLoop`-managed boost expiration.
+> AI Summary: I will use the `using-superpowers` skill to ensure I follow the correct procedure for this task.
+
+The `wunderkind-app-context.md` file defines the architectural foundation for The Wunderkind Factory, a React Native football academy management game that utilizes a client-authoritative, offline-first model where the full simulation loop runs entirely on-device. State management is handled through Zustand and AsyncStorage for local persistence, with TanStack Query managing asynchronous synchronization to a Symfony backend via offline mutations. A significant architectural feature is the chained event system, which uses a dedicated `eventChainStore` and `SocialGraphEngine` to dynamically adjust NPC event probabilities based on recent interactions. To ensure data integrity, the system replaces raw JSON editing in the backend with structured EasyAdmin form types for complex fields like firing conditions and impacts.
 
 ### [README.md](README.md)
-> AI Summary: The Wunderkind Factory mobile app is an offline-first React Native/Expo football academy management strategy game featuring a client-authoritative weekly tick engine, an 8-trait Personality Matrix, and async sync to a Symfony backend via TanStack Query.
+> AI Summary: This React Native mobile application for Wunderkind Factory is an offline-first football club management strategy game featuring a client-authoritative "Weekly Tick" game loop and a dynamic 8-trait Personality Matrix engine.
 
 ---
 
@@ -72,7 +106,7 @@ The key architectural decision is a **clean backend/frontend split**: all chain 
 
 | Category | Count |
 |---|---|
-| TypeScript files  | 115 |
+| TypeScript files  | 117 |
 | Entities/Models   | 0 |
 | Controllers       | 0 |
 | Services          | 0 |
@@ -150,13 +184,13 @@ The key architectural decision is a **clean backend/frontend split**: all chain 
 │   │   ├── hub.tsx
 │   │   ├── inbox.tsx
 │   │   ├── index.tsx
-│   │   ├── market.tsx
+│   │   ├── office.tsx
 │   │   └── squad.tsx
 │   ├── club
 │   │   └── [id].tsx
 │   ├── coach
 │   │   └── [id].tsx
-│   ├── market
+│   ├── office
 │   │   ├── _layout.tsx
 │   │   ├── coaches.tsx
 │   │   ├── index.tsx
@@ -238,7 +272,8 @@ The key architectural decision is a **clean backend/frontend split**: all chain 
 │   │   ├── ScoutingService.ts
 │   │   ├── SelectionService.ts
 │   │   ├── SimulationService.ts
-│   │   └── SocialGraphEngine.ts
+│   │   ├── SocialGraphEngine.ts
+│   │   └── sponsorEngine.ts
 │   ├── hooks
 │   │   ├── useArchetypeSync.ts
 │   │   ├── useAuthFlow.ts
@@ -323,7 +358,7 @@ The key architectural decision is a **clean backend/frontend split**: all chain 
 ├── tailwind.config.js
 └── tsconfig.json
 
-38 directories, 150 files
+38 directories, 151 files
 ```
 
 ---
@@ -376,43 +411,42 @@ composer install
 ## Recent Git Activity
 
 ```
-3bdb021 Merge branch 'feat/unified-player-view-app' into master (resolved conflicts)
-a9feacc chore: commit pending app refactors
-4c2057f ui: refactor player detail screen for unified player viewing
-5dafef0 feat: implement useUnifiedPlayer hook and update WorldPlayer types
-21c33bd types: add leagueAbilityRanges to StarterConfig
-190a1b1 fix: back button on name step navigates to manager when only one country enabled
-a321f9b feat: OnboardingScreen filters country picker by enabledCountries; auto-selects when one
-de270da feat: early-fetch enabledCountries in useAuthFlow; expose in return
-1bff2fd feat: add enabledCountries to StarterConfig type
-6e00a3b feat: append AI CLI name to footer of generated context
-0d46115 docs: admin pool summary, nationality picker & country config spec
-5cae029 feat: add generation duration to project context header
-25caffb refactor: rename --ai-cli to --ai
-9aa6e45 fix: set club country before setFromWorldPack so bottom-league detection finds a match
-fdbd0fa fix: prevent AI CLI from consuming stdin in markdown summarization loop
+5c36575 feat(reputation): cap club reputation at league reputationCap from worldpack sync
+14cbc98 feat(office): block hire when role cap reached; show occupied-role popup with current hire card
+88e3847 feat(office): expand KEY STAFF cards with avatar, archetype badge and influence
+43dd95f feat(office): move KEY STAFF section above tactics
+278e600 feat(office): add staff caps to GameConfig; show singleton role cards on CLUB tab with hire deep-link
+a16d429 feat(finances): SponsorsPane reads sponsorContracts with live weeks-remaining bar
+1ed615b feat(inbox): sponsor accept writes SponsorContract; enforce 10-sponsor cap
+e76bdb6 feat(gameloop): contract-based sponsor income; config-driven offer probabilities and payment formula
+dcde1db feat(gameloop): process sponsor contract expiry and conditional renewal offers
+25f6c21 feat(store): add sponsorContracts to Club; addSponsorContract/removeSponsorContract actions
+53d5582 feat(engine): add sponsorEngine with computeSponsorOffer + probability helpers
+bdb3e5a feat(config): add sponsor/investor offer probability fields per reputation tier
+7c5a5de feat(types): add SponsorContract; extend Club with sponsorContracts
+631b01e feat(office): add Hire sub-nav with unified staff market and StaffRole filter overlay
+7868cf6 feat(office): add Club sub-nav with AMP profile editor (stadium, formation, playing style, kit colours)
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Layered Architecture** — clear separation between `src/api` (data fetching), `src/stores` (state management), `src/engine` (business logic), and `src/components` (presentation), each with a distinct responsibility.
-- **Store Pattern (Flux/Redux-like)** — `src/stores/` contains domain-scoped stores (squad, coach, market, loan, facility, inbox, auth), centralizing mutable state outside components; consistent with Zustand's atom-per-domain convention.
-- **Engine/Domain Layer** — `src/engine/` encapsulates core game logic (GameLoop, personality, recruitment, finance) as pure utilities, keeping business rules independent of UI and storage concerns.
-- **Repository-style API Layer** — `src/api/endpoints/` groups backend calls by resource (squad, staff, facilities, inbox, market), acting as a thin data-access layer; `src/api/mutations/` separates write operations from reads, echoing CQRS at the API boundary.
-- **DTO / Transform Pattern** — raw backend responses are transformed into app-typed models within `src/api/endpoints/` before reaching stores or UI, acting as an anti-corruption layer between the Symfony API contract and the client domain model.
+- **Zustand-based State Management**: The existence of a dedicated `src/stores` directory containing numerous domain-specific stores (e.g., `clubStore.ts`, `playerStore.ts`, `financeStore.ts`) indicates a centralized state management architecture, likely using Zustand given the React Native context.
+- **Service Layer Pattern**: The `src/engine` directory contains specialized service classes (e.g., `DevelopmentService.ts`, `ScoutingService.ts`, `SimulationService.ts`) that encapsulate complex business logic and domain rules, separating them from the UI and state stores.
+- **Hook-based Data Synchronization**: The `src/hooks` directory features synchronization-specific hooks (e.g., `useArchetypeSync.ts`, `useNarrativeSync.ts`), suggesting a pattern where custom hooks orchestrate the flow between API endpoints and the local application state.
+- **Domain-Driven Type System**: A robust `src/types` directory containing domain models (e.g., `archetype.ts`, `club.ts`, `guardian.ts`) suggests a design where the application is structured around strongly-typed domain entities used across the entire stack.
+- **Centralized API Client and Endpoint Management**: The `src/api` structure, with separate directories for `endpoints` and `mutations`, points to a structured communication layer that abstracts network requests from the rest of the application.
 
 ---
 
 ## Current Development Focus
 
-- **Unified player/entity detail views** — The `useUnifiedPlayer` hook and WorldPlayer type system were just merged; extending the same pattern to coaches and scouts (both `coach/[id].tsx` and `scout/[id].tsx` were modified) would benefit from AI to maintain consistency across the three detail screen implementations.
-- **Country/league configuration system** — Active work on `enabledCountries` filtering in onboarding, StarterConfig type extensions, and a dedicated country-config plan doc suggest a growing config surface that AI could help model, validate, and wire end-to-end.
-- **Admin + StarterConfig backend improvements** — Two plan docs from the same day (`admin-backend-improvements`, `admin-starter-config-league-ability-ranges`) indicate parallel admin tooling work; AI can help keep the frontend `StarterConfig` type and API contract in sync as the backend evolves.
-- **Onboarding flow edge cases** — Recent fixes (back-button navigation, auto-select when one country, early-fetch of enabledCountries) show the onboarding state machine is fragile under non-happy-path conditions; AI could help model the full state graph and surface missing guards.
-- **Game-over screen** (`game-over.tsx` modified alongside hub/squad/finances) — Likely tied to the reputation/finance model; AI assistance would be useful for designing loss conditions, surfacing the right end-state metrics, and ensuring the weekly-tick engine feeds the correct signals into the game-over trigger.
+* **Sponsorship System Refinement:** Implementing the logical conclusion of the new contract system, including complex renewal negotiation logic and the fine-tuning of payment formulas within the `GameLoop`.
+* **Staff Archetype & Influence Logic:** Developing the underlying simulation mechanics for the "influence" and "archetype" badges recently added to Key Staff cards to ensure they have a functional impact on club performance.
+* **Worldpack Sync & Reputation Balancing:** Calibrating the interaction between synced league constraints and club progression, specifically handling edge cases where a club's reputation hits the new league caps.
+* **Office UI/UX State Management:** Orchestrating the increasingly complex conditional rendering in `office.tsx`, such as the hire-blocking popups and singleton role card deep-linking, as staff management becomes more feature-rich.
 
 ---
 
-> _AI summaries generated using **claude**._
+> _AI summaries generated using **gemini**._

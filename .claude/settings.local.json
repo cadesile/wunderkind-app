@@ -29,7 +29,8 @@
       "Bash(python3:*)",
       "Bash(curl:*)",
       "Bash(npx eas:*)",
-      "Bash(npx expo:*)"
+      "Bash(npx expo:*)",
+      "Bash(npx jest:*)"
     ]
   }
 }

@@ -169,6 +169,8 @@ export function processMissions(): void {
         candidates = natFiltered.length > 0 ? natFiltered : byPosition;
       }
 
+      console.log('candidates', candidates);
+
       const actualCount = Math.min(count, candidates.length);
 
       for (let i = 0; i < actualCount; i++) {
@@ -186,6 +188,8 @@ export function processMissions(): void {
         foundPlayers.push(gem);
       }
     }
+
+    console.log('foundPlayers', foundPlayers);
 
     if (foundPlayers.length > 0) {
       incrementGemsFound(scout.id, foundPlayers.length);

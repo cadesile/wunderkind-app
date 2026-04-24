@@ -9,6 +9,7 @@ import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useFacilityStore } from '@/stores/facilityStore';
@@ -161,7 +162,7 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
       {/* Main content */}
       <View style={{ flex: 1 }}>
         <BodyText size={14} upper numberOfLines={1} style={{ marginBottom: 3 }}>{coach.name}</BodyText>
-        <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{coach.role.toUpperCase()}</PixelText>
+        <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{formatStaffRole(coach.role).toUpperCase()}</PixelText>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
           <FlagText nationality={coach.nationality} size={11} />
@@ -233,7 +234,7 @@ function ScoutRow({ scout }: { scout: Scout }) {
             {isOnMission && <Badge label="ACTIVE" color="yellow" />}
           </View>
 
-          <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{RANGE_LABEL[scout.scoutingRange]} SCOUT</PixelText>
+          <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{RANGE_LABEL[scout.scoutingRange]} {formatStaffRole(scout.role).toUpperCase()}</PixelText>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
             <FlagText nationality={scout.nationality} size={11} />
@@ -380,6 +381,7 @@ function SquadPane() {
           defaultSortDir="desc"
           onRowPress={(p) => { hapticTap(); router.push(`/player/${p.id}`); }}
           emptyMessage="NO PLAYERS"
+          rowStyle={(p) => p.injury ? injuryStyle(p) : undefined}
         />
       </ScrollView>
     </View>
@@ -389,17 +391,11 @@ function SquadPane() {
 // ─── Staff Pane ──────────────────────────────────────────────────────────────
 
 
-type StaffRoleFilter = 'ALL' | 'HEAD COACH' | 'FITNESS COACH' | 'YOUTH COACH' | 'GK COACH' | 'TACTICAL ANALYST' | 'SCOUT';
+function formatStaffRole(role: string): string {
+  return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-const STAFF_FILTER_OPTIONS: StaffRoleFilter[] = [
-  'ALL',
-  'HEAD COACH',
-  'FITNESS COACH',
-  'YOUTH COACH',
-  'GK COACH',
-  'TACTICAL ANALYST',
-  'SCOUT',
-];
+type StaffRoleFilter = 'ALL' | import('@/types/coach').StaffRole;
 
 function StaffPane() {
   const { coaches, removeCoach } = useCoachStore();
@@ -407,6 +403,13 @@ function StaffPane() {
   const { club, addBalance } = useClubStore();
   const router = useRouter();
   const weekNumber = club.weekNumber ?? 1;
+
+  const staffRoles = useGameConfigStore((s) => s.config.staffRoles);
+  const STAFF_FILTER_OPTIONS = useMemo(() => {
+    const roles = ['ALL', ...staffRoles];
+    if (!roles.includes('scout')) roles.push('scout' as any);
+    return roles as StaffRoleFilter[];
+  }, [staffRoles]);
 
   const [filterRole, setFilterRole] = useState<StaffRoleFilter>('ALL');
   const [showFilter, setShowFilter] = useState(false);
@@ -430,15 +433,7 @@ function StaffPane() {
     filterRole === 'ALL'
       ? allStaff
       : allStaff.filter((item) => {
-          if (filterRole === 'SCOUT') return item.kind === 'scout';
-          const roleMap: Record<string, string> = {
-            'HEAD COACH': 'Head Coach',
-            'FITNESS COACH': 'Fitness Coach',
-            'YOUTH COACH': 'Youth Coach',
-            'GK COACH': 'GK Coach',
-            'TACTICAL ANALYST': 'Tactical Analyst',
-          };
-          return item.kind === 'coach' && item.data.role === roleMap[filterRole];
+          return item.data.role === filterRole;
         });
 
   function fireCoach(coach: Coach) {
@@ -547,7 +542,7 @@ function StaffPane() {
                     }}
                   >
                     <PixelText size={7} color={filterRole === role ? WK.border : WK.text}>
-                      {role}
+                      {formatStaffRole(role)}
                     </PixelText>
                   </Pressable>
                 ))}

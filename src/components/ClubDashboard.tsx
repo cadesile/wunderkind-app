@@ -16,6 +16,8 @@ import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
 import { getLeaderboard } from '@/api/endpoints/leaderboard';
@@ -206,6 +208,185 @@ function RosterStackedBar({ playerCount, coachCount }: { playerCount: number; co
   );
 }
 
+// ─── League Position Card ─────────────────────────────────────────────────────
+
+function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
+  const league   = useLeagueStore((s) => s.league);
+  const fixtures = useFixtureStore((s) => s.fixtures);
+  const club     = useClubStore((s) => s.club);
+
+  if (!league) return null;
+
+  // league.clubs only holds NPC clubs — the AMP is added separately when
+  // fixtures are generated. Build standings from fixture results so the AMP
+  // appears naturally in the table.
+  const npcClubs = league.clubs;
+  const allIds   = [ampClubId, ...npcClubs.map((c) => c.id)];
+
+  type Standing = {
+    id: string; name: string; primaryColor: string;
+    pts: number; gd: number; gf: number; played: number;
+  };
+
+  const map: Record<string, Standing> = {};
+  for (const id of allIds) {
+    const isAmp = id === ampClubId;
+    const snap  = npcClubs.find((c) => c.id === id);
+    map[id] = {
+      id,
+      name:         isAmp ? club.name        : (snap?.name         ?? id),
+      primaryColor: isAmp ? club.primaryColor : (snap?.primaryColor ?? '#888888'),
+      pts: 0, gd: 0, gf: 0, played: 0,
+    };
+  }
+
+  for (const f of fixtures.filter((f) => f.leagueId === league.id && f.result)) {
+    const { homeGoals, awayGoals } = f.result!;
+    const home = map[f.homeClubId];
+    const away = map[f.awayClubId];
+    if (!home || !away) continue;
+    home.played++; away.played++;
+    home.gf += homeGoals; home.gd += homeGoals - awayGoals;
+    away.gf += awayGoals; away.gd += awayGoals - homeGoals;
+    if      (homeGoals > awayGoals) { home.pts += 3; }
+    else if (homeGoals < awayGoals) { away.pts += 3; }
+    else                            { home.pts += 1; away.pts += 1; }
+  }
+
+  const sorted   = Object.values(map).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+  const ampIndex = sorted.findIndex((s) => s.id === ampClubId);
+  if (ampIndex === -1) return null;
+
+  const total = sorted.length;
+  let start   = Math.max(0, ampIndex - 2);
+  let end     = Math.min(total - 1, ampIndex + 2);
+  if (end - start < 4) {
+    if (start === 0) end   = Math.min(total - 1, 4);
+    else             start = Math.max(0, end - 4);
+  }
+
+  const slice = sorted.slice(start, end + 1);
+
+  return (
+    <SectionCard>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <PixelText size={7} dim upper>League Table</PixelText>
+        <BodyText size={10} dim numberOfLines={1}>{league.name.toUpperCase()}</BodyText>
+      </View>
+
+      {slice.map((entry, i) => {
+        const position = start + i + 1;
+        const isAmp    = entry.id === ampClubId;
+        return (
+          <View
+            key={entry.id}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 8,
+              paddingVertical: 7,
+              paddingHorizontal: isAmp ? 6 : 0,
+              borderBottomWidth: i < slice.length - 1 ? 1 : 0,
+              borderBottomColor: WK.border,
+              backgroundColor: isAmp ? WK.yellow + '1A' : 'transparent',
+            }}
+          >
+            <PixelText size={8} color={isAmp ? WK.yellow : WK.dim} style={{ width: 36 }} numberOfLines={1}>
+              #{position}
+            </PixelText>
+            <View style={{ width: 10, height: 10, backgroundColor: entry.primaryColor, borderWidth: 1, borderColor: WK.border }} />
+            <BodyText size={13} color={isAmp ? WK.yellow : WK.text} style={{ flex: 1 }} numberOfLines={1}>
+              {entry.name.toUpperCase()}
+            </BodyText>
+            <PixelText size={8} color={isAmp ? WK.yellow : WK.dim}>{entry.pts}pts</PixelText>
+          </View>
+        );
+      })}
+    </SectionCard>
+  );
+}
+
+// ─── Latest Result + Form Card ────────────────────────────────────────────────
+
+type Outcome = 'W' | 'D' | 'L';
+
+const OUTCOME_COLOR: Record<Outcome, string> = {
+  W: '#2E7D32',  // dark green — readable on teal card
+  D: '#F9A825',  // yellow
+  L: '#C62828',  // red
+};
+
+function getOutcome(homeGoals: number, awayGoals: number, isHome: boolean): Outcome {
+  if (homeGoals === awayGoals) return 'D';
+  return isHome ? (homeGoals > awayGoals ? 'W' : 'L') : (awayGoals > homeGoals ? 'W' : 'L');
+}
+
+function ResultFormCard({ ampClubId }: { ampClubId: string }) {
+  const fixtures = useFixtureStore((s) => s.fixtures);
+  const league   = useLeagueStore((s) => s.league);
+
+  const played = fixtures
+    .filter((f) => f.result !== null && (f.homeClubId === ampClubId || f.awayClubId === ampClubId))
+    .sort((a, b) => new Date(b.result!.playedAt).getTime() - new Date(a.result!.playedAt).getTime());
+
+  if (played.length === 0) return null;
+
+  const latest  = played[0];
+  const isHome  = latest.homeClubId === ampClubId;
+  const { homeGoals, awayGoals } = latest.result!;
+  const outcome = getOutcome(homeGoals, awayGoals, isHome);
+
+  // Resolve opponent name from league clubs if available
+  const opponentId   = isHome ? latest.awayClubId : latest.homeClubId;
+  const opponentClub = league?.clubs.find((c) => c.id === opponentId);
+  const opponentName = opponentClub?.name ?? 'OPPONENT';
+
+  // Form: last 5, oldest → newest (left to right)
+  const form: Outcome[] = played
+    .slice(0, 5)
+    .reverse()
+    .map((f) => getOutcome(f.result!.homeGoals, f.result!.awayGoals, f.homeClubId === ampClubId));
+
+  return (
+    <SectionCard>
+      <PixelText size={7} dim upper style={{ marginBottom: 10 }}>Latest Result</PixelText>
+
+      {/* Score row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <View style={{
+          width: 28, height: 28, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: OUTCOME_COLOR[outcome],
+          borderWidth: 2, borderColor: WK.border,
+        }}>
+          <PixelText size={10} color={WK.text}>{outcome}</PixelText>
+        </View>
+        <PixelText size={14} color={WK.text}>{homeGoals} – {awayGoals}</PixelText>
+        <View style={{ flex: 1 }}>
+          <BodyText size={11} dim>{isHome ? 'HOME' : 'AWAY'}</BodyText>
+          <BodyText size={12} color={WK.dim} numberOfLines={1}>vs {opponentName.toUpperCase()}</BodyText>
+        </View>
+      </View>
+
+      {/* Form row */}
+      {form.length > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <BodyText size={11} dim style={{ marginRight: 2 }}>FORM</BodyText>
+          {form.map((r, i) => (
+            <View
+              key={i}
+              style={{
+                width: 24, height: 24, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: OUTCOME_COLOR[r],
+                borderWidth: 1, borderColor: WK.border,
+              }}
+            >
+              <PixelText size={8} color={WK.text}>{r}</PixelText>
+            </View>
+          ))}
+        </View>
+      )}
+    </SectionCard>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ClubDashboard() {
@@ -331,6 +512,10 @@ export function ClubDashboard() {
           </BodyText>
         </View>
       </SectionCard>
+
+      {/* ── League Position + Result/Form ────────────────────────────────── */}
+      <LeaguePositionCard ampClubId={club.id} />
+      <ResultFormCard ampClubId={club.id} />
 
       {/* ── Fan Base ────────────────────────────────────────────────────── */}
       <View style={{ marginHorizontal: 10 }}>

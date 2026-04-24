@@ -1,7 +1,7 @@
 import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
 import { Player, Position } from '@/types/player';
-import { WorldPlayer } from '@/types/world';
+import { WorldPlayer, WorldClub } from '@/types/world';
 import { useMemo } from 'react';
 
 export interface UnifiedPlayerResult {
@@ -26,6 +26,7 @@ function mapWorldPlayerToPlayer(wp: WorldPlayer): Player {
     potential: 3, // Fallback for NPC
     wage: 0,
     personality: wp.personality,
+    appearance: wp.appearance,
     agentId: null,
     joinedWeek: 1,
     isActive: true,
@@ -41,11 +42,11 @@ function mapWorldPlayerToPlayer(wp: WorldPlayer): Player {
   };
 }
 
-function findNPCPlayer(worldClubs, id) {
+function findNPCPlayer(worldClubs: Record<string, WorldClub>, id: string) {
   for(const clubId in worldClubs){
     const club = worldClubs[clubId];
     if(Array.isArray(club.players)){
-      const npcPlayer = club.players.find((p) => p.id === id);
+      const npcPlayer = club.players.find((p: WorldPlayer) => p.id === id);
       if(npcPlayer){
         return {
           'player': npcPlayer,

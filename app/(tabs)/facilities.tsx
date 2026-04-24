@@ -7,6 +7,7 @@ import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { repairFacilityCost } from '@/types/facility';
 import type { FacilityTemplate } from '@/types/facility';
 import { useClubStore } from '@/stores/clubStore';
+import { useCoachStore } from '@/stores/coachStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
@@ -14,6 +15,18 @@ import { Button } from '@/components/ui/Button';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
 import { penceToPounds, formatPounds } from '@/utils/currency';
+import { nationalityToCode } from '@/utils/nationality';
+
+function isoToFlag(code: string): string {
+  if (!code || code.length !== 2) return '';
+  return [...code.toUpperCase()]
+    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+    .join('');
+}
+
+function nationalityFlag(nationality: string): string {
+  return isoToFlag(nationalityToCode(nationality));
+}
 
 // ─── Category definition ──────────────────────────────────────────────────────
 
@@ -289,6 +302,8 @@ function FacilityCard({
 export default function FacilitiesScreen() {
   const { templates, levels, conditions } = useFacilityStore();
   const club = useClubStore((s) => s.club);
+  const coaches = useCoachStore((s) => s.coaches);
+  const facilityManager = coaches.find((c) => c.role === 'facility_manager') ?? null;
   const [activeCategory, setActiveCategory] = useState<FacilityCategory>('TRAINING');
 
   const balance = penceToPounds(
@@ -320,7 +335,16 @@ export default function FacilitiesScreen() {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        <PixelText size={10} upper>Facilities</PixelText>
+        <View>
+          <PixelText size={10} upper>Facilities</PixelText>
+          {facilityManager && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
+              <BodyText size={13}>{nationalityFlag(facilityManager.nationality)}</BodyText>
+              <BodyText size={11} color={WK.tealLight}>{facilityManager.name}</BodyText>
+              <BodyText size={9} dim>· AUTO-REPAIR</BodyText>
+            </View>
+          )}
+        </View>
         <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
 

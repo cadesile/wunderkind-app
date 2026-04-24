@@ -74,7 +74,7 @@ interface MarketState {
    * Remove a recruited entity from the available market pool so it can't
    * be signed twice. Call immediately after a local recruit action.
    */
-  removeFromMarket: (entityType: 'player' | 'coach' | 'scout', id: string) => void;
+  removeFromMarket: (entityType: import('@/api/endpoints/market').MarketEntityType, id: string) => void;
   updateMarketPlayer: (id: string, changes: Partial<MarketPlayer>) => void;
   addMarketPlayer: (player: MarketPlayer) => void;
   signPlayer: (playerId: string) => void;
@@ -187,9 +187,10 @@ export const useMarketStore = create<MarketState>()(
           set((s) => ({ players: s.players.filter((p) => p.id !== id) }));
         } else if (entityType === 'coach') {
           set((s) => ({ coaches: s.coaches.filter((c) => c.id !== id) }));
-        } else {
+        } else if (entityType === 'scout') {
           set((s) => ({ marketScouts: s.marketScouts.filter((sc) => sc.id !== id) }));
         }
+        // Sponsors and investors are handled by their own stores, so no-op here
       },
       updateMarketPlayer: (id, changes) =>
         set((state) => ({
@@ -367,6 +368,7 @@ export const useMarketStore = create<MarketState>()(
         useScoutStore.getState().addScout({
           id: marketScout.id,
           name: `${marketScout.firstName} ${marketScout.lastName}`,
+          role: marketScout.role,
           salary: marketScout.salary,
           scoutingRange: marketScout.scoutingRange,
           successRate: marketScout.successRate,

@@ -1,4 +1,4 @@
-import { Appearance, AppearanceRole, FacialHair, HairStyle, PersonalityMatrix } from '@/types/player';
+import { Appearance, AppearanceExpression, AppearanceRole, FacialHair, HairStyle, PersonalityMatrix } from '@/types/player';
 
 // ─── Palettes ─────────────────────────────────────────────────────────────────
 

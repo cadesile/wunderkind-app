@@ -27,6 +27,8 @@ export class ResultsEngine {
     away: SimTeam,
     tacticalMatrix: Record<string, Record<string, number>>
   ): MatchResult {
+    console.log('home', home);
+    console.log('away', away);
     const homeDominance = this.calculateDominance(home, away, tacticalMatrix);
     const awayDominance = this.calculateDominance(away, home, tacticalMatrix);
 

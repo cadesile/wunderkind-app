@@ -47,9 +47,9 @@ function AppNavigator() {
   });
   const { isReady, isOnboarding, registerClub, showWelcomeSplash, dismissWelcomeSplash, enabledCountries } = useAuthFlow();
   const clubName = useClubStore((s) => s.club.name);
-  useNarrativeSync();
-  useArchetypeSync();
-  useProspectSync();
+  useNarrativeSync(isReady && !isOnboarding);
+  useArchetypeSync(isReady && !isOnboarding);
+  useProspectSync(isReady && !isOnboarding);
 
   // Tracks whether the player tapped "START AGAIN" on the game over screen
   const [newGameOnboarding, setNewGameOnboarding] = useState(false);

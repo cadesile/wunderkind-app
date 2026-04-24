@@ -1,7 +1,8 @@
 import { apiRequest } from '@/api/client';
 import { MarketData } from '@/types/market';
-import type { CoachRole } from '@/types/coach';
+import type { StaffRole } from '@/types/coach';
 import type { ManagerProfileInput, ApiGuardian } from '@/types/api';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 
 // ─── Entity type sent to POST /api/market/assign ───────────────────────────────
 
@@ -116,18 +117,6 @@ function mapPosition(pos: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
   return 'MID';
 }
 
-/** Map backend snake_case role to app CoachRole. */
-const COACH_ROLE_MAP: Record<string, CoachRole> = {
-  head_coach:       'Head Coach',
-  fitness_coach:    'Fitness Coach',
-  analyst:          'Tactical Analyst',
-  assistant_coach:  'Youth Coach',
-  scout:            'Youth Coach',
-};
-function mapCoachRole(role: string): CoachRole {
-  return COACH_ROLE_MAP[role] ?? 'Youth Coach';
-}
-
 /** Backend coachingAbility is 0–100; app influence is 1–20. */
 function mapInfluence(coachingAbility: number): number {
   return Math.max(1, Math.min(20, Math.round(coachingAbility / 5)));
@@ -161,8 +150,23 @@ function investorAmount(size: 'SMALL' | 'MEDIUM' | 'LARGE'): number {
   return 10_000_000;                         // £100,000
 }
 
+/**
+ * Resolve a backend role string against the authoritative staffRoles list from
+ * /game-config. Falls back to 'coach' if the value is unrecognised or the list
+ * is empty (e.g. before game config has been fetched).
+ */
+function resolveRole(rawRole: string, validRoles: StaffRole[]): StaffRole {
+  if (validRoles.length > 0) {
+    return validRoles.includes(rawRole as StaffRole)
+      ? (rawRole as StaffRole)
+      : 'coach';
+  }
+  // Game config not yet fetched — accept the raw cast as-is
+  return rawRole as StaffRole;
+}
+
 /** Transform raw backend market data to app-facing MarketData. */
-function transformMarketData(raw: RawMarketData): MarketData {
+function transformMarketData(raw: RawMarketData, validRoles: StaffRole[] = []): MarketData {
   return {
     players: raw.players.map((p) => {
       // Prefer the backend-computed overall over the legacy currentAbility field
@@ -202,8 +206,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
       firstName: c.firstName,
       lastName: c.lastName,
       nationality: c.nationality ?? '',
-      rawRole: c.role,
-      role: mapCoachRole(c.role),
+      role: resolveRole(c.role, validRoles),
       influence: mapInfluence(c.coachingAbility),
       salary: c.weeklySalary,
       morale: c.morale,
@@ -218,6 +221,7 @@ function transformMarketData(raw: RawMarketData): MarketData {
         id: s.id,
         firstName: nameParts[0] ?? s.name,
         lastName: nameParts.slice(1).join(' '),
+        role: 'scout' as StaffRole,
         dateOfBirth: s.dateOfBirth,
         nationality: s.nationality,
         scoutingRange: mapScoutingRange(s.experience),
@@ -274,7 +278,8 @@ export const marketApi = {
     const query = params.toString();
     const url = query ? `/api/market/data?${query}` : '/api/market/data';
     const raw = await apiRequest<RawMarketData>(url);
-    return transformMarketData(raw);
+    const validRoles = useGameConfigStore.getState().config.staffRoles;
+    return transformMarketData(raw, validRoles);
   },
 
   /**

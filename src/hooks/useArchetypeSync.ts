@@ -8,15 +8,16 @@ import { useArchetypeStore } from '@/stores/archetypeStore';
  *
  * Call this in the root layout (_layout.tsx).
  */
-export function useArchetypeSync(): void {
+export function useArchetypeSync(enabled = false): void {
   const { loadFromCache, fetchArchetypes } = useArchetypeStore();
 
   useEffect(() => {
+    if (!enabled) return;
     loadFromCache(); // no-op; persist handles rehydration
 
     fetchArchetypes(false).catch((err) => {
       console.warn('[useArchetypeSync] Archetype sync failed:', err);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 }

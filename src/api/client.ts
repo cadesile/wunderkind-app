@@ -93,6 +93,7 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
   _isRetry = false,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const token = useAuthStore.getState().token;
   const method = (options.method ?? 'GET').toUpperCase();
@@ -116,9 +117,9 @@ export async function apiRequest<T>(
     });
   }
 
-  // Enforce a strict 10-second timeout so background syncs never hang indefinitely
+  // Enforce a timeout so background syncs never hang indefinitely
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
@@ -137,7 +138,7 @@ export async function apiRequest<T>(
 
   if (response.status === 401 && !_isRetry) {
     await refreshAuthToken();
-    return apiRequest<T>(path, options, true);
+    return apiRequest<T>(path, options, true, timeoutMs);
   }
 
   if (response.status === 403) {

@@ -1,12 +1,14 @@
 import { PersonalityMatrix, Appearance } from './player';
 import type { ClubTier } from './club';
 
-export type CoachRole =
-  | 'Head Coach'
-  | 'Fitness Coach'
-  | 'Youth Coach'
-  | 'GK Coach'
-  | 'Tactical Analyst';
+export type StaffRole =
+  | 'assistant_coach'
+  | 'coach'
+  | 'scout'
+  | 'manager'
+  | 'director_of_football'
+  | 'facility_manager'
+  | 'chairman';
 
 export type CoachSpecialism = 'pace' | 'technical' | 'vision' | 'power' | 'stamina' | 'heart';
 
@@ -16,9 +18,10 @@ export type CoachSpecialisms = Partial<Record<CoachSpecialism, number>>;
 export interface Coach {
   id: string;
   name: string;
-  role: CoachRole;
+  role: StaffRole;
   salary: number;    // weekly, in pence
   influence: number; // 1–20 scale
+  age?: number;
   personality: PersonalityMatrix;
   /** Deterministic visual appearance generated from id. Optional for backward compat. */
   appearance?: Appearance;

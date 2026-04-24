@@ -22,6 +22,8 @@ interface Props<T extends { id: string }> {
   defaultSortDir?: 'asc' | 'desc';
   onRowPress?: (item: T) => void;
   emptyMessage?: string;
+  /** Optional per-row style overrides — return undefined for default styling */
+  rowStyle?: (item: T) => { backgroundColor?: string; borderColor?: string } | undefined;
 }
 
 export function SortableTable<T extends { id: string }>({
@@ -31,6 +33,7 @@ export function SortableTable<T extends { id: string }>({
   defaultSortDir = 'desc',
   onRowPress,
   emptyMessage = 'NO DATA',
+  rowStyle,
 }: Props<T>) {
   const [sortKey, setSortKey] = useState(defaultSortKey);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir);
@@ -119,6 +122,7 @@ export function SortableTable<T extends { id: string }>({
       ) : (
         sorted.map((item, index) => {
           const rowBg = index % 2 === 0 ? WK.tealCard : 'rgba(0,0,0,0.15)';
+          const custom = rowStyle?.(item);
           return (
             <Pressable
               key={item.id}
@@ -131,11 +135,11 @@ export function SortableTable<T extends { id: string }>({
                 <View style={{
                   flexDirection: 'row',
                   minHeight: 44,
-                  backgroundColor: pressed ? WK.tealMid : rowBg,
+                  backgroundColor: pressed ? WK.tealMid : (custom?.backgroundColor ?? rowBg),
                   borderLeftWidth: 3,
                   borderRightWidth: 3,
                   borderBottomWidth: index === sorted.length - 1 ? 3 : 1,
-                  borderColor: WK.border,
+                  borderColor: custom?.borderColor ?? WK.border,
                 }}>
                   {columns.map((col) => (
                     <View

@@ -35,7 +35,7 @@ function CoachCard({ coach, onFire }: { coach: Coach; onFire: () => void }) {
         <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.name}</PixelText>
-          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
+          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.replace(/_/g, ' ').toUpperCase()}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
             <FlagText nationality={coach.nationality} size={12} />
             <PixelText size={7} dim>{coach.nationality}</PixelText>
@@ -91,7 +91,7 @@ function ProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => voi
         <Avatar appearance={generateAppearance(coach.id, 'COACH', 35)} role="COACH" size={44} morale={70} />
         <View style={{ flex: 1 }}>
           <PixelText size={8} upper numberOfLines={1}>{coach.firstName} {coach.lastName}</PixelText>
-          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.toUpperCase()}</PixelText>
+          <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>{coach.role.replace(/_/g, ' ').toUpperCase()}</PixelText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
             <FlagText nationality={coach.nationality} size={12} />
             <PixelText size={7} dim>{coach.nationality}</PixelText>

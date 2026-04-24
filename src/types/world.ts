@@ -1,4 +1,4 @@
-import { PersonalityMatrix } from './player';
+import { Appearance, PersonalityMatrix } from './player';
 
 /** Player as delivered in the world pack — full attributes + personality */
 export interface WorldPlayer {
@@ -16,6 +16,8 @@ export interface WorldPlayer {
   heart: number;
   // Unified personality matrix (1-20 scale)
   personality: PersonalityMatrix;
+  /** Deterministic visual appearance generated client-side during initialization */
+  appearance?: Appearance;
 }
 
 /** Staff member as delivered in the world pack */
@@ -26,6 +28,8 @@ export interface WorldStaff {
   role: 'manager' | 'head_coach' | 'chairman' | 'scout';
   coachingAbility: number;
   nationality: string;
+  /** Deterministic visual appearance generated client-side during initialization */
+  appearance?: Appearance;
 }
 
 /** Club-level personality traits */

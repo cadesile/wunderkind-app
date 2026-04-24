@@ -7,11 +7,11 @@ import { eventsApi } from '@/api/endpoints/events';
  * has expired (1-hour TTL). Safe to mount at the root layout — no-ops when
  * cache is warm or no auth token is available.
  */
-export function useNarrativeSync(): void {
+export function useNarrativeSync(enabled = false): void {
   const { shouldRefetch, setTemplates } = useEventStore();
 
   useEffect(() => {
-    if (!shouldRefetch()) return;
+    if (!enabled || !shouldRefetch()) return;
 
     eventsApi.fetchTemplates()
       .then(setTemplates)
@@ -20,5 +20,5 @@ export function useNarrativeSync(): void {
         console.warn('[useNarrativeSync] Failed to refresh event templates:', err);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 }

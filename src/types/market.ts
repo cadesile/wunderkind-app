@@ -1,5 +1,5 @@
 import { Position, PersonalityMatrix, PlayerAttributes } from './player';
-import { CoachRole, CoachSpecialisms } from './coach';
+import { StaffRole, CoachSpecialisms } from './coach';
 import type { ClubTier } from './club';
 
 // ─── Hired staff types (locally-generated) ────────────────────────────────────
@@ -28,6 +28,7 @@ export interface Agent {
 export interface Scout {
   id: string;
   name: string;
+  role: StaffRole;
   salary: number;         // weekly, in pence
   scoutingRange: 'local' | 'national' | 'international';
   successRate: number;    // 0–100
@@ -128,9 +129,7 @@ export interface MarketCoach {
   firstName: string;
   lastName: string;
   nationality: string;
-  role: CoachRole;
-  /** Raw StaffRole enum value from the backend (e.g. 'coach', 'assistant_coach'). Used for role-based filtering. */
-  rawRole: string;
+  role: StaffRole;
   /** 1–20 */
   influence: number;
   /** Weekly, in pence */
@@ -147,6 +146,7 @@ export interface MarketScout {
   id: string;
   firstName: string;
   lastName: string;
+  role: StaffRole;
   /** YYYY-MM-DD — for age display */
   dateOfBirth?: string;
   nationality: string;

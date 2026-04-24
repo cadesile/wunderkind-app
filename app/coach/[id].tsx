@@ -116,7 +116,7 @@ export default function CoachDetailScreen() {
           {coach.appearance && <Avatar appearance={coach.appearance} role="COACH" size={64} morale={morale} age={coach.age ?? 35} />}
           <View style={{ flex: 1 }}>
             <PixelText size={10} upper numberOfLines={2}>{coach.name}</PixelText>
-            <PixelText size={7} color={WK.tealLight} style={{ marginTop: 4 }}>{coach.role}</PixelText>
+            <PixelText size={7} color={WK.tealLight} style={{ marginTop: 4 }}>{coach.role.replace(/_/g, ' ').toUpperCase()}</PixelText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
               <FlagText nationality={coach.nationality} size={12} />
               <PixelText size={6} dim>{coach.nationality}</PixelText>
