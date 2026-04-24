@@ -142,6 +142,20 @@ export function processWeeklyTick(): WeeklyTick {
   // deterministic weekly engine if needed.
   simulationService.processDailyTick();
 
+  // ── 0b. Fan Base updates ──────────────────────────────────────────────────────
+  {
+    const { FanEngine } = require('./FanEngine');
+    const { useFanStore } = require('@/stores/fanStore');
+    const fanStore = useFanStore.getState();
+    
+    // Update fan favorite player
+    const favoriteId = FanEngine.determineFanFavorite(allPlayers, weekNumber);
+    fanStore.setFanFavoriteId(favoriteId);
+    
+    // Prune events older than 10 weeks
+    fanStore.pruneEvents(weekNumber);
+  }
+
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
   // Tactical Room boosts coach performance; conditions scale all benefits
   const tacticalBoost = 1 + eff('tactical_room') * 0.05;

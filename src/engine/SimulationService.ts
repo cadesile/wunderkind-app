@@ -93,6 +93,22 @@ class SimulationService {
             const oppGoals = ampIsHome ? result.awayScore : result.homeScore;
             const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
             const venue = ampIsHome ? 'Home' : 'Away';
+            
+            // Emit Fan Event
+            const { useFanStore } = require('@/stores/fanStore');
+            const fanImpact = outcome === 'Win' ? 5 : outcome === 'Loss' ? -5 : 0;
+            const fanEventType = outcome === 'Win' ? 'match_win' : outcome === 'Loss' ? 'match_loss' : 'match_draw';
+            const fanDescription = outcome === 'Win' ? `Won ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}` : 
+                                   outcome === 'Loss' ? `Lost ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}` : 
+                                   `Drew ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}`;
+            
+            useFanStore.getState().addEvent({
+              type: fanEventType,
+              description: fanDescription,
+              impact: fanImpact,
+              weekNumber: userClub.weekNumber,
+            });
+
             useInboxStore.getState().addMessage({
               id: uuidv7(),
               type: 'match_result',
