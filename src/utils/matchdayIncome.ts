@@ -41,6 +41,30 @@ export function calculateMatchdayIncome(
 
   if (subtotal === 0) return 0;
 
-  const total = subtotal * (1 + reputation / 100);
+  // Fan Happiness Multiplier
+  let fanMultiplier = 1.0;
+  try {
+    const { useFanStore } = require('@/stores/fanStore');
+    const { FanEngine } = require('@/engine/FanEngine');
+    const { useClubStore } = require('@/stores/clubStore');
+    
+    const currentWeek = useClubStore.getState().club.weekNumber ?? 1;
+    const score = FanEngine.calculateScore(currentWeek);
+    const tier = FanEngine.getTier(score);
+    
+    const multipliers: Record<string, number> = {
+      'Thrilled': 1.2,
+      'Happy': 1.1,
+      'Neutral': 1.0,
+      'Disappointed': 0.9,
+      'Angry': 0.8,
+    };
+    fanMultiplier = multipliers[tier] ?? 1.0;
+  } catch (e) {
+    // Fallback if fan store not available (e.g. initial setup)
+    fanMultiplier = 1.0;
+  }
+
+  const total = subtotal * (1 + reputation / 100) * fanMultiplier;
   return Math.floor(total);
 }
