@@ -260,6 +260,7 @@ function GuardianOverview({ guardianIds, worstGuardianId }: { guardianIds: strin
 // ─── Gem player card ───────────────────────────────────────────────────────────
 
 function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: string }) {
+  // ── ALL hooks here, unconditionally (Rules of Hooks) ────────────────────────
   const player = useMarketStore((s) => s.players.find((p) => p.id === playerId));
   const inSquad = useSquadStore((s) => s.players.some((p) => p.id === playerId));
   const { signPlayer } = useMarketStore.getState();
@@ -268,6 +269,16 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
   const manager = useCoachStore((s) => s.coaches.find((c) => c.role === 'manager'));
   const squad   = useSquadStore((s) => s.players);
   const { club } = useClubStore();
+
+  // weeklyWage is safe even when player is undefined (nullish coalescing to 0)
+  const weeklyWage = player?.currentOffer ?? player?.marketValue ?? 0;
+
+  const managerOpinion = useMemo(() => {
+    if (!manager || !player) return null;
+    return ManagerBrain.assessScoutedPlayer(manager, player, squad, club.balance ?? 0, weeklyWage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manager?.id, player?.id, squad.length, club.balance, weeklyWage]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   // Player was signed this session or is already in the squad
   if (recruited || inSquad) {
@@ -307,6 +318,7 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
     );
   }
 
+  // Derived values that dereference player (safe here — player is guaranteed non-null)
   // Compute age from dateOfBirth
   const age = player.dateOfBirth
     ? Math.floor((Date.now() - new Date(player.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
@@ -316,13 +328,6 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
   const potential = Math.min(5, Math.max(0, player.potential ?? 0));
   const stars = '★'.repeat(potential) + '☆'.repeat(5 - potential);
   const askingPrice = getPlayerAskingPrice(player);
-
-  const weeklyWage = player.currentOffer ?? player.marketValue ?? 0;
-  const managerOpinion = useMemo(() => {
-    if (!manager) return null;
-    return ManagerBrain.assessScoutedPlayer(manager, player, squad, club.balance ?? 0, weeklyWage);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manager?.id, player.id, squad.length, club.balance, weeklyWage]);
 
   function handleRecruit() {
     if (!player) return;
