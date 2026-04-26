@@ -32,7 +32,7 @@ import { moraleLabel } from '@/utils/morale';
 import { PlayerBrain } from '@/engine/PlayerBrain';
 import { ManagerBrain } from '@/engine/ManagerBrain';
 import { worldTierToAppTier } from '@/engine/MarketEngine';
-import { TIER_ORDER } from '@/types/club';
+import { TIER_ORDER, TIER_REPUTATION_BASELINE } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 
 // ─── Type config ───────────────────────────────────────────────────────────────
@@ -423,6 +423,8 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
   const biddingClubTier = (meta.biddingClubTier as number) ?? 7;
   const ampTierNumeric  = TIER_ORDER[club.reputationTier.toLowerCase() as ClubTier] ?? 0;
   const biddingAppTier  = worldTierToAppTier(biddingClubTier);
+  const TIER_KEYS: ClubTier[] = ['local', 'regional', 'national', 'elite'];
+  const biddingClubReputation = TIER_REPUTATION_BASELINE[TIER_KEYS[biddingAppTier]] ?? 0;
 
   const managerOpinion = manager
     ? ManagerBrain.assessTransferOffer(
@@ -447,7 +449,7 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
     player,
     club.reputation ?? 0,
     ampTierNumeric,
-    club.reputation ?? 0,
+    biddingClubReputation,
     biddingAppTier,
   );
 
@@ -494,7 +496,7 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
           <Badge label={`TIER ${biddingClubTier}`} color="dim" />
           <PixelText size={16} variant="vt323" color={WK.green}>
-            {formatCurrencyWhole(fee)}
+            {formatCurrencyWhole(Math.round(fee / 100))}
           </PixelText>
         </View>
         <PixelText size={13} variant="vt323" dim style={{ marginTop: 4 }}>
