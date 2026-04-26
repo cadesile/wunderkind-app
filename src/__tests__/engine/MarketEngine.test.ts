@@ -3,9 +3,18 @@ import {
   calculateTransferValue,
   getFormationTargets,
   generateNPCBids,
+  processNPCTransfers,
 } from '@/engine/MarketEngine';
 import type { Player } from '@/types/player';
-import type { WorldClub } from '@/types/world';
+import type { WorldClub, WorldPlayer } from '@/types/world';
+
+jest.mock('@/stores/worldStore', () => ({
+  useWorldStore: {
+    getState: () => ({
+      mutateClubRoster: jest.fn().mockResolvedValue(undefined),
+    }),
+  },
+}));
 
 function makePlayer(overrides: Partial<Player>): Player {
   return {
@@ -174,5 +183,51 @@ describe('generateNPCBids', () => {
       }
     }
     expect(got).toBe(true);
+  });
+});
+
+function makeWorldPlayer(id: string, clubId: string, position: WorldPlayer['position']): WorldPlayer {
+  return {
+    id,
+    firstName: 'A',
+    lastName: 'B',
+    position,
+    nationality: 'EN',
+    dateOfBirth: '2005-01-01',
+    pace: 60, technical: 60, vision: 60, power: 60, stamina: 60, heart: 60,
+    personality: {
+      determination:10, professionalism:10, ambition:10, loyalty:10,
+      adaptability:10, pressure:10, temperament:10, consistency:10,
+    },
+    npcClubId: clubId,
+  };
+}
+
+describe('processNPCTransfers', () => {
+  it('returns a digest with no transfers when all clubs meet their minimums', async () => {
+    const gk = makeWorldPlayer('gk1', 'c1', 'GK');
+    const defenders = Array.from({ length: 8 }, (_, i) => makeWorldPlayer(`d${i}`, 'c1', 'DEF'));
+    const mids = Array.from({ length: 8 }, (_, i) => makeWorldPlayer(`m${i}`, 'c1', 'MID'));
+    const fwds = Array.from({ length: 4 }, (_, i) => makeWorldPlayer(`f${i}`, 'c1', 'FWD'));
+
+    const clubs: Record<string, import('@/types/world').WorldClub> = {
+      c1: { ...makeWorldClub('c1', 5), players: [gk, ...defenders, ...mids, ...fwds] },
+    };
+
+    const digest = await processNPCTransfers(1, clubs);
+    expect(digest.transfers).toHaveLength(0);
+  });
+
+  it('executes a transfer when buyer is below minimum and seller has surplus', async () => {
+    const sellerFwds = Array.from({ length: 7 }, (_, i) => makeWorldPlayer(`sf${i}`, 'seller', 'FWD'));
+    const clubs: Record<string, import('@/types/world').WorldClub> = {
+      buyer:  { ...makeWorldClub('buyer',  5), players: [] },
+      seller: { ...makeWorldClub('seller', 5), players: sellerFwds },
+    };
+
+    const digest = await processNPCTransfers(1, clubs);
+    expect(digest.transfers.length).toBeGreaterThan(0);
+    expect(digest.transfers[0].fromClub).toBe('Club seller');
+    expect(digest.transfers[0].toClub).toBe('Club buyer');
   });
 });

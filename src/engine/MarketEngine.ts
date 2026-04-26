@@ -1,7 +1,8 @@
 import type { Player, Position } from '@/types/player';
 import type { TransferOffer } from '@/types/market';
-import type { WorldClub } from '@/types/world';
+import type { WorldClub, WorldPlayer } from '@/types/world';
 import { uuidv7 } from '@/utils/uuidv7';
+import { useWorldStore } from '@/stores/worldStore';
 
 // ─── Tier mapping ─────────────────────────────────────────────────────────────
 
@@ -118,4 +119,80 @@ export function generateNPCBids(
   }
 
   return offers;
+}
+
+// ─── NPC-to-NPC Transfers ─────────────────────────────────────────────────────
+
+export interface NpcTransferDigest {
+  weekNumber: number;
+  transfers: Array<{ playerName: string; fromClub: string; toClub: string; fee: number }>;
+}
+
+const POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'FWD'];
+
+function worldPlayerOverall(wp: WorldPlayer): number {
+  return Math.round((wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6);
+}
+
+/**
+ * Simulate one round of NPC-to-NPC transfers.
+ * Clubs with roster deficits buy from tier-adjacent clubs with surpluses.
+ * Mutates worldStore club rosters and re-persists to AsyncStorage.
+ */
+export async function processNPCTransfers(
+  weekNumber: number,
+  worldClubs: Record<string, WorldClub>,
+): Promise<NpcTransferDigest> {
+  const digest: NpcTransferDigest = { weekNumber, transfers: [] };
+
+  // Work on mutable copies so in-loop reads are consistent
+  const mutableClubs = Object.fromEntries(
+    Object.entries(worldClubs).map(([id, c]) => [id, { ...c, players: [...c.players] }]),
+  );
+
+  for (const buyerClub of Object.values(mutableClubs)) {
+    const targets   = getFormationTargets(buyerClub.formation ?? '4-4-2');
+    const buyerTier = worldTierToAppTier(buyerClub.tier);
+
+    for (const pos of POSITIONS) {
+      const buyerCount = buyerClub.players.filter((p) => p.position === pos).length;
+      if (buyerCount >= targets[pos].min) continue;
+
+      const potentialSellers = Object.values(mutableClubs).filter((c) => {
+        if (c.id === buyerClub.id) return false;
+        if (Math.abs(worldTierToAppTier(c.tier) - buyerTier) > 1) return false;
+        const sellerTargets = getFormationTargets(c.formation ?? '4-4-2');
+        const sellerCount   = c.players.filter((p) => p.position === pos).length;
+        return sellerCount > sellerTargets[pos].max;
+      });
+
+      if (potentialSellers.length === 0) continue;
+
+      const seller = potentialSellers[Math.floor(Math.random() * potentialSellers.length)];
+
+      const surplusPlayers = seller.players
+        .filter((p) => p.position === pos)
+        .sort((a, b) => worldPlayerOverall(b as WorldPlayer) - worldPlayerOverall(a as WorldPlayer));
+
+      const transferPlayer = surplusPlayers[0] as WorldPlayer | undefined;
+      if (!transferPlayer) continue;
+
+      const fee = worldPlayerOverall(transferPlayer) * 1000;
+
+      seller.players    = seller.players.filter((p) => p.id !== transferPlayer.id);
+      buyerClub.players = [...buyerClub.players, { ...transferPlayer, npcClubId: buyerClub.id }];
+
+      await useWorldStore.getState().mutateClubRoster(seller.id, seller.players as WorldPlayer[]);
+      await useWorldStore.getState().mutateClubRoster(buyerClub.id, buyerClub.players as WorldPlayer[]);
+
+      digest.transfers.push({
+        playerName: `${transferPlayer.firstName} ${transferPlayer.lastName}`,
+        fromClub:   seller.name,
+        toClub:     buyerClub.name,
+        fee,
+      });
+    }
+  }
+
+  return digest;
 }
