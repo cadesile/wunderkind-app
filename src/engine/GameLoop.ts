@@ -522,8 +522,12 @@ export function processWeeklyTick(): WeeklyTick {
   const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber, tierOvrCap);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
 
+  // Re-read players after development updates to ensure transfer values and bid
+  // probabilities reflect this week's OVR changes.
+  const playersCurrentTick = useSquadStore.getState().players;
+
   // ── Update transfer values for all active players ─────────────────────────────
-  for (const player of players.filter((p) => p.isActive)) {
+  for (const player of playersCurrentTick.filter((p) => p.isActive)) {
     const tv = calculateTransferValue(player);
     if (tv !== player.transferValue) {
       useSquadStore.getState().updatePlayer(player.id, { transferValue: tv });
@@ -541,12 +545,13 @@ export function processWeeklyTick(): WeeklyTick {
     );
 
     const { clubs } = useWorldStore.getState();
-    const ampTierNumeric = TIER_ORDER[club.reputationTier.toLowerCase() as ClubTier] ?? 0;
+    const tierKey = club.reputationTier.toLowerCase();
+    const ampTierNumeric = tierKey in TIER_ORDER ? TIER_ORDER[tierKey as ClubTier] : 0;
 
     const npcBids = generateNPCBids(
       weekNumber,
       ampTierNumeric,
-      players,
+      playersCurrentTick.filter((p) => p.isActive !== false),
       clubs,
       pendingOfferPlayerIds,
     );
