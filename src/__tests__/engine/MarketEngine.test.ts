@@ -230,4 +230,15 @@ describe('processNPCTransfers', () => {
     expect(digest.transfers[0].fromClub).toBe('Club seller');
     expect(digest.transfers[0].toClub).toBe('Club buyer');
   });
+
+  it('treats WorldPlayer ATT position as FWD when checking squad gaps', async () => {
+    const sellerAtts = Array.from({ length: 7 }, (_, i) =>
+      makeWorldPlayer(`sa${i}`, 'seller2', 'ATT' as any)); // WorldPlayer uses 'ATT'
+    const clubs: Record<string, import('@/types/world').WorldClub> = {
+      buyer2:  { ...makeWorldClub('buyer2',  5), players: [] },
+      seller2: { ...makeWorldClub('seller2', 5), players: sellerAtts },
+    };
+    const digest = await processNPCTransfers(1, clubs);
+    expect(digest.transfers.length).toBeGreaterThan(0);
+  });
 });

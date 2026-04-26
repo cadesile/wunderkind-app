@@ -130,6 +130,11 @@ export interface NpcTransferDigest {
 
 const POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'FWD'];
 
+/** Normalize WorldPlayer position to the app's Position type ('ATT' → 'FWD'). */
+function normalizeWorldPosition(pos: string): Position {
+  return pos === 'ATT' ? 'FWD' : (pos as Position);
+}
+
 function worldPlayerOverall(wp: WorldPlayer): number {
   return Math.round((wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6);
 }
@@ -155,14 +160,14 @@ export async function processNPCTransfers(
     const buyerTier = worldTierToAppTier(buyerClub.tier);
 
     for (const pos of POSITIONS) {
-      const buyerCount = buyerClub.players.filter((p) => p.position === pos).length;
+      const buyerCount = buyerClub.players.filter((p) => normalizeWorldPosition(p.position) === pos).length;
       if (buyerCount >= targets[pos].min) continue;
 
       const potentialSellers = Object.values(mutableClubs).filter((c) => {
         if (c.id === buyerClub.id) return false;
         if (Math.abs(worldTierToAppTier(c.tier) - buyerTier) > 1) return false;
         const sellerTargets = getFormationTargets(c.formation ?? '4-4-2');
-        const sellerCount   = c.players.filter((p) => p.position === pos).length;
+        const sellerCount   = c.players.filter((p) => normalizeWorldPosition(p.position) === pos).length;
         return sellerCount > sellerTargets[pos].max;
       });
 
@@ -171,7 +176,7 @@ export async function processNPCTransfers(
       const seller = potentialSellers[Math.floor(Math.random() * potentialSellers.length)];
 
       const surplusPlayers = seller.players
-        .filter((p) => p.position === pos)
+        .filter((p) => normalizeWorldPosition(p.position) === pos)
         .sort((a, b) => worldPlayerOverall(b as WorldPlayer) - worldPlayerOverall(a as WorldPlayer));
 
       const transferPlayer = surplusPlayers[0] as WorldPlayer | undefined;
