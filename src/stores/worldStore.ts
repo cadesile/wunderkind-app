@@ -226,12 +226,14 @@ export const useWorldStore = create<WorldState>()(
         const leagueId = leagues.find((l) => l.clubIds.includes(clubId))?.id;
         if (!leagueId) return;
 
-        const leagueClubs = get().getLeagueClubs(leagueId).map((c) =>
-          c.id === clubId ? updatedClub : c,
-        );
+        const allLeagueClubs = get().getLeagueClubs(leagueId);
+        const leagueClubMap: Record<string, WorldClub> = {};
+        for (const c of allLeagueClubs) {
+          leagueClubMap[c.id] = c.id === clubId ? updatedClub : c;
+        }
         await AsyncStorage.setItem(
           `${CLUBS_KEY_PREFIX}${leagueId}`,
-          JSON.stringify(leagueClubs),
+          JSON.stringify(leagueClubMap),
         );
       },
     }),
