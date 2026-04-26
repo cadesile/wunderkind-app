@@ -54,7 +54,7 @@ interface InboxState {
   markAllRead: () => void;
   /** Remove all messages that don't require a pending decision. */
   clearDeletable: () => void;
-  /** Remove all messages and agent offers associated with a departed player. */
+  /** Remove all inbox messages associated with a departed player. */
   purgeForPlayer: (playerId: string) => void;
   unreadCount: () => number;
 }

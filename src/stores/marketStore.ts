@@ -25,7 +25,7 @@ import type { Guardian } from '@/types/guardian';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-function calculateAgentOffer(baseValue: number): number {
+function deriveMarketAskingPrice(baseValue: number): number {
   const roll = Math.random();
   if (roll < 0.70) {
     return Math.round(baseValue * (0.90 + Math.random() * 0.20));
@@ -122,7 +122,7 @@ export const useMarketStore = create<MarketState>()(
               scoutingStatus: existing.scoutingStatus,
               scoutingProgress: existing.scoutingProgress ?? 0,
               marketValue: existing.marketValue ?? p.currentAbility * playerFeeMultiplier,
-              currentOffer: existing.currentOffer ?? calculateAgentOffer(p.currentAbility * playerFeeMultiplier),
+              currentOffer: existing.currentOffer ?? deriveMarketAskingPrice(p.currentAbility * playerFeeMultiplier),
               perceivedAbility: existing.perceivedAbility,
               assignedScoutId: existing.assignedScoutId,
             };
@@ -132,7 +132,7 @@ export const useMarketStore = create<MarketState>()(
             scoutingStatus: 'hidden' as const,
             scoutingProgress: 0,
             marketValue: p.currentAbility * playerFeeMultiplier,
-            currentOffer: calculateAgentOffer(p.currentAbility * playerFeeMultiplier),
+            currentOffer: deriveMarketAskingPrice(p.currentAbility * playerFeeMultiplier),
           };
         });
         set({

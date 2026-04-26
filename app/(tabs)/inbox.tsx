@@ -23,7 +23,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { FlagText } from '@/components/ui/FlagText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { formatCurrencyCompact, formatCurrencyWhole, getPlayerAskingPrice } from '@/utils/currency';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -47,8 +46,9 @@ const TYPE_CONFIG: Record<InboxMessageType, {
   sponsor:  { label: 'SPONSOR',  color: 'green',   icon: Building,       stripeColor: WK.green,     iconColor: WK.green     },
   investor: { label: 'INVESTOR', color: 'yellow',  icon: TrendingUp,     stripeColor: WK.yellow,    iconColor: WK.yellow    },
   system:   { label: 'SYSTEM',   color: 'red',     icon: Bell,           stripeColor: WK.red,       iconColor: WK.red       },
-  scout:       { label: 'SCOUT',       color: 'yellow', icon: Gem,   stripeColor: WK.tealLight, iconColor: WK.tealLight },
-  development: { label: 'DEVELOPMENT', color: 'green',  icon: Award, stripeColor: WK.green,     iconColor: WK.green     },
+  scout:        { label: 'SCOUT',       color: 'yellow', icon: Gem,          stripeColor: WK.tealLight, iconColor: WK.tealLight },
+  development:  { label: 'DEVELOPMENT', color: 'green',  icon: Award,        stripeColor: WK.green,     iconColor: WK.green     },
+  match_result: { label: 'MATCH',       color: 'green',  icon: BookOpen,     stripeColor: WK.tealLight, iconColor: WK.tealLight },
 };
 
 // ─── Unified list item ─────────────────────────────────────────────────────────
