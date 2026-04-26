@@ -265,6 +265,9 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
   const { signPlayer } = useMarketStore.getState();
   const { respond } = useInboxStore.getState();
   const [recruited, setRecruited] = useState(false);
+  const manager = useCoachStore((s) => s.coaches.find((c) => c.role === 'manager'));
+  const squad   = useSquadStore((s) => s.players);
+  const { club } = useClubStore();
 
   // Player was signed this session or is already in the squad
   if (recruited || inSquad) {
@@ -314,10 +317,40 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
   const stars = '★'.repeat(potential) + '☆'.repeat(5 - potential);
   const askingPrice = getPlayerAskingPrice(player);
 
+  const weeklyWage = player.currentOffer ?? player.marketValue ?? 0;
+  const managerOpinion = manager
+    ? ManagerBrain.assessScoutedPlayer(manager, player, squad, club.balance ?? 0, weeklyWage)
+    : null;
+
   function handleRecruit() {
+    if (!player) return;
+    // Manager morale: +5 if manager said sign (agreed), -5 if manager said pass (overruled)
+    if (manager && managerOpinion) {
+      const delta = managerOpinion.recommendation === 'sign' ? 5 : -5;
+      useCoachStore.getState().updateMorale(manager.id, delta);
+    }
+    // Transfer fee deduction (fee is in pence, addBalance takes whole pounds)
+    if (player.requiresTransferFee && player.transferFee) {
+      useClubStore.getState().addBalance(-Math.round(player.transferFee / 100));
+      useFinanceStore.getState().addTransaction({
+        amount:      -Math.round(player.transferFee / 100),
+        category:    'transfer_fee',
+        description: `Transfer fee: ${player.firstName} ${player.lastName}`,
+        weekNumber:  club.weekNumber ?? 1,
+      });
+    }
     signPlayer(playerId);
     respond(messageId, 'accepted');
     setRecruited(true);
+  }
+
+  function handlePass() {
+    // Manager morale: -5 if manager said sign (we ignored them), no change if they also said pass
+    if (manager && managerOpinion?.recommendation === 'sign') {
+      useCoachStore.getState().updateMorale(manager.id, -5);
+    }
+    respond(messageId, 'rejected');
+    setRecruited(true); // hide the card
   }
 
   return (
@@ -388,7 +421,42 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
         </PixelText>
       </View>
 
-      <Button label="✓ RECRUIT" variant="yellow" fullWidth onPress={handleRecruit} />
+      {/* Transfer fee badge */}
+      {player.requiresTransferFee && player.transferFee && (
+        <View style={{
+          borderWidth: 2,
+          borderColor: WK.orange,
+          padding: 6,
+          marginBottom: 8,
+        }}>
+          <PixelText size={13} variant="vt323" color={WK.orange}>
+            TRANSFER FEE: {formatCurrencyWhole(Math.round(player.transferFee / 100))}
+          </PixelText>
+        </View>
+      )}
+
+      {/* Manager's Opinion */}
+      {managerOpinion && (
+        <View style={{
+          backgroundColor: WK.greenDark,
+          borderWidth: 2,
+          borderColor: managerOpinion.recommendation === 'sign' ? WK.green : WK.dim,
+          padding: 10,
+          marginBottom: 8,
+        }}>
+          <PixelText size={7} upper style={{ marginBottom: 4 }}>Manager's Opinion</PixelText>
+          <PixelText size={13} variant="vt323"
+            color={managerOpinion.recommendation === 'sign' ? WK.green : WK.dim}>
+            {managerOpinion.recommendation === 'sign' ? '✓ SIGN HIM' : '✗ PASS'}
+          </PixelText>
+          <PixelText size={12} variant="vt323" dim style={{ marginTop: 3 }}>
+            {managerOpinion.reasoning}
+          </PixelText>
+        </View>
+      )}
+
+      <Button label="SIGN PLAYER" variant="yellow" fullWidth onPress={handleRecruit} />
+      <Button label="PASS" variant="teal" fullWidth onPress={handlePass} style={{ marginTop: 6 }} />
     </View>
   );
 }
