@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
-import type { WorldClub, WorldLeague, WorldPackResponse } from '@/types/world';
+import type { WorldClub, WorldLeague, WorldPackResponse, WorldPlayer } from '@/types/world';
 import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
@@ -35,7 +35,7 @@ interface WorldState {
    * Update a single club's player roster and re-persist it to AsyncStorage.
    * Called by MarketEngine after NPC-to-NPC transfers.
    */
-  mutateClubRoster: (clubId: string, updatedPlayers: import('@/types/world').WorldPlayer[]) => Promise<void>;
+  mutateClubRoster: (clubId: string, updatedPlayers: WorldPlayer[]) => Promise<void>;
 }
 
 export const useWorldStore = create<WorldState>()(
@@ -68,41 +68,34 @@ export const useWorldStore = create<WorldState>()(
 
           const leagueClubMap: Record<string, WorldClub> = {};
           for (const club of leagueData.clubs) {
-            // Assign a random formation to the club
-            club.formation = FORMATIONS[Math.floor(Math.random() * FORMATIONS.length)];
-
-            // Augment NPC players and staff with deterministic appearances
-            for (const p of club.players) {
-              // Tag each player with the club they belong to
-              p.npcClubId = club.id;
-              const age = computePlayerAge(p.dateOfBirth, gameDate);
-              p.appearance = generateAppearance(p.id, 'PLAYER', age, p.personality);
-            }
-            for (const s of club.staff) {
-              const role = s.role === 'scout' ? 'SCOUT' : 'COACH';
-              s.appearance = generateAppearance(s.id, role, 35);
-            }
-
-            clubs[club.id] = club;
-            leagueClubMap[club.id] = club;
+            const builtClub: WorldClub = {
+              ...club,
+              formation: FORMATIONS[Math.floor(Math.random() * FORMATIONS.length)],
+              players: club.players.map((p) => ({
+                ...p,
+                npcClubId: club.id,
+                appearance: generateAppearance(p.id, 'PLAYER', computePlayerAge(p.dateOfBirth, gameDate), p.personality),
+              })),
+              staff: club.staff.map((s) => ({
+                ...s,
+                appearance: generateAppearance(s.id, s.role === 'scout' ? 'SCOUT' : 'COACH', 35),
+              })),
+            };
+            clubs[builtClub.id] = builtClub;
+            leagueClubMap[builtClub.id] = builtClub;
           }
 
           const key = `${CLUBS_KEY_PREFIX}${leagueData.id}`;
-          try {
-            await AsyncStorage.setItem(key, JSON.stringify(leagueClubMap));
+          await AsyncStorage.setItem(key, JSON.stringify(leagueClubMap));
 
-            // Verify the write round-tripped successfully
-            const verification = await AsyncStorage.getItem(key);
-            if (!verification) {
-              throw new Error(`WorldStore: storage write did not persist for league ${leagueData.id}`);
-            }
-            const parsed = JSON.parse(verification) as Record<string, WorldClub>;
-            if (Object.keys(parsed).length === 0) {
-              throw new Error(`WorldStore: persisted club map is empty for league ${leagueData.id}`);
-            }
-          } catch (e) {
-            // Rethrow so the caller (useAuthFlow) surfaces this as console.error
-            throw e;
+          // Verify the write round-tripped successfully
+          const verification = await AsyncStorage.getItem(key);
+          if (!verification) {
+            throw new Error(`WorldStore: storage write did not persist for league ${leagueData.id}`);
+          }
+          const parsed = JSON.parse(verification) as Record<string, WorldClub>;
+          if (Object.keys(parsed).length === 0) {
+            throw new Error(`WorldStore: persisted club map is empty for league ${leagueData.id}`);
           }
         }
 
