@@ -104,6 +104,8 @@ export interface Player {
   overallRating: number; // 0–100
   potential: number;     // 1–5 stars
   wage: number;          // weekly, in pence
+  /** Transfer market value in pence — recalculated each weekly tick by MarketEngine */
+  transferValue?: number;
   personality: PersonalityMatrix;
   /** Club tier this player belongs to — from backend ('local'|'regional'|'national'|'elite') */
   tier?: import('./club').ClubTier;

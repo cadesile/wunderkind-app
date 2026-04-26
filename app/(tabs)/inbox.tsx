@@ -48,7 +48,8 @@ const TYPE_CONFIG: Record<InboxMessageType, {
   system:   { label: 'SYSTEM',   color: 'red',     icon: Bell,           stripeColor: WK.red,       iconColor: WK.red       },
   scout:        { label: 'SCOUT',       color: 'yellow', icon: Gem,          stripeColor: WK.tealLight, iconColor: WK.tealLight },
   development:  { label: 'DEVELOPMENT', color: 'green',  icon: Award,        stripeColor: WK.green,     iconColor: WK.green     },
-  match_result: { label: 'MATCH',       color: 'green',  icon: BookOpen,     stripeColor: WK.tealLight, iconColor: WK.tealLight },
+  match_result:   { label: 'MATCH',    color: 'green',  icon: BookOpen,     stripeColor: WK.tealLight, iconColor: WK.tealLight },
+  transfer_offer: { label: 'TRANSFER', color: 'yellow', icon: ArrowLeftRight, stripeColor: WK.yellow,  iconColor: WK.yellow    },
 };
 
 // ─── Unified list item ─────────────────────────────────────────────────────────

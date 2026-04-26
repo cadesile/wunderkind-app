@@ -2,6 +2,20 @@ import { Position, PersonalityMatrix, PlayerAttributes } from './player';
 import { StaffRole, CoachSpecialisms } from './coach';
 import type { ClubTier } from './club';
 
+export interface TransferOffer {
+  id: string;
+  playerId: string;
+  biddingClubId: string;
+  biddingClubName: string;
+  /** Numeric league tier from WorldClub.tier (1 = top flight) */
+  biddingClubTier: number;
+  /** Gross fee in pence */
+  fee: number;
+  weekGenerated: number;
+  /** weekGenerated + 4 */
+  expiresWeek: number;
+}
+
 // ─── Hired staff types (locally-generated) ────────────────────────────────────
 
 export interface ScoutingMission {
@@ -121,6 +135,10 @@ export interface MarketPlayer {
   isLocalGem?: boolean;
   /** Club tier this player belongs to — from backend */
   tier?: ClubTier;
+  /** True when this player belongs to an NPC club and requires a transfer fee to sign */
+  requiresTransferFee?: boolean;
+  /** Transfer fee in pence — set when scout fully reveals an NPC-club player */
+  transferFee?: number;
 }
 
 /** A coach available in the backend market. */

@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { BehavioralIncident } from '@/types/game';
 import { zustandStorage } from '@/utils/storage';
 
-export type InboxMessageType = 'guardian' | 'agent' | 'sponsor' | 'investor' | 'system' | 'scout' | 'development' | 'match_result';
+export type InboxMessageType = 'guardian' | 'agent' | 'sponsor' | 'investor' | 'system' | 'scout' | 'development' | 'match_result' | 'transfer_offer';
 
 export interface InboxMessage {
   id: string;

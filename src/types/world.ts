@@ -18,6 +18,8 @@ export interface WorldPlayer {
   personality: PersonalityMatrix;
   /** Deterministic visual appearance generated client-side during initialization */
   appearance?: Appearance;
+  /** ID of the NPC club this player belongs to, or null if unassigned. Updated by MarketEngine. */
+  npcClubId: string | null;
 }
 
 /** Staff member as delivered in the world pack */
@@ -25,7 +27,7 @@ export interface WorldStaff {
   id: string;
   firstName: string;
   lastName: string;
-  role: 'manager' | 'head_coach' | 'chairman' | 'scout';
+  role: 'manager' | 'head_coach' | 'chairman' | 'scout' | 'director_of_football' | 'facility_manager';
   coachingAbility: number;
   nationality: string;
   /** Deterministic visual appearance generated client-side during initialization */
@@ -52,6 +54,8 @@ export interface WorldClub {
   personality: ClubPersonality;
   players: WorldPlayer[];
   staff: WorldStaff[];
+  /** Randomly assigned formation, e.g. '4-4-2', '4-3-3'. Assigned at world init. */
+  formation: string;
 }
 
 /** Lightweight league metadata stored in worldStore (no club rosters) */
