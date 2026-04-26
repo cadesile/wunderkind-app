@@ -14,6 +14,8 @@ const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 
 const VALID_REPUTATION_TIERS = ['local', 'regional', 'national', 'elite'] as const;
 
+const FORMATIONS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '5-3-2', '4-5-1'] as const;
+
 interface WorldState {
   isInitialized: boolean;
   leagues: WorldLeague[];
@@ -29,6 +31,11 @@ interface WorldState {
   setFromWorldPack: (pack: WorldPackResponse['worldPack']) => Promise<void>;
   getClub: (clubId: string) => WorldClub | undefined;
   getLeagueClubs: (leagueId: string) => WorldClub[];
+  /**
+   * Update a single club's player roster and re-persist it to AsyncStorage.
+   * Called by MarketEngine after NPC-to-NPC transfers.
+   */
+  mutateClubRoster: (clubId: string, updatedPlayers: import('@/types/world').WorldPlayer[]) => Promise<void>;
 }
 
 export const useWorldStore = create<WorldState>()(
@@ -61,8 +68,13 @@ export const useWorldStore = create<WorldState>()(
 
           const leagueClubMap: Record<string, WorldClub> = {};
           for (const club of leagueData.clubs) {
+            // Assign a random formation to the club
+            club.formation = FORMATIONS[Math.floor(Math.random() * FORMATIONS.length)];
+
             // Augment NPC players and staff with deterministic appearances
             for (const p of club.players) {
+              // Tag each player with the club they belong to
+              p.npcClubId = club.id;
               const age = computePlayerAge(p.dateOfBirth, gameDate);
               p.appearance = generateAppearance(p.id, 'PLAYER', age, p.personality);
             }
@@ -135,6 +147,7 @@ export const useWorldStore = create<WorldState>()(
             reputationTier:                (VALID_REPUTATION_TIERS as readonly string[]).includes(bottomLeague.reputationTier ?? '')
                                              ? (bottomLeague.reputationTier as LeagueSnapshot['reputationTier'])
                                              : null,
+            reputationCap:                 null,
             tvDeal:                        null,
             sponsorPot:                    0,
             prizeMoney:                    null,
@@ -197,6 +210,29 @@ export const useWorldStore = create<WorldState>()(
         return league.clubIds
           .map((id) => clubs[id])
           .filter((c): c is WorldClub => c !== undefined);
+      },
+
+      mutateClubRoster: async (clubId, updatedPlayers) => {
+        const { clubs, leagues } = get();
+        const club = clubs[clubId];
+        if (!club) return;
+
+        const updatedClub = { ...club, players: updatedPlayers };
+
+        // Update in-memory map
+        set((s) => ({ clubs: { ...s.clubs, [clubId]: updatedClub } }));
+
+        // Find which league this club belongs to and re-persist that league's clubs
+        const leagueId = leagues.find((l) => l.clubIds.includes(clubId))?.id;
+        if (!leagueId) return;
+
+        const leagueClubs = get().getLeagueClubs(leagueId).map((c) =>
+          c.id === clubId ? updatedClub : c,
+        );
+        await AsyncStorage.setItem(
+          `${CLUBS_KEY_PREFIX}${leagueId}`,
+          JSON.stringify(leagueClubs),
+        );
       },
     }),
     {
