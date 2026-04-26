@@ -29,6 +29,11 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { useNavStore } from '@/stores/navStore';
 import { hapticTap, hapticWarning, hapticError } from '@/utils/haptics';
 import { moraleLabel } from '@/utils/morale';
+import { PlayerBrain } from '@/engine/PlayerBrain';
+import { ManagerBrain } from '@/engine/ManagerBrain';
+import { worldTierToAppTier } from '@/engine/MarketEngine';
+import { TIER_ORDER } from '@/types/club';
+import type { ClubTier } from '@/types/club';
 
 // ─── Type config ───────────────────────────────────────────────────────────────
 
@@ -385,6 +390,160 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
 
       <Button label="✓ RECRUIT" variant="yellow" fullWidth onPress={handleRecruit} />
     </View>
+  );
+}
+
+// ─── Transfer offer card ────────────────────────────────────────────────────────
+
+function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone: () => void }) {
+  const player  = useSquadStore((s) => s.players.find((p) => p.id === message.entityId));
+  const squad   = useSquadStore((s) => s.players);
+  const { club } = useClubStore();
+  const manager = useCoachStore((s) => s.coaches.find((c) => c.role === 'manager'));
+  const { respond, purgeForPlayer } = useInboxStore.getState();
+  const { removePlayer } = useSquadStore.getState();
+  const { addBalance, addEarnings } = useClubStore.getState();
+
+  const [done, setDone] = useState(false);
+
+  if (!player || done || message.response) {
+    return (
+      <View style={{
+        backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+        padding: 16, alignItems: 'center', gap: 6, ...pixelShadow,
+      }}>
+        <PixelText size={8} dim>{message.response ? 'OFFER RESOLVED' : (done ? 'OFFER RESOLVED' : 'PLAYER NOT FOUND')}</PixelText>
+      </View>
+    );
+  }
+
+  const meta            = (message.metadata ?? {}) as Record<string, unknown>;
+  const fee             = (meta.fee as number) ?? 0;
+  const biddingClubName = (meta.biddingClubName as string) ?? 'Unknown Club';
+  const biddingClubTier = (meta.biddingClubTier as number) ?? 7;
+  const ampTierNumeric  = TIER_ORDER[club.reputationTier.toLowerCase() as ClubTier] ?? 0;
+  const biddingAppTier  = worldTierToAppTier(biddingClubTier);
+
+  const managerOpinion = manager
+    ? ManagerBrain.assessTransferOffer(
+        manager,
+        player,
+        {
+          id: message.id,
+          playerId: player.id,
+          biddingClubId: (meta.biddingClubId as string) ?? '',
+          biddingClubName,
+          biddingClubTier,
+          fee,
+          weekGenerated: message.week,
+          expiresWeek:   (meta.expiresWeek as number) ?? message.week + 4,
+        },
+        club.balance ?? 0,
+        squad,
+      )
+    : null;
+
+  const playerOpinion = PlayerBrain.assessTransferOffer(
+    player,
+    club.reputation ?? 0,
+    ampTierNumeric,
+    club.reputation ?? 0,
+    biddingAppTier,
+  );
+
+  function handleAccept() {
+    const feeWholePounds = Math.round(fee / 100);
+    addBalance(feeWholePounds);
+    addEarnings(feeWholePounds);
+    useFinanceStore.getState().addTransaction({
+      amount:      feeWholePounds,
+      category:    'transfer_fee',
+      description: `Transfer: ${player!.name} → ${biddingClubName}`,
+      weekNumber:  message.week,
+    });
+    removePlayer(player!.id);
+    respond(message.id, 'accepted');
+    purgeForPlayer(player!.id);
+    setDone(true);
+    onDone();
+  }
+
+  function handleReject() {
+    respond(message.id, 'rejected');
+    if (biddingAppTier > ampTierNumeric) {
+      const shifts = PlayerBrain.computeRejectionFallout(player!, biddingAppTier, ampTierNumeric);
+      if (Object.keys(shifts).length > 0) {
+        useSquadStore.getState().applyTraitShifts({ [player!.id]: shifts });
+      }
+    }
+    setDone(true);
+    onDone();
+  }
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: FAB_CLEARANCE, gap: 12 }}>
+      {/* Club + fee header */}
+      <View style={{
+        backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.yellow,
+        padding: 14, ...pixelShadow,
+      }}>
+        <PixelText size={14} variant="vt323" color={WK.yellow} style={{ marginBottom: 6 }}>
+          TRANSFER BID
+        </PixelText>
+        <PixelText size={10} upper numberOfLines={2}>{biddingClubName}</PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <Badge label={`TIER ${biddingClubTier}`} color="dim" />
+          <PixelText size={16} variant="vt323" color={WK.green}>
+            {formatCurrencyWhole(fee)}
+          </PixelText>
+        </View>
+        <PixelText size={13} variant="vt323" dim style={{ marginTop: 4 }}>
+          For: {player.name}
+        </PixelText>
+      </View>
+
+      {/* Manager's Opinion */}
+      {managerOpinion && (
+        <View style={{
+          backgroundColor: WK.tealCard, borderWidth: 3,
+          borderColor: managerOpinion.recommendation === 'sell' ? WK.red : WK.green,
+          padding: 12, marginTop: 12, ...pixelShadow,
+        }}>
+          <PixelText size={8} upper style={{ marginBottom: 6 }}>Manager's Opinion</PixelText>
+          <PixelText size={14} variant="vt323"
+            color={managerOpinion.recommendation === 'sell' ? WK.red : WK.green}>
+            {managerOpinion.recommendation === 'sell' ? '↑ SELL' : '↓ KEEP'}
+          </PixelText>
+          <PixelText size={13} variant="vt323" dim style={{ marginTop: 4 }}>
+            {managerOpinion.reasoning}
+          </PixelText>
+        </View>
+      )}
+
+      {/* Player's Opinion */}
+      <View style={{
+        backgroundColor: WK.tealCard, borderWidth: 3,
+        borderColor: playerOpinion.wantsTransfer ? WK.orange : WK.tealLight,
+        padding: 12, marginTop: 12, ...pixelShadow,
+      }}>
+        <PixelText size={8} upper style={{ marginBottom: 6 }}>
+          {player.name.split(' ')[0]}'s Opinion
+        </PixelText>
+        <PixelText size={14} variant="vt323"
+          color={playerOpinion.wantsTransfer ? WK.orange : WK.tealLight}>
+          {playerOpinion.wantsTransfer ? '→ WANTS TO LEAVE' : '✓ HAPPY TO STAY'}
+        </PixelText>
+        <PixelText size={13} variant="vt323" dim style={{ marginTop: 4 }}>
+          {playerOpinion.reasoning}
+        </PixelText>
+      </View>
+
+      {/* Actions */}
+      <View style={{ marginTop: 12, gap: 8 }}>
+        <Button label="ACCEPT OFFER" variant="yellow" fullWidth onPress={handleAccept} />
+        <Button label="REJECT OFFER" variant="teal" fullWidth onPress={handleReject} />
+      </View>
+    </ScrollView>
   );
 }
 
@@ -798,6 +957,11 @@ function InboxMessageDetail({
       }
     }
     respond(message.id, 'accepted');
+  }
+
+  // Transfer offer messages get their own full-screen card
+  if (message.type === 'transfer_offer') {
+    return <TransferOfferCard message={message} onDone={onBack} />;
   }
 
   return (
