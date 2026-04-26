@@ -1,4 +1,7 @@
 import type { Player, Position } from '@/types/player';
+import type { TransferOffer } from '@/types/market';
+import type { WorldClub } from '@/types/world';
+import { uuidv7 } from '@/utils/uuidv7';
 
 // ─── Tier mapping ─────────────────────────────────────────────────────────────
 
@@ -61,4 +64,57 @@ const FORMATION_TARGETS: Record<string, Record<Position, { min: number; max: num
  */
 export function getFormationTargets(formation: string): Record<Position, { min: number; max: number }> {
   return FORMATION_TARGETS[formation] ?? FORMATION_TARGETS['4-4-2'];
+}
+
+// ─── NPC Bids ─────────────────────────────────────────────────────────────────
+
+/**
+ * Generate NPC club bids on AMP squad players for the current week.
+ *
+ * @param weekNumber            Current game week
+ * @param ampTier               AMP club's 0–3 numeric tier (via TIER_ORDER)
+ * @param players               AMP's active squad
+ * @param worldClubs            All WorldClub objects keyed by id from worldStore
+ * @param pendingOfferPlayerIds Player IDs that already have a pending transfer_offer inbox message
+ */
+export function generateNPCBids(
+  weekNumber: number,
+  ampTier: number,
+  players: Player[],
+  worldClubs: Record<string, WorldClub>,
+  pendingOfferPlayerIds: Set<string>,
+): TransferOffer[] {
+  const eligibleClubs = Object.values(worldClubs).filter(
+    (c) => Math.abs(worldTierToAppTier(c.tier) - ampTier) <= 1,
+  );
+  if (eligibleClubs.length === 0) return [];
+
+  const offers: TransferOffer[] = [];
+
+  for (const player of players) {
+    if (!player.isActive) continue;
+    if (player.injury) continue;
+    if (pendingOfferPlayerIds.has(player.id)) continue;
+
+    // Probability: 5% base + 2% per OVR point above 50, capped at 40%
+    const chance = Math.min(0.4, 0.05 + Math.max(0, player.overallRating - 50) * 0.02);
+    if (Math.random() > chance) continue;
+
+    const club = eligibleClubs[Math.floor(Math.random() * eligibleClubs.length)];
+    const tv   = player.transferValue ?? calculateTransferValue(player);
+    const fee  = Math.round(tv * (0.9 + Math.random() * 0.4));
+
+    offers.push({
+      id:              uuidv7(),
+      playerId:        player.id,
+      biddingClubId:   club.id,
+      biddingClubName: club.name,
+      biddingClubTier: club.tier,
+      fee,
+      weekGenerated:   weekNumber,
+      expiresWeek:     weekNumber + 4,
+    });
+  }
+
+  return offers;
 }

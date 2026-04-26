@@ -2,8 +2,10 @@ import {
   worldTierToAppTier,
   calculateTransferValue,
   getFormationTargets,
+  generateNPCBids,
 } from '@/engine/MarketEngine';
 import type { Player } from '@/types/player';
+import type { WorldClub } from '@/types/world';
 
 function makePlayer(overrides: Partial<Player>): Player {
   return {
@@ -96,5 +98,77 @@ describe('getFormationTargets', () => {
       expect(t.GK.min).toBe(1);
       expect(t.GK.max).toBe(2);
     });
+  });
+});
+
+function makeWorldClub(id: string, tier: number): WorldClub {
+  return {
+    id,
+    name: `Club ${id}`,
+    tier,
+    reputation: 50,
+    primaryColor: '#fff',
+    secondaryColor: '#000',
+    stadiumName: null,
+    facilities: {},
+    personality: { playingStyle: 'POSSESSION', financialApproach: 'BALANCED', managerTemperament: 10 },
+    players: [],
+    staff: [],
+    formation: '4-4-2',
+  };
+}
+
+describe('generateNPCBids', () => {
+  it('returns no offers when there are no active players', () => {
+    const clubs = { c1: makeWorldClub('c1', 5) };
+    const offers = generateNPCBids(1, 1, [], clubs, new Set());
+    expect(offers).toHaveLength(0);
+  });
+
+  it('returns no offer for a player already with a pending bid', () => {
+    const player = makePlayer({ id: 'p-pending', overallRating: 80, isActive: true });
+    const clubs = { c1: makeWorldClub('c1', 5) };
+    const pendingIds = new Set(['p-pending']);
+    for (let i = 0; i < 50; i++) {
+      const offers = generateNPCBids(1, 1, [player], clubs, pendingIds);
+      expect(offers.every((o) => o.playerId !== 'p-pending')).toBe(true);
+    }
+  });
+
+  it('returns no offer for an injured player', () => {
+    const player = makePlayer({ id: 'p-injured', overallRating: 99, isActive: true });
+    player.injury = { severity: 'minor', weeksRemaining: 2, injuredWeek: 1 };
+    const clubs = { c1: makeWorldClub('c1', 5) };
+    for (let i = 0; i < 50; i++) {
+      const offers = generateNPCBids(1, 1, [player], clubs, new Set());
+      expect(offers.every((o) => o.playerId !== 'p-injured')).toBe(true);
+    }
+  });
+
+  it('returns at most one offer per player per call', () => {
+    const player = makePlayer({ id: 'p1', overallRating: 80, isActive: true });
+    const clubs = { c1: makeWorldClub('c1', 5), c2: makeWorldClub('c2', 6) };
+    for (let i = 0; i < 20; i++) {
+      const offers = generateNPCBids(1, 1, [player], clubs, new Set());
+      const forPlayer = offers.filter((o) => o.playerId === 'p1');
+      expect(forPlayer.length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('offer fee is within 0.9–1.3× the player transferValue', () => {
+    const player = makePlayer({ id: 'p-hi', overallRating: 99, isActive: true, potential: 5, age: 17 });
+    const clubs = { c1: makeWorldClub('c1', 5) };
+    let got = false;
+    for (let i = 0; i < 200; i++) {
+      const offers = generateNPCBids(1, 1, [player], clubs, new Set());
+      if (offers.length > 0) {
+        const tv = calculateTransferValue(player);
+        expect(offers[0].fee).toBeGreaterThanOrEqual(tv * 0.89);
+        expect(offers[0].fee).toBeLessThanOrEqual(tv * 1.31);
+        got = true;
+        break;
+      }
+    }
+    expect(got).toBe(true);
   });
 });
