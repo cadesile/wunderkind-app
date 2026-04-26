@@ -12,6 +12,7 @@ import { useInboxStore } from '@/stores/inboxStore';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
 import { Player, Position } from '../types/player';
+import { Formation } from '../types/game';
 import { WorldPlayer, WorldClub } from '../types/world';
 import type { FacilityType } from '@/types/facility';
 import {
@@ -107,6 +108,7 @@ class SimulationService {
               description: fanDescription,
               impact: fanImpact,
               weekNumber: userClub.weekNumber,
+              targets: ['manager', 'players'],
             });
 
             useInboxStore.getState().addMessage({
@@ -150,7 +152,7 @@ class SimulationService {
     if (!club) return null;
 
     const players = club.players.map((p) => this.mapWorldPlayerToPlayer(p));
-    const formation = (club as any).formation ?? '4-4-2';
+    const formation = (club.formation ?? '4-4-2') as Formation;
     const xi = SelectionService.selectStartingXI(players, formation);
 
     return {
@@ -250,6 +252,56 @@ class SimulationService {
     }
 
     const message = this.generateMessage(template, entityMap, statImpacts);
+
+    // Auto-Manager logic
+    const { useCoachStore } = require('@/stores/coachStore');
+    const { ManagerBrain } = require('./ManagerBrain');
+    const { reactionHandler } = require('./ReactionHandler');
+    const activeManager = useCoachStore.getState().coaches.find((c: any) => c.role === 'manager');
+    const isAutoManaging = activeManager?.autoManageEvents === true;
+
+    if (isAutoManaging && message.isActionable && message.choices && message.choices.length > 0) {
+      // Pick choice automatically
+      const primaryPlayerId = message.affectedEntities[0];
+      const { useSquadStore } = require('@/stores/squadStore');
+      const player = useSquadStore.getState().players.find((p: any) => p.id === primaryPlayerId);
+      
+      let choiceIndex = 0;
+      if (player && activeManager) {
+        const action = ManagerBrain.decideSupportOrPunish(activeManager, player);
+        // Map support/punish to choice labels if possible, otherwise first is support, second is punish
+        const supportIndex = message.choices.findIndex(c => c.label.toLowerCase().includes('support') || c.label.toLowerCase().includes('accept'));
+        const punishIndex = message.choices.findIndex(c => c.label.toLowerCase().includes('punish') || c.label.toLowerCase().includes('discipline'));
+        
+        if (action === 'support' && supportIndex !== -1) choiceIndex = supportIndex;
+        else if (action === 'punish' && punishIndex !== -1) choiceIndex = punishIndex;
+        else if (action === 'punish' && message.choices.length > 1) choiceIndex = 1; // Fallback for 2-choice events
+      }
+
+      const choice = message.choices[choiceIndex];
+      message.autoManagedChoiceIndex = choiceIndex;
+      
+      // Execute choice immediately
+      reactionHandler.handleChoice(message, choice);
+    }
+
+    // Auto-Manage Direct Actions (Support/Punish) for all listed players
+    if (isAutoManaging && message.affectedEntities.length > 0) {
+      const { useSquadStore } = require('@/stores/squadStore');
+      const squadStore = useSquadStore.getState();
+      const playerChoices: Record<string, number> = {};
+      const currentWeek = useClubStore.getState().club.weekNumber ?? 1;
+
+      message.affectedEntities.forEach((playerId: string) => {
+        const player = squadStore.players.find((p: any) => p.id === playerId);
+        if (player && activeManager) {
+           const action = ManagerBrain.handleBehavioralIncident(activeManager, player, message.title, currentWeek, false);
+           playerChoices[playerId] = action === 'support' ? 0 : 1;
+        }
+      });
+      message.autoManagedPlayerChoices = playerChoices;
+    }
+
     useNarrativeStore.getState().addMessage(message);
   }
 

@@ -2,6 +2,8 @@ import { Position, PersonalityMatrix, PlayerAttributes } from './player';
 import { StaffRole, CoachSpecialisms } from './coach';
 import type { ClubTier } from './club';
 
+// ─── Transfer types ───────────────────────────────────────────────────────────
+
 export interface TransferOffer {
   id: string;
   playerId: string;
