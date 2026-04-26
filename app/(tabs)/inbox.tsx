@@ -13,273 +13,23 @@ import { useGuardianStore } from '@/stores/guardianStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useCoachStore } from '@/stores/coachStore';
-import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
-import { MarketPlayer } from '@/types/market';
 import { reactionHandler } from '@/engine/ReactionHandler';
 import { handleGuardianResponse } from '@/engine/ReactionHandler';
-import { handleAcceptAgentOffer, handleRejectAgentOffer } from '@/utils/agentOfferHandlers';
 import { useInteractionStore } from '@/stores/interactionStore';
-import { NarrativeMessage, EventChoice, AgentOffer } from '@/types/narrative';
+import { NarrativeMessage, EventChoice } from '@/types/narrative';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
 import { Avatar } from '@/components/ui/Avatar';
 import { FlagText } from '@/components/ui/FlagText';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
+
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { formatCurrencyCompact, formatCurrencyWhole, getPlayerAskingPrice } from '@/utils/currency';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useNavStore } from '@/stores/navStore';
 import { hapticTap, hapticWarning, hapticError } from '@/utils/haptics';
 import { moraleLabel } from '@/utils/morale';
-
-// ─── Agent offer card (list item) ────────────────────────────────────────────
-
-function AgentOfferCard({ offer, onViewOffer }: { offer: AgentOffer; onViewOffer: (o: AgentOffer) => void }) {
-  const currentWeek = useClubStore((s) => s.club.weekNumber ?? 1);
-  const weeksLeft   = offer.expiresWeek - currentWeek;
-
-  return (
-    <Pressable onPress={() => { hapticTap(); onViewOffer(offer); }}>
-      <View style={{
-        backgroundColor: WK.tealCard,
-        borderWidth: 3,
-        borderColor: WK.border,
-        borderLeftWidth: 5,
-        borderLeftColor: WK.yellow,
-        marginBottom: 10,
-        flexDirection: 'row',
-        ...pixelShadow,
-      }}>
-        {/* Icon column */}
-        <View style={{ width: 44, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 14 }}>
-          <ArrowLeftRight size={18} color={WK.yellow} />
-        </View>
-
-        {/* Content column */}
-        <View style={{ flex: 1, paddingTop: 12, paddingBottom: 12, paddingRight: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
-            <PixelText size={8} upper style={{ flex: 1, marginRight: 8 }} numberOfLines={2}>
-              {offer.playerName} → {offer.destinationClub}
-            </PixelText>
-            <Badge label="NEW" color="yellow" />
-          </View>
-          <PixelText variant="body" size={13} dim numberOfLines={1}>
-            Expires in {weeksLeft} {weeksLeft === 1 ? 'week' : 'weeks'}
-          </PixelText>
-          <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>WK {offer.week}</PixelText>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-// ─── Agent offer detail screen ────────────────────────────────────────────────
-
-function AgentOfferDetail({ offer, onBack }: { offer: AgentOffer; onBack: () => void }) {
-  const stableOnBack = useCallback(onBack, []);
-  useEffect(() => {
-    useNavStore.getState().setBackFab(stableOnBack);
-    return () => useNavStore.getState().setBackFab(null);
-  }, [stableOnBack]);
-
-  const currentWeek = useClubStore((s) => s.club.weekNumber ?? 1);
-  const investorId  = useClubStore((s) => s.club.investorId);
-  const investor    = useMarketStore((s) => s.investors.find((inv) => inv.id === investorId));
-  const player = useSquadStore((s) => s.players.find((p) => p.id === offer.playerId));
-  const coaches = useCoachStore((s) => s.coaches);
-  const headCoach = getHeadCoach(coaches);
-  const weeksLeft = offer.expiresWeek - currentWeek;
-
-  // Fee breakdown — all in pence
-  const agentCutPence    = offer.estimatedFee - offer.netProceeds; // offer.netProceeds is post-agent
-  const investorEquityPct = investor?.equityTaken ?? 0;
-  const investorCutPence  = investorEquityPct > 0
-    ? Math.round(offer.netProceeds * (investorEquityPct / 100))
-    : 0;
-  const trueNetPence = offer.netProceeds - investorCutPence;
-
-  // Coach opinion: compare offer fee against player's estimated market value
-  const coachOpinion = player && headCoach
-    ? getCoachPerception(
-        {
-          // Agent fee formula: OVR × ~100 whole pounds (OVR × 100 × 100 pence at mid multiplier)
-          // Use same basis so coach opinion reflects fair/steal/overpriced vs actual offer
-          marketValue: player.overallRating * 100,
-          currentOffer: Math.round(offer.estimatedFee / 100),
-          currentAbility: player.overallRating,
-        } as MarketPlayer,
-        headCoach,
-      )
-    : null;
-
-  const verdictColorMap: Record<string, string> = {
-    green: WK.green,
-    red: WK.red,
-    white: WK.text,
-  };
-
-  const age = player?.dateOfBirth
-    ? Math.floor((Date.now() - new Date(player.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-    : player?.age ?? null;
-
-  function handleAccept() {
-    handleAcceptAgentOffer(offer.id);
-    onBack();
-  }
-
-  function handleDecline() {
-    handleRejectAgentOffer(offer.id);
-    onBack();
-  }
-
-  return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: FAB_CLEARANCE }}>
-
-      {/* ── Player mini-profile ─────────────────────────────────────────── */}
-      {player && (
-        <View style={{
-          backgroundColor: WK.tealCard,
-          borderWidth: 3,
-          borderColor: WK.border,
-          padding: 14,
-          ...pixelShadow,
-        }}>
-          <PixelText size={14} variant="vt323" color={WK.tealLight} style={{ marginBottom: 8 }}>PLAYER</PixelText>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <PixelText size={9} upper style={{ flex: 1 }}>{player.name}</PixelText>
-            <View style={{ borderWidth: 2, borderColor: WK.yellow, paddingHorizontal: 6, paddingVertical: 3 }}>
-              <PixelText size={14} variant="vt323" color={WK.yellow}>{player.position}</PixelText>
-            </View>
-          </View>
-
-          {age !== null && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-              <PixelText size={13} variant="vt323" dim>AGE {age} · </PixelText>
-              <FlagText nationality={player.nationality} size={10} />
-              <PixelText size={13} variant="vt323" dim>{player.nationality}</PixelText>
-            </View>
-          )}
-
-          {/* OVR + ability bar */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <View style={{ borderWidth: 2, borderColor: WK.tealLight, paddingHorizontal: 6, paddingVertical: 3 }}>
-              <PixelText size={8} color={WK.tealLight}>OVR {player.overallRating}</PixelText>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-                <View style={{ height: '100%', width: `${player.overallRating}%`, backgroundColor: WK.tealLight }} />
-              </View>
-            </View>
-          </View>
-
-          {/* Morale */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <PixelText size={13} variant="vt323" dim>{moraleLabel(player.morale ?? 70)}</PixelText>
-          </View>
-        </View>
-      )}
-
-      {/* ── Offer details ────────────────────────────────────────────────── */}
-      <View style={{
-        backgroundColor: WK.tealCard,
-        borderWidth: 4,
-        borderColor: WK.yellow,
-        padding: 14,
-        ...pixelShadow,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <Badge label="TRANSFER OFFER" color="yellow" />
-          <PixelText size={6} dim>WK {offer.week}</PixelText>
-        </View>
-
-        <PixelText size={8} upper style={{ marginBottom: 4 }}>
-          {offer.playerName} → {offer.destinationClub}
-        </PixelText>
-        <PixelText size={13} variant="vt323" dim style={{ marginBottom: 12 }}>
-          {offer.agentName} · {offer.agentCommissionRate}% COMMISSION
-        </PixelText>
-
-        <View style={{ gap: 4, marginBottom: 10 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-            <PixelText size={14} variant="vt323" dim>GROSS FEE</PixelText>
-            <PixelText size={18} variant="vt323" color={WK.text}>{formatCurrencyCompact(offer.estimatedFee)}</PixelText>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-            <PixelText size={14} variant="vt323" dim>AGENT ({offer.agentCommissionRate}%)</PixelText>
-            <PixelText size={18} variant="vt323" color={WK.red}>-{formatCurrencyCompact(agentCutPence)}</PixelText>
-          </View>
-          {investorCutPence > 0 && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={14} variant="vt323" dim>INVESTOR ({investorEquityPct}% EQUITY)</PixelText>
-              <PixelText size={18} variant="vt323" color={WK.red}>-{formatCurrencyCompact(investorCutPence)}</PixelText>
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
-            <PixelText size={14} variant="vt323" color={WK.green}>NET PROCEEDS</PixelText>
-            <PixelText size={18} variant="vt323" color={WK.green}>{formatCurrencyCompact(trueNetPence)}</PixelText>
-          </View>
-        </View>
-
-        <PixelText size={14} variant="vt323" dim>
-          EXPIRES IN {weeksLeft} {weeksLeft === 1 ? 'WEEK' : 'WEEKS'}
-        </PixelText>
-      </View>
-
-      {/* ── Coach opinion ─────────────────────────────────────────────────── */}
-      {coachOpinion && headCoach && (
-        <View style={{
-          backgroundColor: WK.tealCard,
-          borderWidth: 3,
-          borderColor: WK.border,
-          padding: 14,
-          ...pixelShadow,
-        }}>
-          <PixelText size={9} upper style={{ marginBottom: 10 }}>Coach Opinion</PixelText>
-
-          <View style={{ gap: 4, marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={14} variant="vt323" dim>HEAD COACH</PixelText>
-              <PixelText size={18} variant="vt323" color={WK.text}>{headCoach.name}</PixelText>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <PixelText size={14} variant="vt323" dim>EST. MARKET VALUE</PixelText>
-              <PixelText size={18} variant="vt323" color={WK.text}>{formatCurrencyCompact(coachOpinion.perceivedValue)}</PixelText>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
-              <PixelText size={14} variant="vt323" dim>OFFER vs VALUATION</PixelText>
-              <PixelText size={18} variant="vt323" color={coachOpinion.deltaPercent < -10 ? WK.green : coachOpinion.deltaPercent > 10 ? WK.red : WK.text}>
-                {coachOpinion.deltaPercent > 0 ? '+' : ''}{coachOpinion.deltaPercent.toFixed(0)}%
-              </PixelText>
-            </View>
-          </View>
-
-          <View style={{
-            borderWidth: 2,
-            borderColor: verdictColorMap[coachOpinion.verdictColor] ?? WK.border,
-            padding: 10,
-          }}>
-            <PixelText variant="body" size={14} color={verdictColorMap[coachOpinion.verdictColor] ?? WK.text}>
-              "{coachOpinion.coachNote}"
-            </PixelText>
-          </View>
-        </View>
-      )}
-
-      {/* ── Actions ──────────────────────────────────────────────────────── */}
-      <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
-        <SwipeConfirm
-          onAccept={handleAccept}
-          onDecline={handleDecline}
-          acceptLabel="ACCEPT OFFER"
-          declineLabel="DECLINE OFFER"
-        />
-      </View>
-    </ScrollView>
-  );
-}
 
 // ─── Type config ───────────────────────────────────────────────────────────────
 
@@ -304,9 +54,8 @@ const TYPE_CONFIG: Record<InboxMessageType, {
 // ─── Unified list item ─────────────────────────────────────────────────────────
 
 type ListItem =
-  | { kind: 'inbox';       message: InboxMessage }
-  | { kind: 'narrative';   message: NarrativeMessage }
-  | { kind: 'agent_offer'; offer: AgentOffer };
+  | { kind: 'inbox';     message: InboxMessage }
+  | { kind: 'narrative'; message: NarrativeMessage };
 
 // ─── Investor offer metadata ───────────────────────────────────────────────────
 
@@ -717,7 +466,11 @@ function InboxMessageRow({
 
 // ─── Management panel (narrative messages with affected players) ───────────────
 
-function ManagementPanel({ playerIds }: { playerIds: string[] }) {
+function ManagementPanel({ playerIds, autoManagedChoiceIndex, autoManagedPlayerChoices }: { 
+  playerIds: string[]; 
+  autoManagedChoiceIndex?: number;
+  autoManagedPlayerChoices?: Record<string, number>;
+}) {
   const router = useRouter();
   const allPlayers = useSquadStore((s) => s.players);
   const players = allPlayers.filter((p) => playerIds.includes(p.id));
@@ -726,6 +479,11 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
   const allRecords = useInteractionStore((s) => s.records);
   const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const [feedback, setFeedback] = useState<Record<string, 'SUPPORTED' | 'DISCIPLINED'>>({});
+
+  // Reactive check for manager settings
+  const coaches = useCoachStore((s) => s.coaches);
+  const activeManager = coaches.find((c) => c.role === 'manager');
+  const isManagerAutoHandling = activeManager?.autoManageEvents === true;
 
   function getCooldown(playerId: string) {
     const last = allRecords
@@ -796,6 +554,17 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
       <PixelText size={9} upper style={{ marginBottom: 12 }}>Management</PixelText>
       {players.map((p, idx) => {
         const cooldown = getCooldown(p.id);
+        
+        // Use stored choice if available, otherwise calculate what the manager WOULD do if auto-manage is active
+        let playerAutoChoice = autoManagedPlayerChoices?.[p.id];
+        if (playerAutoChoice === undefined && isManagerAutoHandling && activeManager) {
+           const { ManagerBrain } = require('@/engine/ManagerBrain');
+           const action = ManagerBrain.decideSupportOrPunish(activeManager, p);
+           playerAutoChoice = action === 'support' ? 0 : 1;
+        }
+
+        const isLocked = cooldown.locked || playerAutoChoice !== undefined || isManagerAutoHandling;
+
         return (
           <View key={p.id} style={idx < players.length - 1 ? { marginBottom: 16, paddingBottom: 16, borderBottomWidth: 2, borderBottomColor: WK.border } : {}}>
             {/* Player row: avatar + name/morale */}
@@ -838,40 +607,64 @@ function ManagementPanel({ playerIds }: { playerIds: string[] }) {
 
             {/* Action buttons */}
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable
-                onPress={cooldown.locked ? undefined : () => handleSupport(p)}
-                style={{
-                  flex: 1,
-                  backgroundColor: cooldown.locked ? WK.tealMid : WK.green,
-                  borderWidth: 2,
-                  borderColor: WK.border,
-                  padding: 10,
-                  alignItems: 'center',
-                  opacity: cooldown.locked ? 0.45 : 1,
-                }}
-              >
-                <PixelText size={16} variant="vt323" color={cooldown.locked ? WK.dim : WK.text}>SUPPORT</PixelText>
-              </Pressable>
-              <Pressable
-                onPress={cooldown.locked ? undefined : () => handlePunish(p)}
-                style={{
-                  flex: 1,
-                  backgroundColor: cooldown.locked ? WK.tealMid : WK.red,
-                  borderWidth: 2,
-                  borderColor: WK.border,
-                  padding: 10,
-                  alignItems: 'center',
-                  opacity: cooldown.locked ? 0.45 : 1,
-                }}
-              >
-                <PixelText size={16} variant="vt323" color={cooldown.locked ? WK.dim : WK.text}>PUNISH</PixelText>
-              </Pressable>
+              {/* SUPPORT Button */}
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={isLocked ? undefined : () => handleSupport(p)}
+                  style={{
+                    backgroundColor: WK.green,
+                    borderWidth: 3,
+                    borderColor: playerAutoChoice === 0 ? WK.yellow : WK.border,
+                    padding: 10,
+                    alignItems: 'center',
+                    opacity: playerAutoChoice === 0 ? 1 : playerAutoChoice === 1 ? 0.1 : (isLocked ? 0.4 : 1),
+                  }}
+                >
+                  <PixelText size={14} variant="vt323" color={WK.text}>
+                    {playerAutoChoice === 0 ? '✓ SUPPORT' : 'SUPPORT'}
+                  </PixelText>
+                </Pressable>
+                {playerAutoChoice === 0 && (
+                   <PixelText size={5} color={WK.yellow} style={{ marginTop: 4, textAlign: 'center' }}>COACH SELECTED</PixelText>
+                )}
+              </View>
+
+              {/* PUNISH Button */}
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={isLocked ? undefined : () => handlePunish(p)}
+                  style={{
+                    backgroundColor: WK.red,
+                    borderWidth: 3,
+                    borderColor: playerAutoChoice === 1 ? WK.yellow : WK.border,
+                    padding: 10,
+                    alignItems: 'center',
+                    opacity: playerAutoChoice === 1 ? 1 : playerAutoChoice === 0 ? 0.1 : (isLocked ? 0.4 : 1),
+                  }}
+                >
+                  <PixelText size={14} variant="vt323" color={WK.text}>
+                    {playerAutoChoice === 1 ? '✓ PUNISH' : 'PUNISH'}
+                  </PixelText>
+                </Pressable>
+                {playerAutoChoice === 1 && (
+                   <PixelText size={5} color={WK.yellow} style={{ marginTop: 4, textAlign: 'center' }}>COACH SELECTED</PixelText>
+                )}
+              </View>
             </View>
-            {cooldown.locked && (
-              <PixelText size={13} variant="vt323" dim style={{ marginTop: 6, textAlign: 'center' }}>
-                AVAILABLE WK {cooldown.availableWeek}
-              </PixelText>
-            )}
+
+            {/* Status Footer */}
+            <View style={{ marginTop: 8, alignItems: 'center' }}>
+               {playerAutoChoice !== undefined ? (
+                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WK.yellow }} />
+                    <PixelText size={13} variant="vt323" color={WK.yellow}>AUTO-MANAGED BY COACH</PixelText>
+                 </View>
+               ) : isManagerAutoHandling ? (
+                 <PixelText size={13} variant="vt323" dim>PROCESSED BY MANAGER</PixelText>
+               ) : cooldown.locked ? (
+                 <PixelText size={13} variant="vt323" dim>AVAILABLE WK {cooldown.availableWeek}</PixelText>
+               ) : null}
+            </View>
           </View>
         );
       })}
@@ -1126,7 +919,11 @@ function InboxMessageDetail({
       )}
 
       {behaviouralPlayerIds.length > 0 && (
-        <ManagementPanel playerIds={behaviouralPlayerIds} />
+        <ManagementPanel 
+          playerIds={behaviouralPlayerIds} 
+          autoManagedChoiceIndex={message.autoManagedChoiceIndex} 
+          autoManagedPlayerChoices={message.autoManagedPlayerChoices}
+        />
       )}
 
       {canRespond && message.type === 'guardian' && (
@@ -1244,20 +1041,36 @@ function NarrativeMessageDetail({
       </View>
 
       {message.affectedEntities.length > 0 && (
-        <ManagementPanel playerIds={message.affectedEntities} />
+        <ManagementPanel 
+          playerIds={message.affectedEntities} 
+          autoManagedChoiceIndex={message.autoManagedChoiceIndex} 
+          autoManagedPlayerChoices={message.autoManagedPlayerChoices}
+        />
       )}
 
       {isPending && message.choices && (
         <View style={{ marginTop: 12, gap: 8 }}>
-          {message.choices.map((choice, i) => (
-            <Button
-              key={i}
-              label={`${choice.emoji}  ${choice.label.toUpperCase()}`}
-              variant={i === 0 ? 'yellow' : 'teal'}
-              fullWidth
-              onPress={() => handleChoice(choice)}
-            />
-          ))}
+          {message.choices.map((choice, i) => {
+            const isAutoPicked = message.autoManagedChoiceIndex === i;
+            return (
+              <Button
+                key={i}
+                label={`${choice.emoji}  ${isAutoPicked ? '✓ ' : ''}${choice.label.toUpperCase()}`}
+                variant={i === 0 ? 'yellow' : 'teal'}
+                fullWidth
+                onPress={message.autoManagedChoiceIndex !== undefined ? undefined : () => handleChoice(choice)}
+                style={[
+                  isAutoPicked ? { borderWidth: 3, borderColor: WK.yellow } : undefined,
+                  { opacity: isAutoPicked ? 1 : message.autoManagedChoiceIndex !== undefined ? 0.1 : 1 }
+                ]}
+              />
+            );
+          })}
+          {message.autoManagedChoiceIndex !== undefined && (
+            <PixelText size={13} variant="vt323" color={WK.yellow} style={{ marginTop: 6, textAlign: 'center' }}>
+              AUTO-MANAGED BY COACH
+            </PixelText>
+          )}
         </View>
       )}
     </ScrollView>
@@ -1270,15 +1083,12 @@ export default function InboxScreen() {
   const inboxMessages = useInboxStore((s) => s.messages);
   const inboxUnread = useInboxStore((s) => s.messages.filter((m) => !m.isRead).length);
   const { markAllRead: inboxMarkAllRead, clearDeletable: inboxClearDeletable, deleteMessage: inboxDelete } = useInboxStore();
-  const agentOffers = useInboxStore((s) => s.agentOffers);
-  const pendingOffers = agentOffers.filter((o) => o.status === 'pending');
   const narrativeMessages = useNarrativeStore((s) => s.messages);
   const narrativeUnread = useNarrativeStore((s) => s.messages.filter((m) => !m.readAt).length);
   const { markAllRead: narrativeMarkAllRead, clearDeletable: narrativeClearDeletable, deleteMessage: narrativeDelete } = useNarrativeStore();
 
   const [selectedInbox, setSelectedInbox] = useState<InboxMessage | null>(null);
   const [selectedNarrative, setSelectedNarrative] = useState<NarrativeMessage | null>(null);
-  const [selectedOffer, setSelectedOffer] = useState<AgentOffer | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -1311,7 +1121,6 @@ export default function InboxScreen() {
       if (item.kind === 'inbox' && item.message.isRead) return false;
     }
     if (typeFilter === null) return true;
-    if (typeFilter === 'offer') return item.kind === 'agent_offer';
     if (typeFilter === 'story') return item.kind === 'narrative';
     if (item.kind === 'inbox') return item.message.type === typeFilter;
     return false;
@@ -1320,7 +1129,6 @@ export default function InboxScreen() {
   function handleBack() {
     setSelectedInbox(null);
     setSelectedNarrative(null);
-    setSelectedOffer(null);
   }
 
   // Reset to list view whenever the inbox icon is tapped (even if already on this screen)
@@ -1360,7 +1168,7 @@ export default function InboxScreen() {
     narrativeDelete(m.id);
   }
 
-  const isListView = !selectedInboxLive && !selectedNarrativeLive && !selectedOffer;
+  const isListView = !selectedInboxLive && !selectedNarrativeLive;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom', 'left', 'right']}>
@@ -1381,7 +1189,6 @@ export default function InboxScreen() {
             {allListItems.length > 0 && (() => {
               const FILTERS: { key: string | null; label: string }[] = [
                 { key: null,          label: 'ALL' },
-                { key: 'offer',       label: 'OFFERS' },
                 { key: 'guardian',    label: 'GUARDIAN' },
                 { key: 'story',       label: 'STORY' },
                 { key: 'sponsor',     label: 'SPONSOR' },
@@ -1392,7 +1199,6 @@ export default function InboxScreen() {
               ];
               const countFor = (key: string | null) => {
                 if (key === null) return allListItems.length;
-                if (key === 'offer') return allListItems.filter((i) => i.kind === 'agent_offer').length;
                 if (key === 'story') return allListItems.filter((i) => i.kind === 'narrative').length;
                 return allListItems.filter((i) => i.kind === 'inbox' && i.message.type === key).length;
               };
@@ -1497,9 +1303,7 @@ export default function InboxScreen() {
         )}
       </View>
 
-      {selectedOffer ? (
-        <AgentOfferDetail offer={selectedOffer} onBack={handleBack} />
-      ) : selectedInboxLive ? (
+      {selectedInboxLive ? (
         <InboxMessageDetail message={selectedInboxLive} onBack={handleBack} />
       ) : selectedNarrativeLive ? (
         <NarrativeMessageDetail message={selectedNarrativeLive} onBack={handleBack} />
@@ -1513,13 +1317,9 @@ export default function InboxScreen() {
       ) : (
         <FlatList
           data={listItems}
-          keyExtractor={(item) =>
-            item.kind === 'agent_offer' ? item.offer.id : item.message.id
-          }
+          keyExtractor={(item) => item.message.id}
           renderItem={({ item }) =>
-            item.kind === 'agent_offer' ? (
-              <AgentOfferCard offer={item.offer} onViewOffer={setSelectedOffer} />
-            ) : item.kind === 'narrative' ? (
+            item.kind === 'narrative' ? (
               <NarrativeMessageRow
                 message={item.message}
                 onPress={setSelectedNarrative}

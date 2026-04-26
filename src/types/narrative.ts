@@ -148,23 +148,9 @@ export interface NarrativeMessage {
   createdAt: string;
   readAt?: string;
   respondedAt?: string;
+  /** Index of the choice selected by the auto-manager, if applicable. */
+  autoManagedChoiceIndex?: number;
+  /** Per-player choices for management panels (playerId -> index). 0=Support, 1=Punish. */
+  autoManagedPlayerChoices?: Record<string, number>;
 }
 
-export interface AgentOffer {
-  id: string;
-  eventId: string;
-  agentId: string;
-  agentName: string;
-  /** Percentage, e.g. 10.5 = 10.5% */
-  agentCommissionRate: number;
-  playerId: string;
-  playerName: string;
-  /** Gross transfer fee in pence */
-  estimatedFee: number;
-  /** Post-agent proceeds in pence (before investor equity deduction, which is calculated at display/accept time) */
-  netProceeds: number;
-  destinationClub: string;
-  week: number;
-  expiresWeek: number;
-  status: 'pending' | 'accepted' | 'rejected' | 'expired';
-}

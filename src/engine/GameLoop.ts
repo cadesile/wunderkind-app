@@ -7,7 +7,7 @@ import {
   calculateInjuryDuration,
 } from './FormulaEngine';
 import { simulationService } from './SimulationService';
-import { generateAgentOffer } from './agentOffers';
+
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
 import { processScoutingTasks, processMissions, refreshMarketOffers } from './ScoutingService';
 import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
@@ -16,11 +16,13 @@ import { processSocialGraph } from './SocialGraphEngine';
 import { processGuardianTick } from './GuardianEngine';
 import { computeSponsorOffer, getSponsorOfferProbability, getInvestorOfferProbability } from './sponsorEngine';
 import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
+import { FanEngine } from './FanEngine';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useCoachStore } from '@/stores/coachStore';
+import { useFanStore } from '@/stores/fanStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLoanStore } from '@/stores/loanStore';
 import { useMarketStore } from '@/stores/marketStore';
@@ -76,7 +78,7 @@ export function processWeeklyTick(): WeeklyTick {
   // generate new incidents, injuries, or trait shifts.
   const players = allPlayers.filter((p) => p.isActive !== false);
   const { club, addBalance, addEarnings, setReputation, incrementWeek } = useClubStore.getState();
-  const { addIncident, addMessage, addAgentOffer, expireOldOffers, messages: inboxMessages } = useInboxStore.getState();
+  const { addIncident, addMessage, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
   const { levels, conditions, templates: facilityTemplates } = useFacilityStore.getState();
 
@@ -144,8 +146,6 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 0b. Fan Base updates ──────────────────────────────────────────────────────
   {
-    const { FanEngine } = require('./FanEngine');
-    const { useFanStore } = require('@/stores/fanStore');
     const fanStore = useFanStore.getState();
     
     // Update fan favorite player
@@ -289,13 +289,36 @@ export function processWeeklyTick(): WeeklyTick {
   // Block-triggering serious altercations are suppressed from inbox — surfaced via dialog only.
   const digestLines: string[] = [];
   const digestPlayerIds = new Set<string>();
+  
+  // Auto-Manager logic
+  const { ManagerBrain } = require('./ManagerBrain');
+  const activeManager = coaches.find((c: any) => c.role === 'manager');
+  const isAutoManaging = activeManager?.autoManageEvents === true;
 
-  // Non-altercation negative incidents → digest
+  // Non-altercation negative incidents → digest or auto-handle
   incidents
     .filter((i) => i.type === 'negative' && !i.id.startsWith('altercation:'))
     .forEach((incident) => {
-      digestLines.push(incident.description);
-      digestPlayerIds.add(incident.playerId);
+      const player = players.find(p => p.id === incident.playerId);
+      if (isAutoManaging && player) {
+        const action = ManagerBrain.handleBehavioralIncident(activeManager, player, incident.description, weekNumber, false);
+        const autoManagedChoiceIndex = action === 'support' ? 0 : 1;
+        
+        addMessage({
+          id: `auto-handle-${incident.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Behavioural Report (Auto)',
+          body: `• ${incident.description}`,
+          isRead: false,
+          metadata: { playerIds: [player.id] },
+          autoManagedChoiceIndex, 
+          autoManagedPlayerChoices: { [player.id]: autoManagedChoiceIndex }, // Mark specifically for this player
+        });
+      } else {
+        digestLines.push(incident.description);
+        digestPlayerIds.add(incident.playerId);
+      }
     });
 
   const altercationIncidents = incidents.filter((i) => i.id.startsWith('altercation:'));
@@ -374,24 +397,45 @@ export function processWeeklyTick(): WeeklyTick {
   newInjuries.forEach(({ playerId, severity, weeksRemaining }) => {
     const player = players.find((p) => p.id === playerId);
     if (!player) return;
+    
+    const incidentDescription = `${player.name} picked up a ${severity} injury in training this week.`;
+    
     addIncident({
       id: `${playerId}-${weekNumber}-injury`,
       playerId,
       week: weekNumber,
       type: 'negative',
-      description: `${player.name} picked up a ${severity} injury in training this week.`,
+      description: incidentDescription,
       traitAffected: 'consistency',
       delta: -1,
     });
-    addMessage({
-      id: `injury-${playerId}-wk${weekNumber}`,
-      type: 'system',
-      week: weekNumber,
-      subject: 'Training Injury',
-      body: `${player.name} picked up a ${severity} injury in training this week. Expected recovery: ${weeksRemaining} week${weeksRemaining !== 1 ? 's' : ''}.`,
-      isRead: false,
-      entityId: playerId,
-    });
+
+    if (isAutoManaging) {
+       const action = ManagerBrain.handleBehavioralIncident(activeManager, player, incidentDescription, weekNumber, false);
+       const autoManagedChoiceIndex = action === 'support' ? 0 : 1;
+       addMessage({
+         id: `injury-auto-${playerId}-wk${weekNumber}`,
+         type: 'system',
+         week: weekNumber,
+         subject: 'Training Injury (Auto)',
+         body: incidentDescription,
+         isRead: false,
+         entityId: playerId,
+         metadata: { playerIds: [playerId] },
+         autoManagedChoiceIndex,
+         autoManagedPlayerChoices: { [playerId]: autoManagedChoiceIndex },
+       });
+    } else {
+      addMessage({
+        id: `injury-${playerId}-wk${weekNumber}`,
+        type: 'system',
+        week: weekNumber,
+        subject: 'Training Injury',
+        body: `${player.name} picked up a ${severity} injury in training this week. Expected recovery: ${weeksRemaining} week${weeksRemaining !== 1 ? 's' : ''}.`,
+        isRead: false,
+        entityId: playerId,
+      });
+    }
   });
 
   // ── 5. Loan repayments ────────────────────────────────────────────────────────
@@ -865,21 +909,6 @@ export function processWeeklyTick(): WeeklyTick {
 
   const reputationDelta = passiveRepDelta - tierDrain - inactivityDecay;
   setReputation(reputationDelta);
-
-  // ── 8a. Agent offers: expire stale (generation disabled) ─────────────────────
-  expireOldOffers(weekNumber);
-  const { agents: allAgents } = useMarketStore.getState();
-  const agentOffer = generateAgentOffer(
-    weekNumber, players, allAgents, club.reputation,
-    useGameConfigStore.getState().config.playerFeeMultiplier,
-  );
-  if (agentOffer) {
-    // Agents don't pursue injured players — they wait for full recovery
-    const offerTarget = useSquadStore.getState().players.find((p) => p.id === agentOffer.playerId);
-    if (!offerTarget?.injury) {
-      addAgentOffer(agentOffer);
-    }
-  }
 
   // ── 8b. Advance week + facility decay ────────────────────────────────────────
   // Decay runs after benefits have been applied, so this week's condition is used in full

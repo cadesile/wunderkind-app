@@ -203,22 +203,6 @@ export const useMarketStore = create<MarketState>()(
         const player = get().players.find((p) => p.id === playerId);
         if (!player) return;
 
-        const { coaches } = useCoachStore.getState();
-        const headCoach = getHeadCoach(coaches);
-
-        // Coach opinion and morale effects
-        if (headCoach && player.marketValue && player.currentOffer) {
-          try {
-            const opinion = getCoachPerception(player, headCoach, useGameConfigStore.getState().config.playerFeeMultiplier);
-            if (opinion.verdict === 'insulting') {
-              useCoachStore.getState().updateMorale(headCoach.id, -10);
-              updateCoachRelationship(headCoach.id, 'manager', 'manager', -15);
-            } else if (opinion.verdict === 'steal') {
-              useCoachStore.getState().updateMorale(headCoach.id, 5);
-            }
-          } catch { /* ignore valuation errors */ }
-        }
-
         // Generate scouting report if player was revealed
         let scoutingReport: import('@/types/player').ScoutingReport | undefined;
         if (player.scoutingStatus === 'revealed' && player.perceivedAbility != null) {

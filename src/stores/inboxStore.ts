@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { BehavioralIncident } from '@/types/game';
-import { AgentOffer } from '@/types/narrative';
 import { zustandStorage } from '@/utils/storage';
 
 export type InboxMessageType = 'guardian' | 'agent' | 'sponsor' | 'investor' | 'system' | 'scout' | 'development' | 'match_result';
@@ -24,6 +23,10 @@ export interface InboxMessage {
    * Investor: { investmentAmount: number (£ whole), equityPct: number, investorName: string, investorSize: string }
    */
   metadata?: Record<string, unknown>;
+  /** Index of the choice selected by the auto-manager, if applicable. */
+  autoManagedChoiceIndex?: number;
+  /** Per-player choices for management panels (playerId -> index). 0=Support, 1=Punish. */
+  autoManagedPlayerChoices?: Record<string, number>;
 }
 
 /** @deprecated Use InboxMessage instead */
@@ -41,18 +44,10 @@ export interface GuardianMessage {
 interface InboxState {
   messages: InboxMessage[];
   incidents: BehavioralIncident[];
-  agentOffers: AgentOffer[];
   addMessage: (msg: InboxMessage) => void;
   markRead: (id: string) => void;
-  respond: (id: string, response: 'accepted' | 'rejected') => void;
+  respond: (id: string, response: 'accepted' | 'rejected', autoMarkRead?: boolean, autoManagedChoiceIndex?: number) => void;
   addIncident: (incident: BehavioralIncident) => void;
-  addAgentOffer: (offer: AgentOffer) => void;
-  /** Mark offer as accepted (status update only — balance/player changes handled by handler). */
-  acceptAgentOffer: (offerId: string) => void;
-  /** Mark offer as rejected (status update only — morale change handled by handler). */
-  rejectAgentOffer: (offerId: string) => void;
-  /** Mark as expired any offers whose expiresWeek <= currentWeek. */
-  expireOldOffers: (currentWeek: number) => void;
   /** Delete a single message. Blocked if requiresResponse and no response yet. */
   deleteMessage: (id: string) => void;
   /** Mark all messages as read. */
@@ -69,7 +64,6 @@ export const useInboxStore = create<InboxState>()(
     (set, get) => ({
       messages: [],
       incidents: [],
-      agentOffers: [],
 
       addMessage: (msg) =>
         set((state) => ({ messages: [msg, ...state.messages] })),
@@ -81,41 +75,22 @@ export const useInboxStore = create<InboxState>()(
           ),
         })),
 
-      respond: (id, response) =>
+      respond: (id, response, autoMarkRead = true, autoManagedChoiceIndex) =>
         set((state) => ({
           messages: state.messages.map((m) =>
-            m.id === id ? { ...m, response, isRead: true } : m
+            m.id === id
+              ? {
+                  ...m,
+                  response,
+                  isRead: autoMarkRead ? true : m.isRead,
+                  autoManagedChoiceIndex: autoManagedChoiceIndex ?? m.autoManagedChoiceIndex,
+                }
+              : m
           ),
         })),
 
       addIncident: (incident) =>
         set((state) => ({ incidents: [incident, ...state.incidents] })),
-
-      addAgentOffer: (offer) =>
-        set((state) => ({ agentOffers: [offer, ...state.agentOffers] })),
-
-      acceptAgentOffer: (offerId) =>
-        set((state) => ({
-          agentOffers: state.agentOffers.map((o) =>
-            o.id === offerId ? { ...o, status: 'accepted' as const } : o
-          ),
-        })),
-
-      rejectAgentOffer: (offerId) =>
-        set((state) => ({
-          agentOffers: state.agentOffers.map((o) =>
-            o.id === offerId ? { ...o, status: 'rejected' as const } : o
-          ),
-        })),
-
-      expireOldOffers: (currentWeek) =>
-        set((state) => ({
-          agentOffers: state.agentOffers.map((o) =>
-            o.status === 'pending' && o.expiresWeek <= currentWeek
-              ? { ...o, status: 'expired' as const }
-              : o
-          ),
-        })),
 
       deleteMessage: (id) =>
         set((state) => ({
@@ -147,16 +122,13 @@ export const useInboxStore = create<InboxState>()(
             return true;
           };
           return {
-            messages:    state.messages.filter(keepMessage),
-            agentOffers: state.agentOffers.filter((o) => o.playerId !== playerId),
+            messages: state.messages.filter(keepMessage),
           };
         }),
 
       unreadCount: () => {
         const state = get();
-        const unreadMessages = state.messages.filter((m) => !m.isRead).length;
-        const pendingOffers = state.agentOffers.filter((o) => o.status === 'pending').length;
-        return unreadMessages + pendingOffers;
+        return state.messages.filter((m) => !m.isRead).length;
       },
     }),
     {
