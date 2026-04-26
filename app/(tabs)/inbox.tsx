@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, FlatList, Pressable, ScrollView, TouchableOpacity } from 'react-native';
 import { FAB_CLEARANCE } from './_layout';
@@ -318,9 +318,11 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
   const askingPrice = getPlayerAskingPrice(player);
 
   const weeklyWage = player.currentOffer ?? player.marketValue ?? 0;
-  const managerOpinion = manager
-    ? ManagerBrain.assessScoutedPlayer(manager, player, squad, club.balance ?? 0, weeklyWage)
-    : null;
+  const managerOpinion = useMemo(() => {
+    if (!manager) return null;
+    return ManagerBrain.assessScoutedPlayer(manager, player, squad, club.balance ?? 0, weeklyWage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manager?.id, player.id, squad.length, club.balance, weeklyWage]);
 
   function handleRecruit() {
     if (!player) return;
