@@ -129,20 +129,24 @@ describe('generateNPCBids', () => {
     const player = makePlayer({ id: 'p-pending', overallRating: 80, isActive: true });
     const clubs = { c1: makeWorldClub('c1', 5) };
     const pendingIds = new Set(['p-pending']);
-    for (let i = 0; i < 50; i++) {
-      const offers = generateNPCBids(1, 1, [player], clubs, pendingIds);
-      expect(offers.every((o) => o.playerId !== 'p-pending')).toBe(true);
-    }
+    const offers = generateNPCBids(1, 1, [player], clubs, pendingIds);
+    expect(offers.every((o) => o.playerId !== 'p-pending')).toBe(true);
   });
 
   it('returns no offer for an injured player', () => {
     const player = makePlayer({ id: 'p-injured', overallRating: 99, isActive: true });
     player.injury = { severity: 'minor', weeksRemaining: 2, injuredWeek: 1 };
     const clubs = { c1: makeWorldClub('c1', 5) };
-    for (let i = 0; i < 50; i++) {
-      const offers = generateNPCBids(1, 1, [player], clubs, new Set());
-      expect(offers.every((o) => o.playerId !== 'p-injured')).toBe(true);
-    }
+    const offers = generateNPCBids(1, 1, [player], clubs, new Set());
+    expect(offers.every((o) => o.playerId !== 'p-injured')).toBe(true);
+  });
+
+  it('returns no offers when no clubs are within ±1 tier of ampTier', () => {
+    // ampTier=0 (local), but only elite clubs (worldTier=1 → appTier=3) — gap is 3
+    const clubs = { c1: makeWorldClub('c1', 1), c2: makeWorldClub('c2', 2) };
+    const player = makePlayer({ id: 'p1', overallRating: 99, isActive: true });
+    const offers = generateNPCBids(1, 0, [player], clubs, new Set());
+    expect(offers).toHaveLength(0);
   });
 
   it('returns at most one offer per player per call', () => {

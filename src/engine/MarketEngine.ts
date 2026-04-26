@@ -93,6 +93,7 @@ export function generateNPCBids(
 
   for (const player of players) {
     if (!player.isActive) continue;
+    if (player.status && player.status !== 'active') continue;
     if (player.injury) continue;
     if (pendingOfferPlayerIds.has(player.id)) continue;
 
