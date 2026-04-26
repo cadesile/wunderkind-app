@@ -6,6 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
 import { simulationService } from '@/engine/SimulationService';
+import { processNPCTransfers } from '@/engine/MarketEngine';
+import { useWorldStore } from '@/stores/worldStore';
+import { useInboxStore } from '@/stores/inboxStore';
+import { uuidv7 } from '@/utils/uuidv7';
 import { syncQueue } from '@/api/syncQueue';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
@@ -281,6 +285,30 @@ export default function TabLayout() {
       // Batch simulate background fixtures
       console.log('run batch simulation...')
       void simulationService.runBatchSimulation();
+
+      // ── Bi-weekly NPC transfer simulation ───────────────────────────────────
+      // Runs every 2 game weeks. Advance button stays locked (inside startTick/endTick).
+      if (result.week % 2 === 0) {
+        const { clubs } = useWorldStore.getState();
+        try {
+          const digest = await processNPCTransfers(result.week, clubs);
+          if (digest.transfers.length > 0) {
+            const lines = digest.transfers
+              .map((t) => `• ${t.playerName}: ${t.fromClub} → ${t.toClub}`)
+              .join('\n');
+            useInboxStore.getState().addMessage({
+              id:      uuidv7(),
+              type:    'system',
+              week:    result.week,
+              subject: `Transfer Window — Week ${result.week}`,
+              body:    `${digest.transfers.length} transfer(s) completed this fortnight:\n\n${lines}`,
+              isRead:  false,
+            });
+          }
+        } catch (err) {
+          console.warn('[doAdvanceWeek] NPC transfer processing failed:', err);
+        }
+      }
 
     } finally {
       endTick();
