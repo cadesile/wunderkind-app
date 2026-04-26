@@ -181,10 +181,12 @@ export class ManagerBrain {
     if (ratio >= 1.2) score += (ratio - 1.2) * 40;
     if (ratio < 0.9)  score -= 20;
 
-    // Squad depth at this position
-    const posDepth = squad.filter((p) => p.position === player.position && p.isActive).length;
-    if (posDepth <= 1) score -= 30;
-    if (posDepth >= 4) score += 10;
+    // Squad depth at this position after the sale (exclude the player being sold)
+    const posDepth = squad.filter(
+      (p) => p.position === player.position && p.isActive && p.id !== player.id,
+    ).length;
+    if (posDepth < 1) score -= 30; // 0 remaining after sale = critical
+    if (posDepth >= 3) score += 10; // 3+ remaining after sale = well covered
 
     // Financial pressure
     if (clubBalance < 20000) score += 20;
@@ -208,7 +210,7 @@ export class ManagerBrain {
         reasoning = 'We have good cover at this position and the fee is reasonable.';
       }
     } else {
-      if (posDepth <= 1) {
+      if (posDepth < 1) {
         reasoning = `${player.name} is our only player in this position. Losing them now would hurt us badly.`;
       } else if (ratio < 1.0) {
         reasoning = 'The offer is below fair value. We should hold out for a better deal.';
@@ -222,6 +224,12 @@ export class ManagerBrain {
 
   /**
    * Assess whether the manager recommends signing a newly scouted player.
+   *
+   * @param manager        The coach entity with role 'manager'
+   * @param marketPlayer   The revealed MarketPlayer
+   * @param squad          Full AMP squad (for positional depth check)
+   * @param clubBalance    AMP club balance in whole pounds (stores convention)
+   * @param weeklyWage     Asking weekly wage in pence (matches Player.wage / MarketPlayer.currentOffer)
    */
   static assessScoutedPlayer(
     manager: Coach,

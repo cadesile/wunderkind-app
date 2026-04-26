@@ -13,7 +13,7 @@ function makeManager(traits: Partial<Coach['personality']> = {}): Coach {
       adaptability: 10, pressure: 10, temperament: 10, consistency: 10,
       ...traits,
     },
-  } as Coach;
+  };
 }
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
@@ -60,6 +60,18 @@ describe('ManagerBrain.assessTransferOffer', () => {
     const squad   = [player]; // only one GK — thin
     const result  = ManagerBrain.assessTransferOffer(manager, player, offer, 50000, squad);
     expect(result.recommendation).toBe('keep');
+  });
+
+  it('does not penalize when 2 players remain at position after sale', () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    const manager = makeManager({ professionalism: 10, ambition: 10, consistency: 10 });
+    const player  = makePlayer({ position: 'GK', transferValue: 60000 });
+    const squad   = [player, makePlayer({ id: 'p2', position: 'GK' }), makePlayer({ id: 'p3', position: 'GK' })];
+    const offer   = makeOffer(90000, 2); // 1.5× → ratio bonus = (1.5-1.2)*40 = 12
+    // posDepth after exclusion = 2 (p2 + p3), no critical penalty
+    // score = 50 + 12 = 62 >= 50 → sell
+    const result = ManagerBrain.assessTransferOffer(manager, player, offer, 50000, squad);
+    expect(result.recommendation).toBe('sell');
   });
 
   it('returns a non-empty reasoning string', () => {
