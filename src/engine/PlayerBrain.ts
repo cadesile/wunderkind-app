@@ -84,9 +84,12 @@ export class PlayerBrain {
     const loyaltyMitigation = loyalty / 20; // 0.05 → 1.0
     const finalMagnitude = Math.max(0.5, baseMagnitude * (1 - loyaltyMitigation * 0.6));
 
-    return {
-      professionalism: -Math.round(finalMagnitude),
-      temperament:     -Math.round(finalMagnitude * 0.75),
-    };
+    const profDelta = -Math.round(finalMagnitude);
+    const tempDelta = -Math.round(finalMagnitude * 0.75);
+
+    const result: Partial<PersonalityMatrix> = {};
+    if (profDelta !== 0) result.professionalism = profDelta;
+    if (tempDelta !== 0) result.temperament = tempDelta;
+    return result;
   }
 }
