@@ -17,6 +17,9 @@ import { processGuardianTick } from './GuardianEngine';
 import { computeSponsorOffer, getSponsorOfferProbability, getInvestorOfferProbability } from './sponsorEngine';
 import { getRelationshipValue, updatePlayerRelationship } from './RelationshipService';
 import { FanEngine } from './FanEngine';
+import { calculateTransferValue, generateNPCBids } from './MarketEngine';
+import { useWorldStore } from '@/stores/worldStore';
+import { uuidv7 } from '@/utils/uuidv7';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
@@ -34,7 +37,8 @@ import { WeeklyTick, AltercationBlock } from '@/types/game';
 import { FacilityLevels, repairFacilityCost } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
-import { TIER_OVR_CEILING } from '@/types/club';
+import { TIER_OVR_CEILING, TIER_ORDER } from '@/types/club';
+import type { ClubTier } from '@/types/club';
 import { getEffectiveTier } from '@/utils/tierGate';
 import { calculateClubValuation } from '@/hooks/useClubMetrics';
 
@@ -517,6 +521,67 @@ export function processWeeklyTick(): WeeklyTick {
   const tierOvrCap = TIER_OVR_CEILING[effectiveTier];
   const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber, tierOvrCap);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
+
+  // ── Update transfer values for all active players ─────────────────────────────
+  for (const player of players.filter((p) => p.isActive)) {
+    const tv = calculateTransferValue(player);
+    if (tv !== player.transferValue) {
+      useSquadStore.getState().updatePlayer(player.id, { transferValue: tv });
+    }
+  }
+
+  // ── NPC club bids on AMP players ──────────────────────────────────────────────
+  {
+    const { messages } = useInboxStore.getState();
+    const pendingOfferPlayerIds = new Set(
+      messages
+        .filter((m) => m.type === 'transfer_offer' && !m.response)
+        .map((m) => m.entityId)
+        .filter((id): id is string => !!id),
+    );
+
+    const { clubs } = useWorldStore.getState();
+    const ampTierNumeric = TIER_ORDER[club.reputationTier.toLowerCase() as ClubTier] ?? 0;
+
+    const npcBids = generateNPCBids(
+      weekNumber,
+      ampTierNumeric,
+      players,
+      clubs,
+      pendingOfferPlayerIds,
+    );
+
+    for (const bid of npcBids) {
+      useInboxStore.getState().addMessage({
+        id:               uuidv7(),
+        type:             'transfer_offer',
+        week:             weekNumber,
+        subject:          `Transfer Bid: ${bid.biddingClubName}`,
+        body:             `${bid.biddingClubName} have submitted a bid for one of your players.`,
+        isRead:           false,
+        requiresResponse: true,
+        entityId:         bid.playerId,
+        metadata: {
+          fee:             bid.fee,
+          biddingClubId:   bid.biddingClubId,
+          biddingClubName: bid.biddingClubName,
+          biddingClubTier: bid.biddingClubTier,
+          expiresWeek:     bid.expiresWeek,
+        },
+      });
+    }
+  }
+
+  // ── Expire stale transfer offers ──────────────────────────────────────────────
+  {
+    const { messages, respond } = useInboxStore.getState();
+    messages
+      .filter((m) => m.type === 'transfer_offer' && !m.response)
+      .filter((m) => (m.metadata?.expiresWeek as number ?? 0) <= weekNumber)
+      .forEach((m) => {
+        respond(m.id, 'rejected');
+      });
+  }
 
   // Decrement all active injury timers (clears expired injuries automatically)
   tickInjuries();
