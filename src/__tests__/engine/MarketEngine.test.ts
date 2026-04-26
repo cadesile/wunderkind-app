@@ -24,7 +24,7 @@ function makePlayer(overrides: Partial<Player>): Player {
     joinedWeek: 1,
     isActive: true,
     ...overrides,
-  } as Player;
+  };
 }
 
 describe('worldTierToAppTier', () => {
@@ -60,6 +60,17 @@ describe('calculateTransferValue', () => {
     const lo = makePlayer({ overallRating: 30 });
     expect(calculateTransferValue(hi)).toBeGreaterThan(calculateTransferValue(lo));
   });
+
+  it('a player aged 30 has a lower value than age 25 (age factor floor)', () => {
+    const p30 = makePlayer({ age: 30 });
+    const p25 = makePlayer({ age: 25 });
+    expect(calculateTransferValue(p30)).toBeLessThanOrEqual(calculateTransferValue(p25));
+  });
+
+  it('returns expected pence for age 17, OVR 50, potential 3 (canonical case)', () => {
+    // Formula: 50 × 1000 × 1.4 × 1.1 = 77,000
+    expect(calculateTransferValue(makePlayer({ age: 17, overallRating: 50, potential: 3 }))).toBe(77000);
+  });
 });
 
 describe('getFormationTargets', () => {
@@ -76,8 +87,7 @@ describe('getFormationTargets', () => {
   });
 
   it('unknown formation falls back to 4-4-2', () => {
-    const t = getFormationTargets('invalid');
-    expect(t.DEF.min).toBe(8);
+    expect(getFormationTargets('invalid')).toEqual(getFormationTargets('4-4-2'));
   });
 
   it('all formations have GK min 1, max 2', () => {

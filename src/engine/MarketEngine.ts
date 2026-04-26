@@ -35,6 +35,7 @@ function ageFactor(age: number): number {
  */
 export function calculateTransferValue(player: Player): number {
   const age    = player.age ?? 17;
+  // potential is always 1–5; ?? 1.0 guards against legacy or malformed API data
   const potMul = POTENTIAL_MULTIPLIER[player.potential] ?? 1.0;
   return Math.round(player.overallRating * 1000 * ageFactor(age) * potMul);
 }
