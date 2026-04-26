@@ -4,6 +4,7 @@ import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { useWorldStore } from '@/stores/worldStore';
 import { MarketPlayer } from '@/types/market';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
 import { CLUB_CODE_TO_NATIONALITY } from '@/utils/nationality';
@@ -91,10 +92,28 @@ export function processScoutingTasks(): void {
           0,
           100,
         );
+
+        // Check if this player belongs to an NPC club — flag transfer fee if so
+        const { clubs } = useWorldStore.getState();
+        let requiresTransferFee = false;
+        let transferFee: number | undefined;
+
+        for (const club of Object.values(clubs)) {
+          const wp = club.players.find((p) => p.id === playerId);
+          if (wp && wp.npcClubId) {
+            requiresTransferFee = true;
+            transferFee = Math.round(
+              ((wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6) * 1000,
+            );
+            break;
+          }
+        }
+
         updateMarketPlayer(playerId, {
           scoutingStatus: 'revealed',
           scoutingProgress: 2,
           perceivedAbility: isNaN(perceivedAbility) ? player.currentAbility : perceivedAbility,
+          ...(requiresTransferFee ? { requiresTransferFee: true, transferFee } : {}),
         });
         removeScoutAssignment(scout.id, playerId);
       } else {
