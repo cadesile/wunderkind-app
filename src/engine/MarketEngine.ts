@@ -155,8 +155,10 @@ export async function processNPCTransfers(
     Object.entries(worldClubs).map(([id, c]) => [id, { ...c, players: [...c.players] }]),
   );
 
+  const mutatedIds = new Set<string>();
+
   for (const buyerClub of Object.values(mutableClubs)) {
-    const targets   = getFormationTargets(buyerClub.formation ?? '4-4-2');
+    const targets   = getFormationTargets(buyerClub.formation);
     const buyerTier = worldTierToAppTier(buyerClub.tier);
 
     for (const pos of POSITIONS) {
@@ -166,7 +168,7 @@ export async function processNPCTransfers(
       const potentialSellers = Object.values(mutableClubs).filter((c) => {
         if (c.id === buyerClub.id) return false;
         if (Math.abs(worldTierToAppTier(c.tier) - buyerTier) > 1) return false;
-        const sellerTargets = getFormationTargets(c.formation ?? '4-4-2');
+        const sellerTargets = getFormationTargets(c.formation);
         const sellerCount   = c.players.filter((p) => normalizeWorldPosition(p.position) === pos).length;
         return sellerCount > sellerTargets[pos].max;
       });
@@ -182,13 +184,14 @@ export async function processNPCTransfers(
       const transferPlayer = surplusPlayers[0] as WorldPlayer | undefined;
       if (!transferPlayer) continue;
 
+      // Cosmetic proxy fee (pence) for NPC-to-NPC transfers — not gameplay-critical
       const fee = worldPlayerOverall(transferPlayer) * 1000;
 
       seller.players    = seller.players.filter((p) => p.id !== transferPlayer.id);
       buyerClub.players = [...buyerClub.players, { ...transferPlayer, npcClubId: buyerClub.id }];
 
-      await useWorldStore.getState().mutateClubRoster(seller.id, seller.players as WorldPlayer[]);
-      await useWorldStore.getState().mutateClubRoster(buyerClub.id, buyerClub.players as WorldPlayer[]);
+      mutatedIds.add(seller.id);
+      mutatedIds.add(buyerClub.id);
 
       digest.transfers.push({
         playerName: `${transferPlayer.firstName} ${transferPlayer.lastName}`,
@@ -198,6 +201,15 @@ export async function processNPCTransfers(
       });
     }
   }
+
+  // Flush all mutated club rosters in parallel — one write per club, not per transfer
+  const storeState = useWorldStore.getState();
+  await Promise.all(
+    [...mutatedIds].map((id) => {
+      const club = mutableClubs[id];
+      return club ? storeState.mutateClubRoster(id, club.players as WorldPlayer[]) : Promise.resolve();
+    }),
+  );
 
   return digest;
 }

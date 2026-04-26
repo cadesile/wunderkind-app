@@ -8,10 +8,12 @@ import {
 import type { Player } from '@/types/player';
 import type { WorldClub, WorldPlayer } from '@/types/world';
 
+const mockMutateClubRoster = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('@/stores/worldStore', () => ({
   useWorldStore: {
     getState: () => ({
-      mutateClubRoster: jest.fn().mockResolvedValue(undefined),
+      mutateClubRoster: mockMutateClubRoster,
     }),
   },
 }));
@@ -204,6 +206,8 @@ function makeWorldPlayer(id: string, clubId: string, position: WorldPlayer['posi
 }
 
 describe('processNPCTransfers', () => {
+  beforeEach(() => mockMutateClubRoster.mockClear());
+
   it('returns a digest with no transfers when all clubs meet their minimums', async () => {
     const gk = makeWorldPlayer('gk1', 'c1', 'GK');
     const defenders = Array.from({ length: 8 }, (_, i) => makeWorldPlayer(`d${i}`, 'c1', 'DEF'));
@@ -229,6 +233,7 @@ describe('processNPCTransfers', () => {
     expect(digest.transfers.length).toBeGreaterThan(0);
     expect(digest.transfers[0].fromClub).toBe('Club seller');
     expect(digest.transfers[0].toClub).toBe('Club buyer');
+    expect(mockMutateClubRoster).toHaveBeenCalledTimes(2); // seller + buyer
   });
 
   it('treats WorldPlayer ATT position as FWD when checking squad gaps', async () => {
