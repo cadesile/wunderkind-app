@@ -236,6 +236,7 @@ export const useSquadStore = create<SquadState>()(
           description: isFavorite ? `Sold Fan Favorite: ${playerName}` : `Sold player: ${playerName}`,
           impact: isFavorite ? -25 : -5,
           weekNumber: currentWeek,
+          targets: ['owner', 'manager'],
         });
 
         // Remove locally — local state is authoritative

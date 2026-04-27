@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
@@ -100,6 +101,7 @@ export default function PlayerDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
 
   const { player, isNpc, clubColors, clubName: npcClubName } = useUnifiedPlayer(id ?? null);
+  const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
 
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const extendContract = useSquadStore((s) => s.extendContract);
@@ -135,9 +137,10 @@ export default function PlayerDetailScreen() {
     contractPct >= 85 ? WK.red :
     contractPct >= 60 ? WK.orange : WK.tealLight;
 
-  // Contract extension cost: OVR × £100 × (extensionCount + 1), in pounds
+  // Contract extension cost: 5% of total 52-week contract value
+  // wage is pence/week → total value = 52 × wage pence → 5% → convert to whole pounds
   const extensionCostPounds = player
-    ? player.overallRating * 100 * ((player.extensionCount ?? 0) + 1)
+    ? Math.max(1, Math.round(52 * (player.wage ?? 0) * 0.05 / 100))
     : 0;
   const canAffordExtension = clubBalance >= extensionCostPounds * 100; // balance stored in pence
 
@@ -656,6 +659,21 @@ export default function PlayerDetailScreen() {
               </View>
             )}
 
+            {/* ── Debug: Personality Matrix ── */}
+            {debugEnabled && (
+              <View style={{
+                backgroundColor: WK.tealCard, borderWidth: 3,
+                borderColor: WK.yellow, padding: 14, ...pixelShadow,
+              }}>
+                <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>PERSONALITY MATRIX (DEBUG)</PixelText>
+                <View style={{ backgroundColor: WK.tealDark, borderWidth: 1, borderColor: WK.border, padding: 10 }}>
+                  <BodyText size={11} color={WK.text} style={{ fontFamily: 'monospace', lineHeight: 18 }}>
+                    {JSON.stringify(player.personality, null, 2)}
+                  </BodyText>
+                </View>
+              </View>
+            )}
+
             {/* ── 13. Release player — SwipeConfirm ───────────────────────────────── */}
             <View style={{ borderWidth: 3, borderColor: WK.red, padding: 14, marginTop: 6 }}>
               <PixelText size={8} color={WK.red} style={{ marginBottom: 8 }}>RELEASE PLAYER</PixelText>
@@ -740,7 +758,7 @@ export default function PlayerDetailScreen() {
         title="Extend Enrollment?"
         message={
           canAffordExtension
-            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${extensionCostPounds.toLocaleString()}. This is extension #${(player?.extensionCount ?? 0) + 1} — costs increase with each renewal.`
+            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${extensionCostPounds.toLocaleString()}. Fee is 5% of their total 52-week contract value.`
             : `You cannot afford this extension. You need £${extensionCostPounds.toLocaleString()} but your balance is insufficient.`
         }
         onClose={() => setShowExtendDialog(false)}

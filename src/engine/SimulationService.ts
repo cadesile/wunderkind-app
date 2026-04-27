@@ -5,10 +5,13 @@ import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useClubStore } from '@/stores/clubStore';
+import { updatePlayerRelationship } from './RelationshipService';
 import { useWorldStore } from '@/stores/worldStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
 import { useInboxStore } from '@/stores/inboxStore';
+import { useAttendanceStore } from '@/stores/attendanceStore';
+import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
 import { Player, Position } from '../types/player';
@@ -25,6 +28,7 @@ import {
   TargetType,
   StatOperator,
   EventCategory,
+  RelationshipType,
 } from '@/types/narrative';
 
 // ─── Simulation Service ───────────────────────────────────────────────────────
@@ -94,15 +98,15 @@ class SimulationService {
             const oppGoals = ampIsHome ? result.awayScore : result.homeScore;
             const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
             const venue = ampIsHome ? 'Home' : 'Away';
-            
+
             // Emit Fan Event
             const { useFanStore } = require('@/stores/fanStore');
             const fanImpact = outcome === 'Win' ? 5 : outcome === 'Loss' ? -5 : 0;
             const fanEventType = outcome === 'Win' ? 'match_win' : outcome === 'Loss' ? 'match_loss' : 'match_draw';
-            const fanDescription = outcome === 'Win' ? `Won ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}` : 
-                                   outcome === 'Loss' ? `Lost ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}` : 
+            const fanDescription = outcome === 'Win' ? `Won ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}` :
+                                   outcome === 'Loss' ? `Lost ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}` :
                                    `Drew ${ampGoals}-${oppGoals} vs ${ampIsHome ? awayName : homeName}`;
-            
+
             useFanStore.getState().addEvent({
               type: fanEventType,
               description: fanDescription,
@@ -119,6 +123,50 @@ class SimulationService {
               body: `${homeName} ${result.homeScore} – ${result.awayScore} ${awayName}\nMatchday ${fixture.round}`,
               isRead: false,
             });
+
+            // ── Attendance log (home games only) ──────────────────────────────
+            if (ampIsHome) {
+              const { templates, levels } = useFacilityStore.getState();
+              const capacity = calculateStadiumCapacity(templates, levels);
+
+              const TIER_RANGES: Record<string, [number, number]> = {
+                Local:    [20, 50],
+                Regional: [40, 60],
+                National: [60, 80],
+                Elite:    [80, 90],
+              };
+              const [min, max] = TIER_RANGES[userClub.reputationTier] ?? [20, 50];
+              const basePct = min + Math.random() * (max - min);
+
+              // Collect active narrative effects tagged as attendance bonuses
+              // Convention: tickEffect.target === 'club', tickEffect.field === 'attendance_bonus'
+              const activeEffects = useActiveEffectStore.getState().effects;
+              const fanEffects: { label: string; bonus: number }[] = activeEffects
+                .filter(
+                  (e) =>
+                    e.tickEffect?.target === 'club' &&
+                    e.tickEffect?.field === 'attendance_bonus',
+                )
+                .map((e) => ({ label: e.slug, bonus: e.tickEffect!.value }));
+              const totalBonus = fanEffects.reduce((sum, e) => sum + e.bonus, 0);
+
+              const finalPct = Math.min(100, Math.max(0, basePct + totalBonus));
+              const attendance = capacity > 0 ? Math.round(capacity * finalPct / 100) : 0;
+
+              useAttendanceStore.getState().addRecord({
+                fixtureId: fixture.id,
+                week: userClub.weekNumber,
+                homeClubName: homeName,
+                awayClubName: awayName,
+                homeGoals: result.homeScore,
+                awayGoals: result.awayScore,
+                stadiumCapacity: capacity,
+                attendancePct: Math.round(finalPct),
+                attendance,
+                reputationTier: userClub.reputationTier,
+                fanEffects,
+              });
+            }
           }
         }
       }
@@ -246,9 +294,12 @@ class SimulationService {
     const isActionable = (template.impacts.choices?.length ?? 0) > 0;
 
     let statImpacts: StatImpact[] = [];
-    if (!isActionable && autoChanges.length > 0) {
-      statImpacts = this.computeStatImpacts(autoChanges, entityMap);
-      this.applyStatChanges(autoChanges, entityMap);
+    if (!isActionable) {
+      if (autoChanges.length > 0) {
+        statImpacts = this.computeStatImpacts(autoChanges, entityMap);
+        this.applyStatChanges(autoChanges, entityMap);
+      }
+      this.applyLegacyImpacts(template.impacts, entityMap);
     }
 
     const message = this.generateMessage(template, entityMap, statImpacts);
@@ -286,7 +337,7 @@ class SimulationService {
     }
 
     // Auto-Manage Direct Actions (Support/Punish) for all listed players
-    if (isAutoManaging && message.affectedEntities.length > 0) {
+    if (isAutoManaging && !template.noInteract && message.affectedEntities.length > 0) {
       const { useSquadStore } = require('@/stores/squadStore');
       const squadStore = useSquadStore.getState();
       const playerChoices: Record<string, number> = {};
@@ -404,12 +455,14 @@ class SimulationService {
       body = body.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
     });
 
+    const hasChoices = !template.noInteract && (template.impacts.choices?.length ?? 0) > 0;
     return {
       id: uuidv7(),
       title: template.title,
       body,
-      isActionable: (template.impacts.choices?.length ?? 0) > 0,
-      choices: template.impacts.choices,
+      isActionable: hasChoices,
+      noInteract: template.noInteract ?? false,
+      choices: hasChoices ? template.impacts.choices : undefined,
       affectedEntities: Object.values(entityMap),
       statImpacts: statImpacts.length > 0 ? statImpacts : undefined,
       createdAt: new Date().toISOString(),
@@ -449,6 +502,89 @@ class SimulationService {
 
   private formatFacilityLabel(type: string): string {
     return type.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
+  }
+
+  // ── Legacy impact format ───────────────────────────────────────────────────
+  //
+  // The backend sends some impacts as numbered object keys rather than the
+  // stat_changes array format. This method parses those and applies them,
+  // including the separate relationships[] array for direct bond changes.
+  //
+  // Supported targets:
+  //   player_X.morale                 → clamp 0–100
+  //   player_X.personality.<trait>    → clamp 1–20 (unknown traits silently skipped)
+  //   pair.relationship               → bidirectional updatePlayerRelationship
+  //
+  // relationships[] entries:
+  //   { type: 'friendship'|'rivalry', player_1_ref, player_2_ref, intensity }
+  //   → bidirectional delta: +intensity (friendship) or -intensity (rivalry)
+
+  private applyLegacyImpacts(
+    impacts: any,
+    entityMap: Record<string, string>,
+  ): void {
+    if (!impacts || typeof impacts !== 'object') return;
+
+    // 1. Numbered-key entries
+    for (const key of Object.keys(impacts)) {
+      if (!/^\d+$/.test(key)) continue;
+      const entry = impacts[key];
+      if (!entry || typeof entry !== 'object') continue;
+      const { target, delta } = entry;
+      if (typeof target !== 'string' || typeof delta !== 'number' || delta === 0) continue;
+
+      if (target === 'pair.relationship') {
+        const p1Id = entityMap['player_1'];
+        const p2Id = entityMap['player_2'];
+        if (p1Id && p2Id) {
+          updatePlayerRelationship(p1Id, p2Id, 'player', delta);
+          updatePlayerRelationship(p2Id, p1Id, 'player', delta);
+        }
+        continue;
+      }
+
+      // "player_1.morale" or "player_1.personality.confidence"
+      const parts = target.split('.');
+      if (parts.length < 2) continue;
+      const entityRef = parts[0];
+      const entityId = entityMap[entityRef];
+      if (!entityId) continue;
+
+      const { players, updatePlayer } = useSquadStore.getState();
+      const player = players.find((p) => p.id === entityId);
+      if (!player) continue;
+
+      if (parts[1] === 'morale') {
+        const current = player.morale ?? 70;
+        updatePlayer(entityId, { morale: Math.max(0, Math.min(100, current + delta)) });
+      } else if (parts[1] === 'personality' && parts[2]) {
+        const trait = parts[2];
+        const current = (player.personality as Record<string, number>)[trait];
+        if (typeof current === 'number') {
+          updatePlayer(entityId, {
+            personality: {
+              ...player.personality,
+              [trait]: Math.max(1, Math.min(20, current + delta)),
+            },
+          });
+        }
+        // Unknown traits (e.g. 'confidence', 'ego') not in PersonalityMatrix are silently skipped
+      }
+    }
+
+    // 2. Relationships array
+    const relationships: any[] = Array.isArray(impacts.relationships) ? impacts.relationships : [];
+    for (const rel of relationships) {
+      if (!rel || typeof rel !== 'object') continue;
+      const p1Id = entityMap[rel.player_1_ref];
+      const p2Id = entityMap[rel.player_2_ref];
+      if (!p1Id || !p2Id) continue;
+      const intensity = typeof rel.intensity === 'number' ? rel.intensity : 0;
+      if (intensity === 0) continue;
+      const relDelta = rel.type === RelationshipType.RIVALRY ? -intensity : intensity;
+      updatePlayerRelationship(p1Id, p2Id, 'player', relDelta);
+      updatePlayerRelationship(p2Id, p1Id, 'player', relDelta);
+    }
   }
 
   // ── Stat changes ───────────────────────────────────────────────────────────
@@ -511,16 +647,19 @@ class SimulationService {
     const autoChanges = template.impacts.stat_changes ?? [];
     let statImpacts: StatImpact[] = [];
 
-    if (!isMajor && autoChanges.length > 0) {
-      statImpacts = this.computeStatImpacts(autoChanges, entityMap);
-      this.applyStatChanges(autoChanges, entityMap);
+    if (!isMajor) {
+      if (autoChanges.length > 0) {
+        statImpacts = this.computeStatImpacts(autoChanges, entityMap);
+        this.applyStatChanges(autoChanges, entityMap);
+      }
+      this.applyLegacyImpacts(template.impacts, entityMap);
     }
 
     const message = this.generateMessage(template, entityMap, statImpacts);
 
     const finalMessage = {
       ...message,
-      isActionable: isMajor && (template.impacts.choices?.length ?? 0) > 0,
+      isActionable: !template.noInteract && isMajor && (template.impacts.choices?.length ?? 0) > 0,
     };
 
     useNarrativeStore.getState().addMessage(finalMessage);

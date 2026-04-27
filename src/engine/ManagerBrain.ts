@@ -2,6 +2,7 @@ import { Coach } from '@/types/coach';
 import { Player } from '@/types/player';
 import { Guardian } from '@/types/guardian';
 import { TransferOffer, MarketPlayer } from '@/types/market';
+import { getFormationTargets } from './MarketEngine';
 import { useCoachStore } from '@/stores/coachStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -170,6 +171,7 @@ export class ManagerBrain {
     offer: TransferOffer,
     clubBalance: number,
     squad: Player[],
+    formation = '4-4-2',
   ): { recommendation: 'sell' | 'keep'; reasoning: string } {
     const { professionalism, ambition, consistency } = manager.personality;
 
@@ -185,8 +187,15 @@ export class ManagerBrain {
     const posDepth = squad.filter(
       (p) => p.position === player.position && p.isActive && p.id !== player.id,
     ).length;
-    if (posDepth < 1) score -= 30; // 0 remaining after sale = critical
-    if (posDepth >= 3) score += 10; // 3+ remaining after sale = well covered
+
+    // Formation-aware depth targets
+    const targets = getFormationTargets(formation);
+    const pos = player.position as keyof typeof targets;
+    const minTarget = targets[pos]?.min ?? 4; // minimum squad players needed at this position
+
+    if (posDepth < 1)          score -= 30; // would leave us with nobody
+    if (posDepth < minTarget)  score -= 15; // below formation squad minimum
+    if (posDepth >= minTarget) score += 10; // well covered per formation targets
 
     // Financial pressure
     if (clubBalance < 20000) score += 20;
@@ -212,6 +221,8 @@ export class ManagerBrain {
     } else {
       if (posDepth < 1) {
         reasoning = `${player.name} is our only player in this position. Losing them now would hurt us badly.`;
+      } else if (posDepth < minTarget) {
+        reasoning = `We only have ${posDepth} player${posDepth === 1 ? '' : 's'} left in this position — we need at least ${minTarget} for our ${formation}. I'd keep them.`;
       } else if (ratio < 1.0) {
         reasoning = 'The offer is below fair value. We should hold out for a better deal.';
       } else {

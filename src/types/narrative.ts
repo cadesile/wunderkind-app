@@ -117,6 +117,8 @@ export interface GameEventTemplate {
   firingConditions?: NpcFiringConditions | null;
   severity?: 'minor' | 'major' | null;
   chainedEvents?: ChainLink[] | null;
+  /** When true, the event fires with no interaction — no choices, no support/punish. Effects still apply. */
+  noInteract?: boolean;
 }
 
 export interface ActiveEffect {
@@ -142,6 +144,8 @@ export interface NarrativeMessage {
   title: string;
   body: string;
   isActionable: boolean;
+  /** When true, no interaction UI (choices, support/punish panel) is shown. Effects still display. */
+  noInteract?: boolean;
   choices?: EventChoice[];
   affectedEntities: string[];
   statImpacts?: StatImpact[];

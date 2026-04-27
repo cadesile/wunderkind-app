@@ -6,6 +6,7 @@ import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useWorldStore } from '@/stores/worldStore';
 import { MarketPlayer } from '@/types/market';
+import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
 import { CLUB_CODE_TO_NATIONALITY } from '@/utils/nationality';
 
@@ -102,9 +103,11 @@ export function processScoutingTasks(): void {
           const wp = club.players.find((p) => p.id === playerId);
           if (wp && wp.npcClubId) {
             requiresTransferFee = true;
-            transferFee = Math.round(
-              ((wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6) * 1000,
+            const avgAbility = Math.round(
+              (wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6,
             );
+            const { playerFeeMultiplier } = useGameConfigStore.getState().config;
+            transferFee = calculateMarketPlayerValue(avgAbility, 3, wp.dateOfBirth, playerFeeMultiplier);
             break;
           }
         }

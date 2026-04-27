@@ -47,5 +47,5 @@ export interface TransferRecord {
   /** Net proceeds (after agent commission) in pence */
   netProceeds: number;
   week: number;
-  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted' | 'guardian_withdrawal';
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
 }

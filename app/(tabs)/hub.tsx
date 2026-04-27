@@ -144,56 +144,76 @@ function PlayerRow({ player }: { player: Player }) {
 // ─── Coach cards ──────────────────────────────────────────────────────────────
 
 function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
+  const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
+
   return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: WK.border,
-      padding: 10,
-      marginBottom: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      ...pixelShadow,
-    }}>
-      {/* Avatar */}
-      <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={35} />
+    <View style={{ marginBottom: 6 }}>
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: WK.border,
+        padding: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        ...pixelShadow,
+      }}>
+        {/* Avatar */}
+        <Avatar appearance={coach.appearance} role="COACH" size={44} morale={coach.morale ?? 70} age={35} />
 
-      {/* Main content */}
-      <View style={{ flex: 1 }}>
-        <BodyText size={14} upper numberOfLines={1} style={{ marginBottom: 3 }}>{coach.name}</BodyText>
-        <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{formatStaffRole(coach.role).toUpperCase()}</PixelText>
+        {/* Main content */}
+        <View style={{ flex: 1 }}>
+          <BodyText size={14} upper numberOfLines={1} style={{ marginBottom: 3 }}>{coach.name}</BodyText>
+          <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{formatStaffRole(coach.role).toUpperCase()}</PixelText>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
-          <FlagText nationality={coach.nationality} size={11} />
-          <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</BodyText>
-          <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(coach.salary / 100).toLocaleString()}/wk</BodyText>
-        </View>
-
-        {/* Influence bar */}
-        <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border, marginBottom: 5 }}>
-          <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
-        </View>
-
-        {/* Specialism chips */}
-        {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
-            {(Object.entries(coach.specialisms) as [string, number][]).map(([attr]) => (
-              <View key={attr} style={{ paddingHorizontal: 5, paddingVertical: 2, backgroundColor: WK.tealDark, borderWidth: 1, borderColor: WK.yellow }}>
-                <PixelText size={7} color={WK.yellow}>{attr.toUpperCase()}</PixelText>
-              </View>
-            ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+            <FlagText nationality={coach.nationality} size={11} />
+            <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</BodyText>
+            <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(coach.salary / 100).toLocaleString()}/wk</BodyText>
           </View>
-        )}
+
+          {/* Influence bar */}
+          <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border, marginBottom: 5 }}>
+            <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
+          </View>
+
+          {/* Specialism chips */}
+          {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
+            <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+              {(Object.entries(coach.specialisms) as [string, number][]).map(([attr]) => (
+                <View key={attr} style={{ paddingHorizontal: 5, paddingVertical: 2, backgroundColor: WK.tealDark, borderWidth: 1, borderColor: WK.yellow }}>
+                  <PixelText size={7} color={WK.yellow}>{attr.toUpperCase()}</PixelText>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Right: badge + release */}
+        <View style={{ alignItems: 'flex-end', gap: 8 }}>
+          <Badge label={`INF ${coach.influence}`} color="yellow" />
+          <Pressable onPress={() => { hapticWarning(); onFire(); }} hitSlop={10}>
+            <PixelText size={7} color={WK.red}>RELEASE</PixelText>
+          </Pressable>
+        </View>
       </View>
 
-      {/* Right: badge + release */}
-      <View style={{ alignItems: 'flex-end', gap: 8 }}>
-        <Badge label={`INF ${coach.influence}`} color="yellow" />
-        <Pressable onPress={() => { hapticWarning(); onFire(); }} hitSlop={10}>
-          <PixelText size={7} color={WK.red}>RELEASE</PixelText>
-        </Pressable>
-      </View>
+      {/* Debug: Personality Matrix */}
+      {debugEnabled && (
+        <View style={{
+          backgroundColor: WK.tealDark,
+          borderWidth: 2,
+          borderColor: WK.yellow,
+          marginTop: -3,
+          padding: 8,
+          zIndex: -1,
+        }}>
+          <PixelText size={6} color={WK.yellow} style={{ marginBottom: 4 }}>PERSONALITY MATRIX</PixelText>
+          <BodyText size={9} color={WK.text} style={{ fontFamily: 'monospace' }}>
+            {JSON.stringify(coach.personality, null, 2)}
+          </BodyText>
+        </View>
+      )}
     </View>
   );
 }
@@ -209,49 +229,68 @@ const RANGE_LABEL: Record<Scout['scoutingRange'], string> = {
 function ScoutRow({ scout }: { scout: Scout }) {
   const router = useRouter();
   const isOnMission = scout.activeMission?.status === 'active';
+  const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
 
   return (
-    <Pressable onPress={() => { hapticTap(); router.push(`/scout/${scout.id}`); }}>
-      <View style={{
-        backgroundColor: WK.tealCard,
-        borderWidth: 3,
-        borderColor: isOnMission ? WK.orange : WK.border,
-        padding: 10,
-        marginBottom: 6,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        ...pixelShadow,
-      }}>
-        {/* Avatar */}
-        <Avatar appearance={scout.appearance} role="SCOUT" size={44} morale={scout.morale ?? 70} />
+    <View style={{ marginBottom: 6 }}>
+      <Pressable onPress={() => { hapticTap(); router.push(`/scout/${scout.id}`); }}>
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: isOnMission ? WK.orange : WK.border,
+          padding: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          ...pixelShadow,
+        }}>
+          {/* Avatar */}
+          <Avatar appearance={scout.appearance} role="SCOUT" size={44} morale={scout.morale ?? 70} />
 
-        {/* Main content */}
-        <View style={{ flex: 1 }}>
-          {/* Name + mission badge */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-            <BodyText size={14} upper numberOfLines={1} style={{ flex: 1 }}>{scout.name}</BodyText>
-            {isOnMission && <Badge label="ACTIVE" color="yellow" />}
+          {/* Main content */}
+          <View style={{ flex: 1 }}>
+            {/* Name + mission badge */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <BodyText size={14} upper numberOfLines={1} style={{ flex: 1 }}>{scout.name}</BodyText>
+              {isOnMission && <Badge label="ACTIVE" color="yellow" />}
+            </View>
+
+            <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{RANGE_LABEL[scout.scoutingRange]} {formatStaffRole(scout.role).toUpperCase()}</PixelText>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <FlagText nationality={scout.nationality} size={11} />
+              <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{scout.nationality}</BodyText>
+              <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(scout.salary / 100).toLocaleString()}/wk</BodyText>
+            </View>
+
+            {/* Success rate bar */}
+            <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+              <View style={{ height: '100%', width: `${scout.successRate}%`, backgroundColor: traitColor(Math.round(scout.successRate / 5)) }} />
+            </View>
           </View>
 
-          <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{RANGE_LABEL[scout.scoutingRange]} {formatStaffRole(scout.role).toUpperCase()}</PixelText>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
-            <FlagText nationality={scout.nationality} size={11} />
-            <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{scout.nationality}</BodyText>
-            <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(scout.salary / 100).toLocaleString()}/wk</BodyText>
-          </View>
-
-          {/* Success rate bar */}
-          <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
-            <View style={{ height: '100%', width: `${scout.successRate}%`, backgroundColor: traitColor(Math.round(scout.successRate / 5)) }} />
-          </View>
+          {/* Success rate badge */}
+          <Badge label={`${scout.successRate}%`} color="yellow" />
         </View>
+      </Pressable>
 
-        {/* Success rate badge */}
-        <Badge label={`${scout.successRate}%`} color="yellow" />
-      </View>
-    </Pressable>
+      {/* Debug: Personality Matrix */}
+      {debugEnabled && (scout as any).personality && (
+        <View style={{
+          backgroundColor: WK.tealDark,
+          borderWidth: 2,
+          borderColor: WK.yellow,
+          marginTop: -3,
+          padding: 8,
+          zIndex: -1,
+        }}>
+          <PixelText size={6} color={WK.yellow} style={{ marginBottom: 4 }}>PERSONALITY MATRIX</PixelText>
+          <BodyText size={9} color={WK.text} style={{ fontFamily: 'monospace' }}>
+            {JSON.stringify((scout as any).personality, null, 2)}
+          </BodyText>
+        </View>
+      )}
+    </View>
   );
 }
 

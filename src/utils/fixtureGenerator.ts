@@ -22,7 +22,7 @@ export function generateRoundRobin(participants: string[]): GeneratedFixture[] {
 
   const n = teams.length;
   const numRounds = n - 1;
-  const fixtures: GeneratedFixture[] = [];
+  const firstLeg: GeneratedFixture[] = [];
 
   const fixed = teams[0];
   const rotating = [...teams.slice(1)];
@@ -39,12 +39,42 @@ export function generateRoundRobin(participants: string[]): GeneratedFixture[] {
         continue;
       }
 
-      fixtures.push({ round: roundNum, homeClubId: a, awayClubId: b });
+      // 1. For the fixed team (i === 0), strictly alternate Home/Away based on round number
+      // 2. For other teams, use the standard circle method venue assignment (alternate by index)
+      const isFixed = i === 0;
+      let home, away;
+
+      if (isFixed) {
+        if (roundNum % 2 === 0) {
+          home = b;
+          away = a;
+        } else {
+          home = a;
+          away = b;
+        }
+      } else {
+        if (i % 2 === 0) {
+          home = a;
+          away = b;
+        } else {
+          home = b;
+          away = a;
+        }
+      }
+
+      firstLeg.push({ round: roundNum, homeClubId: home, awayClubId: away });
     }
 
     // Circle rotation: last element of rotating array moves to the front
     rotating.unshift(rotating.pop()!);
   }
 
-  return fixtures;
+  // Generate second leg (reverse fixtures)
+  const secondLeg: GeneratedFixture[] = firstLeg.map((f) => ({
+    round: f.round + numRounds,
+    homeClubId: f.awayClubId,
+    awayClubId: f.homeClubId,
+  }));
+
+  return [...firstLeg, ...secondLeg];
 }

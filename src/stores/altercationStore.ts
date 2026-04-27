@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AltercationBlock } from '@/types/game';
+interface AltercationBlock {
+  playerAId: string;
+  playerBId: string;
+  severity: 'serious';
+}
 
 interface AltercationState {
   pendingBlocks: AltercationBlock[];

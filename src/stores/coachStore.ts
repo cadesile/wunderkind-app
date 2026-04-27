@@ -19,7 +19,7 @@ export const useCoachStore = create<CoachState>()(
       addCoach: (coach) =>
         set((state) => {
           if (state.coaches.some((c) => c.id === coach.id)) return state;
-          return { coaches: [...state.coaches, coach] };
+          return { coaches: [...state.coaches, { ...coach, autoManageEvents: true }] };
         }),
       removeCoach: (id) =>
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== id) })),

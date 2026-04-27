@@ -3,6 +3,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { calculateWeeklyFinances } from '@/engine/finance';
+import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { Player } from '@/types/player';
 import { ReputationTier } from '@/types/club';
 import { FacilityLevels } from '@/types/facility';
@@ -99,6 +100,7 @@ export default function useClubMetrics(): ClubMetrics {
   const coaches = useCoachStore((s) => s.coaches);
   const levels            = useFacilityStore((s) => s.levels);
   const facilityTemplates = useFacilityStore((s) => s.templates);
+  const conditions        = useFacilityStore((s) => s.conditions);
 
   const { reputation } = club;
 
@@ -144,17 +146,23 @@ export default function useClubMetrics(): ClubMetrics {
   const squadTotalPotential = players.reduce((sum, p) => sum + p.potential, 0);
 
   // ── Weekly Net Cashflow ────────────────────────────────────────────────────
-  // Pass empty sponsors/loans for a baseline estimate; net is already in pence
-  const weeklyNetCashflow = calculateWeeklyFinances(
+  // calculateWeeklyFinances covers wages, upkeep, reputation income, and sponsors.
+  // Sponsor income is derived from contracts stored on the club (same weeklyPayment field).
+  const sponsorIncomePence = (club.sponsorContracts ?? []).reduce((s, c) => s + c.weeklyPayment, 0);
+  const baseNet = calculateWeeklyFinances(
     club.weekNumber ?? 1,
     club,
     players,
     coaches,
     levels,
-    [],
+    [],           // sponsors handled separately below
     0,
     facilityTemplates,
-  ).net;
+  ).net + sponsorIncomePence;
+  // Facility (matchday) income is calculated outside calculateWeeklyFinances —
+  // it must be added here to produce an accurate next-tick prediction.
+  const facilityIncomePence = calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation);
+  const weeklyNetCashflow = baseNet + facilityIncomePence;
 
   // ── Reputation Tier Progress ───────────────────────────────────────────────
   const band = resolveTierBand(reputation);

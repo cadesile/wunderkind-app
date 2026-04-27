@@ -1,6 +1,7 @@
 import { apiRequest } from '@/api/client';
 import { MarketPlayer } from '@/types/market';
 import type { ApiGuardian } from '@/types/api';
+import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
 
 // ─── Raw backend shape — same as RawPlayer in market.ts ───────────────────────
 
@@ -57,8 +58,8 @@ function transformProspect(p: RawProspectPlayer): MarketPlayer {
       : null,
     scoutingStatus: 'hidden',
     scoutingProgress: 0,
-    marketValue: p.currentAbility * 1000,
-    currentOffer: p.currentAbility * 1000,
+    marketValue: calculateMarketPlayerValue(p.currentAbility, p.potential, p.dateOfBirth),
+    currentOffer: calculateMarketPlayerValue(p.currentAbility, p.potential, p.dateOfBirth),
     perceivedAbility: p.currentAbility,
     guardians: p.guardians ?? [],
   };

@@ -471,6 +471,7 @@ function KeyStaffSection({
           );
         }
 
+        const { updateCoach } = useCoachStore.getState();
         const archetype = getArchetypeForPlayer(hired as unknown as Player, archetypes);
 
         return (
@@ -508,6 +509,42 @@ function KeyStaffSection({
                 </View>
               </View>
             </View>
+
+            {/* Auto-Manage Toggle (only for MANAGER role) */}
+            {role === 'manager' && (
+              <Pressable
+                onPress={() => {
+                  hapticTap();
+                  updateCoach(hired.id, { autoManageEvents: !hired.autoManageEvents });
+                }}
+                style={{
+                  marginTop: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: 10,
+                  backgroundColor: hired.autoManageEvents ? WK.tealDark : 'rgba(0,0,0,0.2)',
+                  borderWidth: 2,
+                  borderColor: hired.autoManageEvents ? WK.yellow : WK.border,
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <PixelText size={7} color={hired.autoManageEvents ? WK.yellow : WK.dim}>AUTO-MANAGE PLAYER EVENTS</PixelText>
+                  <BodyText size={10} dim style={{ marginTop: 2 }}>
+                    Handles player & guardian requests based on personality.
+                  </BodyText>
+                </View>
+                <View style={{
+                   width: 36, height: 20, 
+                   backgroundColor: hired.autoManageEvents ? WK.yellow : WK.tealMid,
+                   borderWidth: 2, borderColor: WK.border,
+                   padding: 2,
+                   alignItems: hired.autoManageEvents ? 'flex-end' : 'flex-start'
+                }}>
+                   <View style={{ width: 12, height: '100%', backgroundColor: hired.autoManageEvents ? WK.border : WK.dim }} />
+                </View>
+              </Pressable>
+            )}
           </View>
         );
       })}

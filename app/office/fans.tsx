@@ -16,6 +16,10 @@ export default function FansPane() {
   const score = FanEngine.calculateScore(weekNumber);
   const tier = FanEngine.getTier(score);
 
+  const ownerScore = FanEngine.calculateTargetScore(weekNumber, 'owner');
+  const managerScore = FanEngine.calculateTargetScore(weekNumber, 'manager');
+  const playersScore = FanEngine.calculateTargetScore(weekNumber, 'players');
+
   const tierColors: Record<string, string> = {
     'Thrilled': WK.green,
     'Happy': WK.yellow,
@@ -51,9 +55,37 @@ export default function FansPane() {
           </View>
         </View>
 
+        {/* Target Ratings */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+          {[
+            { label: 'OWNER', score: ownerScore },
+            { label: 'MANAGER', score: managerScore },
+            { label: 'PLAYERS', score: playersScore }
+          ].map((item) => {
+            const itemTier = FanEngine.getTier(item.score);
+            const color = tierColors[itemTier];
+            return (
+              <View key={item.label} style={{
+                flex: 1,
+                backgroundColor: WK.tealDark,
+                borderWidth: 2,
+                borderColor: color,
+                paddingVertical: 12,
+                paddingHorizontal: 4,
+                alignItems: 'center',
+                ...pixelShadow,
+              }}>
+                <PixelText size={4} color={WK.dim} style={{ marginBottom: 6 }}>{item.label}</PixelText>
+                <PixelText size={10} color={color}>{item.score}</PixelText>
+                <PixelText size={4} color={color} dim upper style={{ marginTop: 2 }}>{itemTier}</PixelText>
+              </View>
+            );
+          })}
+        </View>
+
         {/* Impact Summary */}
-        <View style={{ marginBottom: 20 }}>
-           <PixelText size={7} color={WK.yellow} style={{ marginBottom: 12 }}>CURRENT IMPACTS</PixelText>
+        <View style={{ marginBottom: 24, backgroundColor: 'rgba(0,0,0,0.1)', padding: 12, borderWidth: 1, borderColor: WK.border, borderStyle: 'dashed' }}>
+           <PixelText size={6} color={WK.yellow} style={{ marginBottom: 12 }}>ACTIVE EFFECTS</PixelText>
            <View style={{ gap: 8 }}>
               {tier === 'Thrilled' && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: WK.tealDark, padding: 10, borderWidth: 1, borderColor: WK.green }}>
@@ -101,6 +133,7 @@ export default function FansPane() {
           borderColor: WK.border,
           padding: 16,
           marginBottom: 24,
+          ...pixelShadow,
         }}>
            <PixelText size={7} color={WK.yellow} style={{ marginBottom: 12 }}>FAN FAVORITE</PixelText>
            {player ? (
@@ -120,30 +153,38 @@ export default function FansPane() {
 
         {/* Recent Events */}
         <View>
-          <PixelText size={7} color={WK.yellow} style={{ marginBottom: 12 }}>RECENT EVENTS</PixelText>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <PixelText size={7} color={WK.yellow}>RECENT EVENTS</PixelText>
+            <PixelText size={5} dim>LAST 5</PixelText>
+          </View>
           {recentEvents.length > 0 ? (
-            recentEvents.map((event) => (
-              <View key={event.id} style={{
-                backgroundColor: WK.tealDark,
-                borderBottomWidth: 1,
-                borderBottomColor: WK.border,
-                paddingVertical: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <BodyText size={12}>{event.description}</BodyText>
-                  <PixelText size={5} dim>WEEK {event.weekNumber}</PixelText>
+            <View style={{ backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 12 }}>
+              {recentEvents.map((event, idx) => (
+                <View key={event.id} style={{
+                  borderBottomWidth: idx === recentEvents.length - 1 ? 0 : 1,
+                  borderBottomColor: WK.border,
+                  paddingVertical: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <BodyText size={12}>{event.description}</BodyText>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
+                       <PixelText size={4} dim>WK {event.weekNumber}</PixelText>
+                       <PixelText size={4} color={WK.yellow}>•</PixelText>
+                       <PixelText size={4} dim>{event.targets.join(', ').toUpperCase()}</PixelText>
+                    </View>
+                  </View>
+                  <PixelText size={7} color={event.impact >= 0 ? WK.green : WK.red}>
+                    {event.impact >= 0 ? `+${event.impact}` : event.impact}
+                  </PixelText>
                 </View>
-                <PixelText size={7} color={event.impact >= 0 ? WK.green : WK.red}>
-                  {event.impact >= 0 ? `+${event.impact}` : event.impact}
-                </PixelText>
-              </View>
-            ))
+              ))}
+            </View>
           ) : (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-               <BodyText size={12} color={WK.dim}>No recent major events recorded.</BodyText>
+            <View style={{ padding: 32, alignItems: 'center', backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border }}>
+               <BodyText size={12} dim>No recent major events recorded.</BodyText>
             </View>
           )}
         </View>

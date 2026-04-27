@@ -9,6 +9,8 @@ import type { FacilityTemplate } from '@/types/facility';
 import { useClubStore } from '@/stores/clubStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFinanceStore } from '@/stores/financeStore';
+import { useAttendanceStore } from '@/stores/attendanceStore';
+import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
@@ -297,6 +299,160 @@ function FacilityCard({
   );
 }
 
+// ─── Attendance log ───────────────────────────────────────────────────────────
+
+function AttendanceLog() {
+  const records = useAttendanceStore((s) => s.records);
+
+  if (records.length === 0) {
+    return (
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: WK.border,
+        padding: 14,
+        marginBottom: 14,
+        alignItems: 'center',
+        ...pixelShadow,
+      }}>
+        <PixelText size={8} dim>NO HOME GAMES YET</PixelText>
+        <BodyText size={12} dim style={{ marginTop: 6, textAlign: 'center' }}>
+          Attendance figures will appear here after your first home match.
+        </BodyText>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+        <PixelText size={8} color={WK.yellow}>ATTENDANCE LOG</PixelText>
+        <BodyText size={11} dim>({records.length} games)</BodyText>
+      </View>
+
+      {records.map((r) => {
+        const outcomeColor =
+          r.homeGoals > r.awayGoals ? WK.green :
+          r.homeGoals < r.awayGoals ? WK.red : WK.yellow;
+        const fillPct = r.stadiumCapacity > 0
+          ? Math.round((r.attendance / r.stadiumCapacity) * 100)
+          : r.attendancePct;
+
+        return (
+          <View
+            key={r.id}
+            style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 2,
+              borderColor: WK.border,
+              padding: 10,
+              marginBottom: 6,
+              ...pixelShadow,
+            }}
+          >
+            {/* Match line */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <BodyText size={12} style={{ flex: 1 }} numberOfLines={1}>
+                {r.homeClubName} vs {r.awayClubName}
+              </BodyText>
+              <View style={{
+                borderWidth: 2,
+                borderColor: outcomeColor,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}>
+                <PixelText size={9} color={outcomeColor}>
+                  {r.homeGoals}–{r.awayGoals}
+                </PixelText>
+              </View>
+            </View>
+
+            {/* Attendance fill bar */}
+            <View style={{ marginBottom: 4 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                <BodyText size={11} dim>ATTENDANCE</BodyText>
+                <BodyText size={11} color={WK.tealLight}>
+                  {r.attendance > 0 ? r.attendance.toLocaleString() : '—'}
+                  {r.stadiumCapacity > 0 ? ` / ${r.stadiumCapacity.toLocaleString()}` : ''}
+                </BodyText>
+              </View>
+              <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+                <View style={{ height: '100%', width: `${fillPct}%`, backgroundColor: WK.tealLight }} />
+              </View>
+            </View>
+
+            {/* Meta row */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <BodyText size={10} dim>WK {r.week} · {r.reputationTier.toUpperCase()} · {r.attendancePct}% FILL</BodyText>
+              {r.fanEffects.length > 0 && (
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {r.fanEffects.map((fe, i) => (
+                    <View key={i} style={{
+                      backgroundColor: fe.bonus >= 0 ? WK.green + '33' : WK.red + '33',
+                      borderWidth: 1,
+                      borderColor: fe.bonus >= 0 ? WK.green : WK.red,
+                      paddingHorizontal: 4,
+                      paddingVertical: 1,
+                    }}>
+                      <BodyText size={10} color={fe.bonus >= 0 ? WK.green : WK.red}>
+                        {fe.bonus >= 0 ? '+' : ''}{fe.bonus}%
+                      </BodyText>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Stadium overview card ────────────────────────────────────────────────────
+
+function StadiumOverviewCard({
+  stadiumName,
+  templates,
+  levels,
+}: {
+  stadiumName: string | null;
+  templates: FacilityTemplate[];
+  levels: Record<string, number>;
+}) {
+  const capacity = calculateStadiumCapacity(templates, levels);
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.yellow,
+      padding: 14,
+      marginBottom: 14,
+      ...pixelShadow,
+    }}>
+      {/* Stadium name */}
+      <PixelText size={9} color={WK.yellow} upper style={{ marginBottom: 8 }}>
+        STADIUM NAME: {stadiumName ?? 'UNNAMED STADIUM'}
+      </PixelText>
+
+      {/* Capacity row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <BodyText size={12} dim>EST. CAPACITY</BodyText>
+        <PixelText size={14} variant="vt323" color={capacity > 0 ? WK.green : WK.dim}>
+          {capacity > 0 ? capacity.toLocaleString() : '—'}
+        </PixelText>
+      </View>
+
+      {capacity === 0 && (
+        <BodyText size={12} dim style={{ marginTop: 8 }}>
+          Build and upgrade facilities to increase stadium capacity.
+        </BodyText>
+      )}
+    </View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function FacilitiesScreen() {
@@ -313,6 +469,7 @@ export default function FacilitiesScreen() {
   );
 
   const visibleTemplates = templates.filter((t) => t.category === activeCategory);
+  const stadiumName = club.stadiumName ?? null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
@@ -349,6 +506,16 @@ export default function FacilitiesScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
+        {activeCategory === 'STADIUM' && (
+          <>
+            <StadiumOverviewCard
+              stadiumName={stadiumName}
+              templates={templates}
+              levels={levels}
+            />
+            <AttendanceLog />
+          </>
+        )}
         {visibleTemplates.map((template) => (
           <FacilityCard
             key={template.slug}

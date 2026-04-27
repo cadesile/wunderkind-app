@@ -23,6 +23,26 @@ export class FanEngine {
   }
 
   /**
+   * Calculates a target-specific Fan Happiness Score (0-100).
+   */
+  static calculateTargetScore(currentWeek: number, target: import('@/types/fans').FanImpactTarget): number {
+    const events = useFanStore.getState().events;
+    let score = 50; // Baseline
+    
+    events.forEach(event => {
+      if (!event.targets.includes(target)) return;
+      
+      const weeksAgo = currentWeek - event.weekNumber;
+      if (weeksAgo < 0) return;
+      
+      const decay = Math.max(0, 1 - (weeksAgo * 0.1));
+      score += event.impact * decay;
+    });
+
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  /**
    * Maps a happiness score to a qualitative FanTier.
    */
   static getTier(score: number): FanTier {

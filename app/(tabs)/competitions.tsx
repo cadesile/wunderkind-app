@@ -60,6 +60,7 @@ export default function CompetitionsScreen() {
 
   const ampClubId       = useClubStore((s) => s.club.id);
   const ampName         = useClubStore((s) => s.club.name);
+  const ampStadiumName  = useClubStore((s) => s.club.stadiumName ?? null);
   const league          = useLeagueStore((s) => s.league);
   const clubs           = useLeagueStore((s) => s.clubs);
   const fixtures        = useFixtureStore((s) => s.fixtures);
@@ -101,6 +102,7 @@ export default function CompetitionsScreen() {
           clubs={clubs}
           ampClubId={ampClubId}
           ampName={ampName}
+          ampStadiumName={ampStadiumName}
           currentMatchday={currentMatchday}
         />
       )}

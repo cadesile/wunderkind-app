@@ -35,13 +35,44 @@ function ageFactor(age: number): number {
 
 /**
  * Calculate a player's transfer market value in pence.
- * Formula: overallRating × 1000 × ageFactor × potentialMultiplier
+ * Formula: overallRating × playerFeeMultiplier × ageFactor × potentialMultiplier
  */
-export function calculateTransferValue(player: Player): number {
+export function calculateTransferValue(player: Player, playerFeeMultiplier = 1000): number {
   const age    = player.age ?? 17;
   // potential is always 1–5; ?? 1.0 guards against legacy or malformed API data
   const potMul = POTENTIAL_MULTIPLIER[player.potential] ?? 1.0;
-  return Math.round(player.overallRating * 1000 * ageFactor(age) * potMul);
+  return Math.round(player.overallRating * playerFeeMultiplier * ageFactor(age) * potMul);
+}
+
+/** Derive age in years from an ISO 8601 date-of-birth string. */
+function ageFromDob(dateOfBirth: string): number {
+  const dob = new Date(dateOfBirth);
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+  return Math.max(14, age);
+}
+
+/**
+ * Calculate market value in pence for a MarketPlayer or WorldPlayer.
+ * Identical formula to calculateTransferValue — ensures buying and selling
+ * prices are derived from the same base.
+ *
+ * @param currentAbility  0–100 ability (equivalent to overallRating)
+ * @param potential       1–5 star potential
+ * @param dateOfBirth     ISO 8601 "YYYY-MM-DD"
+ * @param playerFeeMultiplier  pence per OVR point (default 1000)
+ */
+export function calculateMarketPlayerValue(
+  currentAbility: number,
+  potential: number,
+  dateOfBirth: string,
+  playerFeeMultiplier = 1000,
+): number {
+  const age    = ageFromDob(dateOfBirth);
+  const potMul = POTENTIAL_MULTIPLIER[potential] ?? 1.0;
+  return Math.round(currentAbility * playerFeeMultiplier * ageFactor(age) * potMul);
 }
 
 // ─── Formation targets ────────────────────────────────────────────────────────
@@ -84,6 +115,7 @@ export function generateNPCBids(
   players: Player[],
   worldClubs: Record<string, WorldClub>,
   pendingOfferPlayerIds: Set<string>,
+  playerFeeMultiplier = 1000,
 ): TransferOffer[] {
   const eligibleClubs = Object.values(worldClubs).filter(
     (c) => Math.abs(worldTierToAppTier(c.tier) - ampTier) <= 1,
@@ -103,7 +135,7 @@ export function generateNPCBids(
     if (Math.random() > chance) continue;
 
     const club = eligibleClubs[Math.floor(Math.random() * eligibleClubs.length)];
-    const tv   = player.transferValue ?? calculateTransferValue(player);
+    const tv   = player.transferValue || calculateTransferValue(player, playerFeeMultiplier);
     const fee  = Math.round(tv * (0.9 + Math.random() * 0.4));
 
     offers.push({

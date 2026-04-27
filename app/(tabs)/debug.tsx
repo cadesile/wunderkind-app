@@ -6,6 +6,10 @@ import { useNavStore } from '@/stores/navStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 import { FAB_CLEARANCE } from './_layout';
+import { eventsApi } from '@/api/endpoints/events';
+import { useEventStore } from '@/stores/eventStore';
+import { useArchetypeStore } from '@/stores/archetypeStore';
+import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 
 // ─── Level colours ────────────────────────────────────────────────────────────
 
@@ -167,7 +171,20 @@ function LogRow({ entry, onPress }: { entry: DebugLogEntry; onPress: () => void 
 export default function DebugScreen() {
   const entries = useDebugLogStore((s) => s.entries);
   const clear   = useDebugLogStore((s) => s.clear);
+  const setTemplates = useEventStore((s) => s.setTemplates);
+  const fetchArchetypes = useArchetypeStore((s) => s.fetchArchetypes);
   const [selected, setSelected] = useState<DebugLogEntry | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshNarrative = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([
+      eventsApi.fetchTemplates().then(setTemplates),
+      fetchArchetypes(true),
+      fetchAndCacheGameConfig(),
+    ]);
+    setRefreshing(false);
+  }, [setTemplates, fetchArchetypes]);
 
   // Always return to list view when the tab is tapped
   useFocusEffect(useCallback(() => {
@@ -197,6 +214,20 @@ export default function DebugScreen() {
       }}>
         <PixelText size={9} upper style={{ flex: 1 }}>Debug Log</PixelText>
         <BodyText size={11} color={WK.dim}>{entries.length} entries</BodyText>
+        <Pressable
+          onPress={handleRefreshNarrative}
+          disabled={refreshing}
+          style={[{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: WK.tealCard,
+            borderWidth: 2,
+            borderColor: WK.border,
+            opacity: refreshing ? 0.5 : 1,
+          }, pixelShadow]}
+        >
+          <PixelText size={8} color={WK.yellow}>{refreshing ? '...' : 'REFRESH'}</PixelText>
+        </Pressable>
         <Pressable
           onPress={clear}
           style={[{

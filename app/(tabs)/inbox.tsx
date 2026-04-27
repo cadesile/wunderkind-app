@@ -517,6 +517,7 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
         },
         club.balance ?? 0,
         squad,
+        club.formation ?? '4-4-2',
       )
     : null;
 
@@ -529,9 +530,11 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
   );
 
   function handleAccept() {
+    // fee is in pence — addBalance and addEarnings both accumulate pence
+    addBalance(fee);
+    addEarnings(fee);
+    // Transaction amounts follow the GameLoop convention: whole pounds for ledger display
     const feeWholePounds = Math.round(fee / 100);
-    addBalance(feeWholePounds);
-    addEarnings(feeWholePounds);
     useFinanceStore.getState().addTransaction({
       amount:      feeWholePounds,
       category:    'transfer_fee',
@@ -577,6 +580,37 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
         <PixelText size={13} variant="vt323" dim style={{ marginTop: 4 }}>
           For: {player.name}
         </PixelText>
+      </View>
+
+      {/* Player bio card */}
+      <View style={{
+        backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+        padding: 14, flexDirection: 'row', gap: 14, ...pixelShadow,
+      }}>
+        {player.appearance && (
+          <Avatar appearance={player.appearance} role="PLAYER" size={64} morale={player.morale ?? 70} age={player.age} />
+        )}
+        <View style={{ flex: 1, justifyContent: 'center', gap: 6 }}>
+          <PixelText size={10} upper numberOfLines={1}>{player.name}</PixelText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Badge label={player.position} color="dim" />
+            <FlagText nationality={player.nationality} size={14} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <PixelText size={13} variant="vt323" color={WK.yellow}>
+              {'★'.repeat(Math.round((player.overallRating / 100) * 5))}{'☆'.repeat(5 - Math.round((player.overallRating / 100) * 5))}
+            </PixelText>
+            <PixelText size={12} variant="vt323" dim>{player.overallRating}</PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <PixelText size={12} variant="vt323" dim>AGE {player.age}</PixelText>
+            <PixelText size={13} variant="vt323" color={
+              (player.morale ?? 70) >= 60 ? WK.green : (player.morale ?? 70) >= 40 ? WK.yellow : WK.red
+            }>
+              {moraleLabel(player.morale ?? 70).toUpperCase()}
+            </PixelText>
+          </View>
+        </View>
       </View>
 
       {/* Manager's Opinion */}
@@ -862,7 +896,7 @@ function ManagementPanel({ playerIds, autoManagedChoiceIndex, autoManagedPlayerC
                   </PixelText>
                 </Pressable>
                 {playerAutoChoice === 0 && (
-                   <PixelText size={5} color={WK.yellow} style={{ marginTop: 4, textAlign: 'center' }}>COACH SELECTED</PixelText>
+                   <PixelText size={5} color={WK.yellow} style={{ marginTop: 4, textAlign: 'center' }}>MGR: {activeManager?.name?.split(' ')[0]?.toUpperCase() ?? 'MANAGER'}</PixelText>
                 )}
               </View>
 
@@ -884,7 +918,7 @@ function ManagementPanel({ playerIds, autoManagedChoiceIndex, autoManagedPlayerC
                   </PixelText>
                 </Pressable>
                 {playerAutoChoice === 1 && (
-                   <PixelText size={5} color={WK.yellow} style={{ marginTop: 4, textAlign: 'center' }}>COACH SELECTED</PixelText>
+                   <PixelText size={5} color={WK.yellow} style={{ marginTop: 4, textAlign: 'center' }}>MGR: {activeManager?.name?.split(' ')[0]?.toUpperCase() ?? 'MANAGER'}</PixelText>
                 )}
               </View>
             </View>
@@ -894,7 +928,7 @@ function ManagementPanel({ playerIds, autoManagedChoiceIndex, autoManagedPlayerC
                {playerAutoChoice !== undefined ? (
                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WK.yellow }} />
-                    <PixelText size={13} variant="vt323" color={WK.yellow}>AUTO-MANAGED BY COACH</PixelText>
+                    <PixelText size={13} variant="vt323" color={WK.yellow}>AUTO-MANAGED BY {activeManager?.name?.toUpperCase() ?? 'MANAGER'}</PixelText>
                  </View>
                ) : isManagerAutoHandling ? (
                  <PixelText size={13} variant="vt323" dim>PROCESSED BY MANAGER</PixelText>
@@ -980,6 +1014,7 @@ function InboxMessageDetail({
 }) {
   const { markRead, respond } = useInboxStore();
   const { setInvestorId, addBalance, addSponsorContract, club } = useClubStore();
+  const activeManager = useCoachStore((s) => s.coaches.find((c) => c.role === 'manager'));
 
   const stableOnBack = useCallback(onBack, []);
   useEffect(() => {
@@ -1058,6 +1093,42 @@ function InboxMessageDetail({
         <PixelText size={11} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
         <PixelText size={14} variant="body" style={{ color: WK.dim }}>{message.body}</PixelText>
 
+        {/* ── Facility repair breakdown ───────────────────────────────────────── */}
+        {message.metadata?.systemType === 'facility_repair' && Array.isArray(message.metadata?.items) && (
+          <View style={{ marginTop: 16 }}>
+            {/* Header row */}
+            <View style={{
+              flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border, marginBottom: 4,
+            }}>
+              <PixelText size={12} variant="vt323" color={WK.tealLight}>FACILITY</PixelText>
+              <PixelText size={12} variant="vt323" color={WK.tealLight}>COST</PixelText>
+            </View>
+            {/* Line items */}
+            {(message.metadata.items as Array<{ name: string; cost: number }>).map((item, i) => (
+              <View key={i} style={{
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: WK.border,
+              }}>
+                <PixelText size={13} variant="vt323" style={{ flex: 1 }}>{item.name}</PixelText>
+                <PixelText size={13} variant="vt323" color={WK.red}>
+                  -{formatCurrencyWhole(item.cost)}
+                </PixelText>
+              </View>
+            ))}
+            {/* Total row */}
+            <View style={{
+              flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              paddingTop: 10, marginTop: 4, borderTopWidth: 3, borderTopColor: WK.yellow,
+            }}>
+              <PixelText size={9} upper color={WK.yellow}>TOTAL SPENT</PixelText>
+              <PixelText size={16} variant="vt323" color={WK.yellow}>
+                -{formatCurrencyWhole(message.metadata.totalCost as number)}
+              </PixelText>
+            </View>
+          </View>
+        )}
+
         {message.type === 'sponsor' && sponsorMeta && (
           <View style={{ marginTop: 16, borderWidth: 2, borderColor: WK.tealMid, padding: 12 }}>
             <PixelText size={16} variant="vt323" color={WK.tealLight} style={{ marginBottom: 10 }}>OFFER DETAILS</PixelText>
@@ -1103,6 +1174,46 @@ function InboxMessageDetail({
           </View>
         )}
       </View>
+
+      {/* ── NPC transfer digest list ────────────────────────────────────────────── */}
+      {message.metadata?.systemType === 'npc_transfers' && Array.isArray(message.metadata?.transfers) && (
+        <View style={{ marginTop: 12 }}>
+          {/* Count badge */}
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 8,
+          }}>
+            <PixelText size={13} variant="vt323" color={WK.tealLight}>
+              {(message.metadata.transfers as any[]).length} MOVES
+            </PixelText>
+            <PixelText size={12} variant="vt323" dim>THIS FORTNIGHT</PixelText>
+          </View>
+          {(message.metadata.transfers as Array<{ playerName: string; fromClub: string; toClub: string; fee: number }>)
+            .map((t, i) => (
+              <View key={i} style={{
+                backgroundColor: WK.tealCard,
+                borderWidth: 2,
+                borderColor: WK.border,
+                padding: 10,
+                marginBottom: 6,
+                ...pixelShadow,
+              }}>
+                {/* Player name */}
+                <PixelText size={9} upper style={{ marginBottom: 6 }}>{t.playerName}</PixelText>
+                {/* From → To row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <PixelText size={13} variant="vt323" dim numberOfLines={1} style={{ flex: 1 }}>
+                    {t.fromClub}
+                  </PixelText>
+                  <ArrowLeftRight size={12} color={WK.yellow} />
+                  <PixelText size={13} variant="vt323" color={WK.tealLight} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>
+                    {t.toClub}
+                  </PixelText>
+                </View>
+              </View>
+            ))}
+        </View>
+      )}
 
       {message.type === 'guardian' && message.entityId && (
         <GuardianPlayerCard playerId={message.entityId} />
@@ -1282,10 +1393,10 @@ function NarrativeMessageDetail({
         )}
       </View>
 
-      {message.affectedEntities.length > 0 && (
-        <ManagementPanel 
-          playerIds={message.affectedEntities} 
-          autoManagedChoiceIndex={message.autoManagedChoiceIndex} 
+      {!message.noInteract && message.affectedEntities.length > 0 && (
+        <ManagementPanel
+          playerIds={message.affectedEntities}
+          autoManagedChoiceIndex={message.autoManagedChoiceIndex}
           autoManagedPlayerChoices={message.autoManagedPlayerChoices}
         />
       )}
@@ -1310,7 +1421,7 @@ function NarrativeMessageDetail({
           })}
           {message.autoManagedChoiceIndex !== undefined && (
             <PixelText size={13} variant="vt323" color={WK.yellow} style={{ marginTop: 6, textAlign: 'center' }}>
-              AUTO-MANAGED BY COACH
+              AUTO-MANAGED BY {activeManager?.name?.toUpperCase() ?? 'MANAGER'}
             </PixelText>
           )}
         </View>

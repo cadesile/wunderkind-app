@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Pressable, Modal } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, LayoutGrid, Building2, DollarSign, Store, Trophy, Settings, RefreshCw } from 'lucide-react-native';
+import { Home, Users, Building2, PoundSterling, Briefcase, Trophy, Settings, RefreshCw } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { processWeeklyTick } from '@/engine/GameLoop';
@@ -38,10 +38,10 @@ type NavTabDef = {
 };
 
 const NAV_TABS_BASE: NavTabDef[] = [
-  { name: 'hub',        Icon: LayoutGrid },
-  { name: 'facilities', Icon: Building2 },
-  { name: 'finances',   Icon: DollarSign },
-  { name: 'office',     Icon: Store },
+  { name: 'office',       Icon: Briefcase },
+  { name: 'finances',     Icon: PoundSterling },
+  { name: 'hub',          Icon: Users },
+  { name: 'facilities',   Icon: Building2 },
   { name: 'competitions', Icon: Trophy },
 ];
 
@@ -282,9 +282,10 @@ export default function TabLayout() {
         void fetchAndCacheGameConfig(result.week);
       }
 
-      // Batch simulate background fixtures
-      console.log('run batch simulation...')
-      void simulationService.runBatchSimulation();
+      // Batch simulate background fixtures — first match week is 5 (4-week pre-season buffer)
+      if (result.week >= 5) {
+        void simulationService.runBatchSimulation();
+      }
 
       // ── Bi-weekly NPC transfer simulation ───────────────────────────────────
       // Runs every 2 game weeks. Advance button stays locked (inside startTick/endTick).
@@ -293,16 +294,17 @@ export default function TabLayout() {
         try {
           const digest = await processNPCTransfers(result.week, clubs);
           if (digest.transfers.length > 0) {
-            const lines = digest.transfers
-              .map((t) => `• ${t.playerName}: ${t.fromClub} → ${t.toClub}`)
-              .join('\n');
             useInboxStore.getState().addMessage({
               id:      uuidv7(),
               type:    'system',
               week:    result.week,
               subject: `Transfer Window — Week ${result.week}`,
-              body:    `${digest.transfers.length} transfer(s) completed this fortnight:\n\n${lines}`,
+              body:    `${digest.transfers.length} transfer(s) completed this fortnight.`,
               isRead:  false,
+              metadata: {
+                systemType: 'npc_transfers',
+                transfers:  digest.transfers,
+              },
             });
           }
         } catch (err) {

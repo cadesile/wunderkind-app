@@ -8,8 +8,12 @@ import type { FacilityTemplate } from './facility';
 export interface StarterConfig {
   startingBalance: number;       // pence
   starterPlayerCount: number;
+  starterManagerCount: number;
   starterCoachCount: number;
   starterScoutCount: number;
+  starterDirectorOfFootballCount: number;
+  starterFacilityManagerCount: number;
+  starterChairmanCount: number;
   starterSponsorTier: string;    // 'SMALL' | 'MEDIUM' | 'LARGE'
   /** Default club tier for new academies e.g. 'local' | 'regional' | 'national' | 'elite' */
   starterClubTier: string;
@@ -244,7 +248,7 @@ export interface SyncTransfer {
   grossFee: number;        // pence
   agentCommission: number; // pence
   netProceeds: number;     // pence
-  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted' | 'guardian_withdrawal';
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
 }
 
 export interface SyncLedgerEntry {

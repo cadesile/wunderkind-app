@@ -17,6 +17,7 @@ import { useScoutStore } from './scoutStore';
 import { useClubStore } from './clubStore';
 import { useGuardianStore } from './guardianStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
+import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
 import { updateCoachRelationship } from '@/engine/RelationshipService';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { randomBaseMorale } from '@/utils/morale';
@@ -121,8 +122,8 @@ export const useMarketStore = create<MarketState>()(
               ...p,
               scoutingStatus: existing.scoutingStatus,
               scoutingProgress: existing.scoutingProgress ?? 0,
-              marketValue: existing.marketValue ?? p.currentAbility * playerFeeMultiplier,
-              currentOffer: existing.currentOffer ?? deriveMarketAskingPrice(p.currentAbility * playerFeeMultiplier),
+              marketValue: existing.marketValue ?? calculateMarketPlayerValue(p.currentAbility, p.potential, p.dateOfBirth, playerFeeMultiplier),
+              currentOffer: existing.currentOffer ?? deriveMarketAskingPrice(calculateMarketPlayerValue(p.currentAbility, p.potential, p.dateOfBirth, playerFeeMultiplier)),
               perceivedAbility: existing.perceivedAbility,
               assignedScoutId: existing.assignedScoutId,
             };
@@ -131,8 +132,8 @@ export const useMarketStore = create<MarketState>()(
             ...p,
             scoutingStatus: 'hidden' as const,
             scoutingProgress: 0,
-            marketValue: p.currentAbility * playerFeeMultiplier,
-            currentOffer: deriveMarketAskingPrice(p.currentAbility * playerFeeMultiplier),
+            marketValue: calculateMarketPlayerValue(p.currentAbility, p.potential, p.dateOfBirth, playerFeeMultiplier),
+            currentOffer: deriveMarketAskingPrice(calculateMarketPlayerValue(p.currentAbility, p.potential, p.dateOfBirth, playerFeeMultiplier)),
           };
         });
         set({

@@ -61,7 +61,7 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
     // Log transaction (amount in pence per FinancialTransaction spec)
     const positionLabel = selectedPosition ? ` (${selectedPosition})` : '';
     addTransaction({
-      amount: -costPence,
+      amount: -penceToPounds(costPence),
       category: 'upkeep',
       description: `Scouting mission — ${scout.name}${positionLabel}`,
       weekNumber: club.weekNumber ?? 1,

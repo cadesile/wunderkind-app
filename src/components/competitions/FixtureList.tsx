@@ -10,6 +10,7 @@ export interface FixtureListProps {
   clubs: ClubSnapshot[];
   ampClubId: string;
   ampName: string;
+  ampStadiumName: string | null;
   currentMatchday: number;
 }
 
@@ -18,7 +19,7 @@ interface FixtureSection {
   data: Fixture[];
 }
 
-export function FixtureList({ fixtures, clubs, ampClubId, ampName, currentMatchday }: FixtureListProps) {
+export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumName, currentMatchday }: FixtureListProps) {
   const listRef = useRef<SectionList<Fixture, FixtureSection>>(null);
 
   const clubNameMap = useMemo(() => {
@@ -26,6 +27,13 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, currentMatchd
     map.set(ampClubId, ampName);
     return map;
   }, [clubs, ampClubId, ampName]);
+
+  // Stadium map: clubId → stadiumName (null if not set)
+  const stadiumMap = useMemo(() => {
+    const map = new Map<string, string | null>(clubs.map((c) => [c.id, c.stadiumName]));
+    map.set(ampClubId, ampStadiumName);
+    return map;
+  }, [clubs, ampClubId, ampStadiumName]);
 
   const sections = useMemo<FixtureSection[]>(() => {
     const ampFixtures = fixtures.filter(
@@ -100,42 +108,71 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, currentMatchd
         const homeName = clubNameMap.get(item.homeClubId) ?? item.homeClubId;
         const awayName = clubNameMap.get(item.awayClubId) ?? item.awayClubId;
         const isPlayed = item.result !== null;
+        const isHome = item.homeClubId === ampClubId;
+
+        // Venue is always the home club's stadium
+        const venue = stadiumMap.get(item.homeClubId) ?? null;
+
+        // Win/loss/draw colour for the score box
+        let resultColor: string = WK.dim;
+        if (isPlayed) {
+          const ampGoals = isHome ? item.result!.homeGoals : item.result!.awayGoals;
+          const oppGoals = isHome ? item.result!.awayGoals : item.result!.homeGoals;
+          if (ampGoals > oppGoals) resultColor = WK.green;
+          else if (ampGoals < oppGoals) resultColor = WK.red;
+          else resultColor = WK.yellow;
+        }
 
         return (
           <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
             paddingHorizontal: 12,
             paddingVertical: 10,
             borderBottomWidth: 1,
             borderBottomColor: WK.border,
-            gap: 8,
           }}>
-            <BodyText size={13} style={{ flex: 1, textAlign: 'right', color: WK.text }} numberOfLines={1}>
-              {homeName}
-            </BodyText>
+            {/* Main fixture row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <BodyText size={13} style={{ flex: 1, textAlign: 'right', color: WK.text }} numberOfLines={1}>
+                {homeName}
+              </BodyText>
 
-            <View style={{
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              backgroundColor: WK.tealCard,
-              borderWidth: 2,
-              borderColor: isPlayed ? WK.border : WK.dim,
-              minWidth: 60,
-              alignItems: 'center',
-            }}>
-              {isPlayed ? (
-                <VT323Text size={18} color={WK.text}>
-                  {item.result!.homeGoals} - {item.result!.awayGoals}
-                </VT323Text>
-              ) : (
-                <PixelText size={8} color={WK.dim}>VS</PixelText>
-              )}
+              <View style={{
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                backgroundColor: WK.tealCard,
+                borderWidth: 2,
+                borderColor: isPlayed ? resultColor : WK.dim,
+                minWidth: 60,
+                alignItems: 'center',
+              }}>
+                {isPlayed ? (
+                  <VT323Text size={18} color={resultColor}>
+                    {item.result!.homeGoals} - {item.result!.awayGoals}
+                  </VT323Text>
+                ) : (
+                  <PixelText size={8} color={WK.dim}>VS</PixelText>
+                )}
+              </View>
+
+              <BodyText size={13} style={{ flex: 1, color: WK.text }} numberOfLines={1}>
+                {awayName}
+              </BodyText>
             </View>
 
-            <BodyText size={13} style={{ flex: 1, color: WK.text }} numberOfLines={1}>
-              {awayName}
-            </BodyText>
+            {/* Venue row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 5 }}>
+              <PixelText size={7} color={isHome ? WK.green : WK.orange}>
+                {isHome ? 'HOME' : 'AWAY'}
+              </PixelText>
+              {venue && (
+                <>
+                  <PixelText size={7} color={WK.border}>·</PixelText>
+                  <BodyText size={12} style={{ color: WK.dim }} numberOfLines={1}>
+                    {venue}
+                  </BodyText>
+                </>
+              )}
+            </View>
           </View>
         );
       }}

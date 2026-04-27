@@ -27,6 +27,8 @@ import type { ManagerProfile, ClubTier } from '@/types/club';
 import { TIER_REPUTATION_BASELINE } from '@/types/club';
 import { initializeWorld } from '@/api/endpoints/initialize';
 import { useWorldStore } from '@/stores/worldStore';
+import { useScoutStore } from '@/stores/scoutStore';
+import { syncQueue } from '@/api/syncQueue';
 import type { WorldPlayer, WorldStaff } from '@/types/world';
 
 function generateDeviceEmail(): string {
@@ -371,10 +373,24 @@ export function useAuthFlow(): AuthFlowResult {
       await setFromWorldPack(initResp.worldPack);
 
       // Map AMP starter entities to local types
-      players         = ampStarter.players.map((wp) => worldPlayerToPlayer(wp, weekNumber));
-      assignedCoaches = ampStarter.staff
-        .filter((s) => s.role !== 'scout')
-        .map((ws) => worldStaffToCoach(ws, weekNumber));
+      players = ampStarter.players.map((wp) => worldPlayerToPlayer(wp, weekNumber));
+
+      // Use starter config counts to limit how many of each staff role we assign
+      const staffRoleLimits: Record<string, number> = {
+        manager:               starterConfig.starterManagerCount,
+        head_coach:            starterConfig.starterCoachCount,
+        director_of_football:  starterConfig.starterDirectorOfFootballCount,
+        facility_manager:      starterConfig.starterFacilityManagerCount,
+        chairman:              starterConfig.starterChairmanCount,
+      };
+      const roleCounts: Record<string, number> = {};
+      const selectedStaff = ampStarter.staff.filter((ws) => {
+        if (ws.role === 'scout') return false;
+        const limit = staffRoleLimits[ws.role] ?? 0;
+        roleCounts[ws.role] = (roleCounts[ws.role] ?? 0) + 1;
+        return roleCounts[ws.role] <= limit;
+      });
+      assignedCoaches = selectedStaff.map((ws) => worldStaffToCoach(ws, weekNumber));
 
       console.log(`[useAuthFlow] World initialized: ${players.length}p / ${assignedCoaches.length}c`);
     } catch (err) {
@@ -414,7 +430,32 @@ export function useAuthFlow(): AuthFlowResult {
     setSponsorIds(sponsorIds);
     setInvestorId(investorId);
 
-    // 8. Finalise
+    // 8. Force initial sync — ensures backend has the fresh club state immediately
+    //    after /data was called during initialisation.
+    {
+      const { club: syncClub } = useClubStore.getState();
+      const { players: syncPlayers } = useSquadStore.getState();
+      const { coaches: syncCoaches } = useCoachStore.getState();
+      const { scouts: syncScouts } = useScoutStore.getState();
+      const { levels: syncLevels } = useFacilityStore.getState();
+      syncQueue.enqueue({
+        weekNumber:          weekNumber,
+        clientTimestamp:     new Date().toISOString(),
+        earningsDelta:       0,
+        balance:             syncClub.balance,
+        totalCareerEarnings: syncClub.totalCareerEarnings ?? 0,
+        reputationDelta:     0,
+        reputation:          syncClub.reputation,
+        hallOfFamePoints:    syncClub.hallOfFamePoints ?? 0,
+        squadSize:           syncPlayers.filter((p) => p.isActive).length,
+        staffCount:          syncCoaches.length + syncScouts.length,
+        facilityLevels:      syncLevels,
+        transfers:           [],
+        ledger:              [],
+      });
+    }
+
+    // 9. Finalise
     setClubName(clubName);
     setShowWelcomeSplash(true);
     setIsOnboarding(false);

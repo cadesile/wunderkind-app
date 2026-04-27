@@ -5,7 +5,6 @@ import { useGuardianStore } from '@/stores/guardianStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
-import { useFinanceStore } from '@/stores/financeStore';
 import { useEventStore } from '@/stores/eventStore';
 import { EventCategory } from '@/types/narrative';
 import { uuidv7 } from '@/utils/uuidv7';
@@ -284,40 +283,7 @@ export function processGuardianTick(weekNumber: number): void {
 
     const worstGuardian = getWorstGuardianFromArray(guardians);
 
-    // Spike 1: Threat warning when loyalty < 20
-    if (worstGuardian.loyaltyToClub < 20) {
-      const alreadyFired = inboxMessages.some(
-        (m) => m.week === weekNumber &&
-               m.entityId === player.id &&
-               (m.metadata as Record<string, unknown> | undefined)?.templateSlug === 'guardian_threat_withdrawal',
-      );
-      if (!alreadyFired) {
-        const template = useEventStore.getState().getTemplateBySlug('guardian_threat_withdrawal');
-        if (template) {
-          const guardianNames = guardians.map((g) => g.firstName).join(' & ');
-          const body = template.bodyTemplate
-            .replace('{guardian_name}', guardianNames)
-            .replace('{player_name}', player.name);
-          addMessage({
-            id: uuidv7(),
-            type: 'guardian',
-            week: weekNumber,
-            subject: template.title,
-            body,
-            isRead: false,
-            requiresResponse: false,
-            entityId: player.id,
-            metadata: {
-              templateSlug: template.slug,
-              guardianIds: guardians.map((g) => g.id),
-              worstGuardianId: worstGuardian.id,
-            },
-          });
-        }
-      }
-    }
-
-    // Spike 2: Low-morale concern when player morale < 30
+    // Spike: Low-morale concern when player morale < 30
     if ((player.morale ?? 70) < 30) {
       const alreadyFired = inboxMessages.some(
         (m) => m.week === weekNumber &&
@@ -338,7 +304,7 @@ export function processGuardianTick(weekNumber: number): void {
             subject: template.title,
             body,
             isRead: false,
-            requiresResponse: false,
+            requiresResponse: !template.noInteract,
             entityId: player.id,
             metadata: {
               templateSlug: template.slug,
@@ -392,7 +358,7 @@ export function processGuardianTick(weekNumber: number): void {
       subject: template.title,
       body,
       isRead: false,
-      requiresResponse: true,
+      requiresResponse: !template.noInteract,
       entityId: player.id,
       metadata: {
         templateSlug: template.slug,
@@ -402,7 +368,17 @@ export function processGuardianTick(weekNumber: number): void {
       },
     };
 
-    addMessage(message);
+    // Auto-Manager logic
+    const { useCoachStore } = require('@/stores/coachStore');
+    const { ManagerBrain } = require('./ManagerBrain');
+    const activeManager = useCoachStore.getState().coaches.find((c: any) => c.role === 'manager');
+    const isAutoManaging = activeManager?.autoManageEvents === true;
+
+    if (isAutoManaging) {
+      ManagerBrain.handleGuardianRequest(activeManager, player, worstGuardian, message);
+    } else {
+      addMessage(message);
+    }
     messagesGenerated++;
   }
 
@@ -418,55 +394,4 @@ export function processGuardianTick(weekNumber: number): void {
     });
   }
 
-  // ── Threat execution ─────────────────────────────────────────────────────────
-  // Guardians with loyalty < 20 withdraw the player from the club.
-
-  for (const player of activePlayers) {
-    const guardians = allGuardians.filter((g) => g.playerId === player.id);
-    if (guardians.length === 0) continue;
-
-    const hasLowLoyalty = guardians.some((g) => g.loyaltyToClub < 20);
-    if (!hasLowLoyalty) continue;
-
-    // Check we haven't already processed a withdrawal for this player this week
-    const alreadyWithdrawn = inboxMessages.some(
-      (m) => m.entityId === player.id &&
-             (m.metadata as Record<string, unknown> | undefined)?.type === 'guardian_withdrawal',
-    );
-    if (alreadyWithdrawn) continue;
-
-    // Soft-delete the player
-    useSquadStore.getState().updatePlayer(player.id, {
-      isActive: false,
-      status: 'transferred',
-    });
-
-    // Transfer record
-    useFinanceStore.getState().addTransfer({
-      playerId: player.id,
-      playerName: player.name,
-      destinationClub: 'Withdrawn by Guardian',
-      grossFee: 0,
-      agentCommission: 0,
-      netProceeds: 0,
-      week: weekNumber,
-      type: 'guardian_withdrawal',
-    });
-
-    // Remove guardians from store
-    useGuardianStore.getState().removeGuardiansForPlayer(player.id);
-
-    // Confirmation inbox message
-    addMessage({
-      id: uuidv7(),
-      type: 'system',
-      week: weekNumber,
-      subject: `${player.name} Has Been Withdrawn`,
-      body: `A guardian of ${player.name} has lost confidence in the club and has withdrawn them from your programme. This follows a breakdown in the relationship that was not resolved in time.`,
-      isRead: false,
-      requiresResponse: false,
-      entityId: player.id,
-      metadata: { type: 'guardian_withdrawal', playerId: player.id },
-    });
-  }
 }

@@ -31,6 +31,8 @@ export interface Coach {
   specialisms?: CoachSpecialisms;
   morale?: number;
   relationships?: import('./player').Relationship[];
+  /** If true, this staff member (usually manager) handles certain player/guardian events automatically. */
+  autoManageEvents?: boolean;
   /** Club tier this coach belongs to — from backend */
   tier?: ClubTier;
 }

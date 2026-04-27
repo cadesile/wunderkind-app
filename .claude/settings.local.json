@@ -30,7 +30,8 @@
       "Bash(curl:*)",
       "Bash(npx eas:*)",
       "Bash(npx expo:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Bash(cat:*)"
     ]
   }
 }

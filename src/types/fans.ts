@@ -1,5 +1,7 @@
 export type FanTier = 'Angry' | 'Disappointed' | 'Neutral' | 'Happy' | 'Thrilled';
 
+export type FanImpactTarget = 'manager' | 'owner' | 'players';
+
 export type FanEventType = 
   | 'match_win' | 'match_loss' | 'match_draw' 
   | 'player_sold' | 'player_sold_favorite'
@@ -11,4 +13,5 @@ export interface FanEvent {
   description: string;
   impact: number; // e.g. +5, -10
   weekNumber: number;
+  targets: FanImpactTarget[];
 }

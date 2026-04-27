@@ -317,7 +317,7 @@ function computeDressingRoomHealth(
     for (let j = i + 1; j < active.length; j++) {
       const val = getRelationshipValue(active[i], active[j].id);
       totalPairs++;
-      if (val > 10) positiveCount++;
+      if (val > 0) positiveCount++;
       if (val < -10) negativeCount++;
     }
   }

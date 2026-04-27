@@ -183,7 +183,7 @@ function BalancePane() {
       }}>
         <BodyText size={13} dim style={{ marginBottom: 6 }}>TOTAL CAREER EARNINGS</BodyText>
         <PixelText size={18} color={WK.tealLight}>
-          £{club.totalCareerEarnings.toLocaleString()}
+          £{penceToPounds(club.totalCareerEarnings).toLocaleString()}
         </PixelText>
       </View>
 
@@ -617,6 +617,7 @@ const CAT_BADGE_CONFIG: Record<FinancialCategory, { label: string; color: string
   contract_termination: { label: 'TRM', color: WK.red },
   investor_buyout:      { label: 'BYO', color: WK.red },
   guardian_payment:     { label: 'GRD', color: WK.yellow },
+  matchday_income:      { label: 'MCH', color: WK.green },
 };
 
 function LedgerPane() {

@@ -1,6 +1,4 @@
 import { PersonalityMatrix, Player, PlayerAttributes, TraitName } from '@/types/player';
-import { BehavioralIncident } from '@/types/game';
-import { getRelationshipValue } from '@/engine/RelationshipService';
 import { GameConfig, DEFAULT_GAME_CONFIG } from '@/types/gameConfig';
 
 export const TRAIT_NAMES: TraitName[] = [
@@ -69,70 +67,3 @@ export function calculateTraitShifts(
   return shifts;
 }
 
-/** Generates behavioral incidents based on personality trait thresholds */
-export function generateIncidents(
-  player: Player,
-  week: number,
-  squadMates?: Player[],
-  config: GameConfig = DEFAULT_GAME_CONFIG,
-): BehavioralIncident[] {
-  const incidents: BehavioralIncident[] = [];
-
-  if (player.personality.professionalism < config.incidentLowProfessionalismThreshold && Math.random() < config.incidentLowProfessionalismChance) {
-    incidents.push({
-      id: `${player.id}-${week}-professionalism`,
-      playerId: player.id,
-      week,
-      type: 'negative',
-      description: `${player.name} arrived late to training.`,
-      traitAffected: 'professionalism',
-      delta: -1,
-    });
-  }
-
-  if (player.personality.determination > config.incidentHighDeterminationThreshold && Math.random() < config.incidentHighDeterminationChance) {
-    incidents.push({
-      id: `${player.id}-${week}-determination`,
-      playerId: player.id,
-      week,
-      type: 'positive',
-      description: `${player.name} stayed behind to work on their weaknesses.`,
-      traitAffected: 'consistency',
-      delta: 1,
-    });
-  }
-
-  // Player-on-player altercation (only when squad context is available)
-  if (squadMates && squadMates.length > 0 && Math.random() < config.incidentAltercationBaseChance) {
-    const partner = squadMates[Math.floor(Math.random() * squadMates.length)];
-    // Deduplicate: only generate once per pair (lower UUID initiates)
-    if (player.id < partner.id) {
-      const existingRelationship = getRelationshipValue(player, partner.id);
-
-      let severity: 'minor' | 'serious' = 'minor';
-      if (existingRelationship < 0) {
-        const avgTemperament =
-          (player.personality.temperament + partner.personality.temperament) / 2;
-        // temperament is 1–20; higher = more volatile
-        const seriousChance = config.incidentAltercationSeriousBase + (avgTemperament / 20) * config.incidentAltercationSeriousTemperamentScale;
-        if (Math.random() < seriousChance) {
-          severity = 'serious';
-        }
-      }
-
-      incidents.push({
-        // Colon-delimited so GameLoop can safely extract IDs without UUID ambiguity
-        id: `altercation:${player.id}:${partner.id}:${week}`,
-        playerId: player.id,
-        week,
-        type: 'negative',
-        description: `${player.name} and ${partner.name} had a heated altercation during training.`,
-        traitAffected: 'temperament',
-        delta: -1,
-        severity,
-      });
-    }
-  }
-
-  return incidents;
-}

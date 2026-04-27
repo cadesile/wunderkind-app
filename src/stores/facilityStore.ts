@@ -114,6 +114,7 @@ export const useFacilityStore = create<FacilityState>()(
           description: `Upgraded ${template.label} to Level ${levels[slug] + 1}`,
           impact: 10,
           weekNumber: club.weekNumber ?? 1,
+          targets: ['owner'],
         });
 
         return true;
