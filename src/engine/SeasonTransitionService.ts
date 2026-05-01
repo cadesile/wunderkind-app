@@ -108,3 +108,85 @@ export function buildLeagueStandings(
     relegated: total > 1 && (i + 1) === total,
   }));
 }
+
+/**
+ * Build the full pyramid payload for the conclude-season API call.
+ * Includes the AMP club in its own league's clubIds.
+ * Reads clubStore and fixtureStore (read-only).
+ */
+export function buildPyramidPayload(
+  currentLeagueId: string,
+  worldLeagues: WorldLeague[],
+  season: number,
+): PyramidLeague[] {
+  const ampClubId = useClubStore.getState().club.id;
+  return worldLeagues.map((wLeague) => {
+    const clubIds = wLeague.id === currentLeagueId
+      ? [...wLeague.clubIds, ampClubId]
+      : wLeague.clubIds;
+    return {
+      leagueId:  wLeague.id,
+      standings: buildLeagueStandings(wLeague.id, clubIds, wLeague.promotionSpots, season),
+    };
+  });
+}
+
+/**
+ * Build a LeagueSnapshot for leagueStore from a SeasonUpdateLeague API entry.
+ * Each club appears in exactly one league in the backend response — no deduplication needed.
+ * AMP club (isAmp: true) is excluded from the clubs array.
+ * promoted/relegated flags have zero effect on league membership.
+ */
+export function buildLeagueSnapshot(
+  seasonLeague: SeasonUpdateLeague,
+  season: number,
+): LeagueSnapshot {
+  const repTier = (VALID_REP_TIERS as readonly string[]).includes(seasonLeague.reputationTier ?? '')
+    ? (seasonLeague.reputationTier as LeagueSnapshot['reputationTier'])
+    : null;
+
+  const worldClubs = useWorldStore.getState().clubs;
+  const clubs: ClubSnapshot[] = seasonLeague.clubs
+    .filter((slim) => !slim.isAmp)
+    .map((slim) => {
+      const full = worldClubs[slim.clubId];
+      return full
+        ? {
+            id:             full.id,
+            name:           full.name,
+            reputation:     full.reputation,
+            tier:           seasonLeague.tier,
+            primaryColor:   full.primaryColor,
+            secondaryColor: full.secondaryColor,
+            stadiumName:    full.stadiumName,
+            facilities:     full.facilities,
+          }
+        : {
+            id:             slim.clubId,
+            name:           slim.clubId,
+            reputation:     0,
+            tier:           seasonLeague.tier,
+            primaryColor:   '#888888',
+            secondaryColor: '#444444',
+            stadiumName:    null,
+            facilities:     {},
+          };
+    });
+
+  return {
+    id:                            seasonLeague.id,
+    tier:                          seasonLeague.tier,
+    name:                          seasonLeague.name,
+    country:                       seasonLeague.country,
+    season,
+    promotionSpots:                seasonLeague.promotionSpots,
+    reputationTier:                repTier,
+    reputationCap:                 repTier ? (LEAGUE_TIER_REP_CAP[repTier] ?? null) : null,
+    tvDeal:                        seasonLeague.tvDeal,
+    sponsorPot:                    seasonLeague.sponsorPot,
+    prizeMoney:                    seasonLeague.prizeMoney,
+    leaguePositionPot:             seasonLeague.leaguePositionPot,
+    leaguePositionDecreasePercent: seasonLeague.leaguePositionDecreasePercent,
+    clubs,
+  };
+}
