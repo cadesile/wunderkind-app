@@ -134,6 +134,48 @@ export function buildPyramidPayload(
   });
 }
 
+// ─── Store-mutating steps ─────────────────────────────────────────────────────
+
+/**
+ * Apply a conclude-season API response to all stores.
+ * Order: worldStore → leagueStore → inbox (if league changed) → fixtureStore.
+ * Club-to-league assignment is taken verbatim from the backend response.
+ */
+export async function applySeasonResponse(
+  responseLeagues: SeasonUpdateLeague[],
+  currentLeague: LeagueSnapshot,
+  nextSeason: number,
+): Promise<void> {
+  // 1. Update all NPC league memberships, club tiers, and per-league AsyncStorage buckets.
+  await useWorldStore.getState().applySeasonUpdate(responseLeagues);
+
+  // 2. Find AMP's new league using isAmp flag — authoritative signal per spec.
+  const ampLeague = responseLeagues.find((l) => l.clubs.some((c) => c.isAmp));
+
+  if (ampLeague) {
+    useLeagueStore.getState().setFromSync(buildLeagueSnapshot(ampLeague, nextSeason));
+
+    // 3. Inbox notification if the AMP has moved to a different league.
+    if (ampLeague.id !== currentLeague.id) {
+      const direction = ampLeague.tier < currentLeague.tier ? 'PROMOTED' : 'RELEGATED';
+      useInboxStore.getState().addMessage({
+        id:      uuidv7(),
+        type:    'system',
+        week:    useClubStore.getState().club.weekNumber ?? 1,
+        subject: `${direction} — Season ${nextSeason - 1} Complete`,
+        body:    `You have been ${direction.toLowerCase()} to ${ampLeague.name}.`,
+        isRead:  false,
+      });
+    }
+  }
+
+  // 4. Replace all fixtures with server-generated schedule for the new season.
+  useFixtureStore.getState().clearSeason();
+  for (const l of responseLeagues) {
+    useFixtureStore.getState().loadFromServerSchedule(l.id, nextSeason, l.fixtures);
+  }
+}
+
 /**
  * Build a LeagueSnapshot for leagueStore from a SeasonUpdateLeague API entry.
  * Each club appears in exactly one league in the backend response — no deduplication needed.

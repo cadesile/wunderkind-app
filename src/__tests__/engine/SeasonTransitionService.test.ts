@@ -2,8 +2,10 @@ import {
   buildLeagueStandings,
   buildPyramidPayload,
   buildLeagueSnapshot,
+  applySeasonResponse,
 } from '@/engine/SeasonTransitionService';
 import type { WorldLeague, SeasonUpdateLeague } from '@/types/world';
+import type { LeagueSnapshot } from '@/types/api';
 
 const mockFixtures = [
   // c1 beat c2 3-0
@@ -20,8 +22,17 @@ const mockFixtures = [
     result: { homeGoals: 5, awayGoals: 0, playedAt: '', synced: true } },
 ];
 
+const mockClearSeason = jest.fn();
+const mockLoadFromServerSchedule = jest.fn();
+
 jest.mock('@/stores/fixtureStore', () => ({
-  useFixtureStore: { getState: () => ({ fixtures: mockFixtures }) },
+  useFixtureStore: {
+    getState: () => ({
+      fixtures: mockFixtures,
+      clearSeason: mockClearSeason,
+      loadFromServerSchedule: mockLoadFromServerSchedule,
+    }),
+  },
 }));
 
 jest.mock('@/stores/clubStore', () => ({
@@ -30,6 +41,8 @@ jest.mock('@/stores/clubStore', () => ({
 
 // Used by applySeasonResponse tests (Task 3)
 const mockApplySeasonUpdate = jest.fn().mockResolvedValue(undefined);
+const mockSetFromSync = jest.fn();
+const mockAddMessage = jest.fn();
 
 jest.mock('@/stores/worldStore', () => ({
   useWorldStore: {
@@ -41,6 +54,14 @@ jest.mock('@/stores/worldStore', () => ({
       applySeasonUpdate: mockApplySeasonUpdate,
     }),
   },
+}));
+
+jest.mock('@/stores/leagueStore', () => ({
+  useLeagueStore: { getState: () => ({ setFromSync: mockSetFromSync }) },
+}));
+
+jest.mock('@/stores/inboxStore', () => ({
+  useInboxStore: { getState: () => ({ addMessage: mockAddMessage }) },
 }));
 
 describe('buildLeagueStandings', () => {
@@ -181,5 +202,102 @@ describe('buildLeagueSnapshot', () => {
     const unknown = snapshot.clubs.find((c) => c.id === 'c99')!;
     expect(unknown.name).toBe('c99');
     expect(unknown.primaryColor).toBe('#888888');
+  });
+});
+
+// ─── Test data shared across applySeasonResponse tests ───────────────────────
+
+const twoLeagueResponse: SeasonUpdateLeague[] = [
+  {
+    id: 'L7', tier: 7, name: 'League 7', country: 'BR', promotionSpots: 1,
+    reputationTier: 'local', tvDeal: 1000000, sponsorPot: 0, prizeMoney: 0,
+    leaguePositionPot: 0, leaguePositionDecreasePercent: 8,
+    clubs: [
+      { clubId: 'c10', isAmp: false, promoted: false, relegated: true },
+      { clubId: 'c11', isAmp: false, promoted: true, relegated: false },
+    ],
+    fixtures: [[['c10', 'c11']]],
+  },
+  {
+    id: 'L8', tier: 8, name: 'League 8', country: 'BR', promotionSpots: 1,
+    reputationTier: 'local', tvDeal: 500000, sponsorPot: 0, prizeMoney: 0,
+    leaguePositionPot: 0, leaguePositionDecreasePercent: 8,
+    clubs: [
+      { clubId: 'amp1', isAmp: true, promoted: false, relegated: false },
+      { clubId: 'c12', isAmp: false, promoted: false, relegated: true },
+    ],
+    fixtures: [[['amp1', 'c12']]],
+  },
+];
+
+const mockCurrentLeague: LeagueSnapshot = {
+  id: 'L8', tier: 8, name: 'League 8', country: 'BR', season: 1,
+  promotionSpots: 1, reputationTier: 'local', reputationCap: 14,
+  tvDeal: 500000, sponsorPot: 0, prizeMoney: 0, leaguePositionPot: 0,
+  leaguePositionDecreasePercent: 8, clubs: [],
+};
+
+describe('applySeasonResponse', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const { useWorldStore } = jest.requireMock('@/stores/worldStore');
+    useWorldStore.getState = () => ({
+      clubs: { 'c1': { id: 'c1', name: 'Club One', reputation: 50, tier: 8, primaryColor: '#ff0000', secondaryColor: '#000', stadiumName: null, facilities: {} } },
+      leagues: [],
+      applySeasonUpdate: mockApplySeasonUpdate,
+    });
+    const { useClubStore } = jest.requireMock('@/stores/clubStore');
+    useClubStore.getState = () => ({ club: { id: 'amp1', weekNumber: 10 } });
+  });
+
+  it('calls worldStore.applySeasonUpdate with the response leagues', async () => {
+    await applySeasonResponse(twoLeagueResponse, mockCurrentLeague, 2);
+    expect(mockApplySeasonUpdate).toHaveBeenCalledWith(twoLeagueResponse);
+  });
+
+  it('calls leagueStore.setFromSync with a LeagueSnapshot for the AMP league', async () => {
+    await applySeasonResponse(twoLeagueResponse, mockCurrentLeague, 2);
+    expect(mockSetFromSync).toHaveBeenCalledTimes(1);
+    const snapshot = mockSetFromSync.mock.calls[0][0];
+    expect(snapshot.id).toBe('L8');
+    expect(snapshot.season).toBe(2);
+  });
+
+  it('does NOT add an inbox message when AMP stays in the same league', async () => {
+    await applySeasonResponse(twoLeagueResponse, mockCurrentLeague, 2);
+    expect(mockAddMessage).not.toHaveBeenCalled();
+  });
+
+  it('adds a PROMOTED inbox message when AMP moves to a lower-tier-number league', async () => {
+    const promotedLeagueResponse: SeasonUpdateLeague[] = [
+      {
+        id: 'L7', tier: 7, name: 'League 7', country: 'BR', promotionSpots: 1,
+        reputationTier: 'local', tvDeal: 1000000, sponsorPot: 0, prizeMoney: 0,
+        leaguePositionPot: 0, leaguePositionDecreasePercent: 8,
+        clubs: [
+          { clubId: 'amp1', isAmp: true, promoted: true, relegated: false },
+          { clubId: 'c11', isAmp: false, promoted: false, relegated: false },
+        ],
+        fixtures: [],
+      },
+      {
+        id: 'L8', tier: 8, name: 'League 8', country: 'BR', promotionSpots: 1,
+        reputationTier: 'local', tvDeal: 500000, sponsorPot: 0, prizeMoney: 0,
+        leaguePositionPot: 0, leaguePositionDecreasePercent: 8,
+        clubs: [{ clubId: 'c12', isAmp: false, promoted: false, relegated: true }],
+        fixtures: [],
+      },
+    ];
+    await applySeasonResponse(promotedLeagueResponse, mockCurrentLeague, 2);
+    expect(mockAddMessage).toHaveBeenCalledTimes(1);
+    expect(mockAddMessage.mock.calls[0][0].body).toContain('promoted');
+  });
+
+  it('clears fixtures then loads server schedule for every response league', async () => {
+    await applySeasonResponse(twoLeagueResponse, mockCurrentLeague, 2);
+    expect(mockClearSeason).toHaveBeenCalledTimes(1);
+    expect(mockLoadFromServerSchedule).toHaveBeenCalledTimes(2);
+    expect(mockLoadFromServerSchedule).toHaveBeenCalledWith('L7', 2, twoLeagueResponse[0].fixtures);
+    expect(mockLoadFromServerSchedule).toHaveBeenCalledWith('L8', 2, twoLeagueResponse[1].fixtures);
   });
 });
