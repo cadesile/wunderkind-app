@@ -105,6 +105,6 @@ export function buildLeagueStandings(
     clubId,
     isAmp:     clubId === ampClubId,
     promoted:  promotionSpots != null && (i + 1) <= promotionSpots,
-    relegated: (i + 1) === total,
+    relegated: total > 1 && (i + 1) === total,
   }));
 }

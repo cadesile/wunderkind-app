@@ -65,4 +65,9 @@ describe('buildLeagueStandings', () => {
     // c1 should only have stats from L1/season1 — not inflated by the OTHER-league fixture
     expect(standings[0].clubId).toBe('c1');
   });
+
+  it('does not relegate any club in a single-club league', () => {
+    const standings = buildLeagueStandings('L1', ['c1'], null, 1);
+    expect(standings[0].relegated).toBe(false);
+  });
 });
