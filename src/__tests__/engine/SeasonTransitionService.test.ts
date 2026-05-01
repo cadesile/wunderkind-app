@@ -299,5 +299,33 @@ describe('applySeasonResponse', () => {
     expect(mockLoadFromServerSchedule).toHaveBeenCalledTimes(2);
     expect(mockLoadFromServerSchedule).toHaveBeenCalledWith('L7', 2, twoLeagueResponse[0].fixtures);
     expect(mockLoadFromServerSchedule).toHaveBeenCalledWith('L8', 2, twoLeagueResponse[1].fixtures);
+    expect(mockClearSeason.mock.invocationCallOrder[0])
+      .toBeLessThan(mockLoadFromServerSchedule.mock.invocationCallOrder[0]);
+  });
+
+  it('adds a RELEGATED inbox message when AMP moves to a higher-tier-number league', async () => {
+    const relegatedLeagueResponse: SeasonUpdateLeague[] = [
+      {
+        id: 'L9', tier: 9, name: 'League 9', country: 'BR', promotionSpots: 1,
+        reputationTier: 'local', tvDeal: 250000, sponsorPot: 0, prizeMoney: 0,
+        leaguePositionPot: 0, leaguePositionDecreasePercent: 8,
+        clubs: [
+          { clubId: 'amp1', isAmp: true, promoted: false, relegated: true },
+          { clubId: 'c13', isAmp: false, promoted: false, relegated: false },
+        ],
+        fixtures: [],
+      },
+      {
+        id: 'L8', tier: 8, name: 'League 8', country: 'BR', promotionSpots: 1,
+        reputationTier: 'local', tvDeal: 500000, sponsorPot: 0, prizeMoney: 0,
+        leaguePositionPot: 0, leaguePositionDecreasePercent: 8,
+        clubs: [{ clubId: 'c12', isAmp: false, promoted: false, relegated: false }],
+        fixtures: [],
+      },
+    ];
+    // currentLeague is mockCurrentLeague (L8 tier 8); AMP now in L9 tier 9 = relegated
+    await applySeasonResponse(relegatedLeagueResponse, mockCurrentLeague, 2);
+    expect(mockAddMessage).toHaveBeenCalledTimes(1);
+    expect(mockAddMessage.mock.calls[0][0].body).toContain('relegated');
   });
 });
