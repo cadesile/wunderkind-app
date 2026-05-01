@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { useMarketStore } from '@/stores/marketStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useFinanceStore } from '@/stores/financeStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
@@ -73,7 +74,7 @@ function HirePane({
   const refreshPool  = useMarketStore((s) => s.refreshMarketPool);
   const isLoading    = useMarketStore((s) => s.isLoading);
 
-  const { club, addBalance } = useClubStore();
+  const { club } = useClubStore();
   const hiredCoaches = useCoachStore((s) => s.coaches);
   const hiredScouts  = useScoutStore((s) => s.scouts);
   const config       = useGameConfigStore((s) => s.config);
@@ -138,7 +139,12 @@ function HirePane({
       setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
       return;
     }
-    addBalance(-fee);
+    useFinanceStore.getState().addTransaction({
+      amount:      -fee,
+      category:    'staff_signing',
+      description: `Signed ${mc.firstName} ${mc.lastName}`,
+      weekNumber,
+    });
     hireCoach(mc.id, weekNumber);
   }
 
@@ -150,7 +156,12 @@ function HirePane({
       setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
       return;
     }
-    addBalance(-fee);
+    useFinanceStore.getState().addTransaction({
+      amount:      -fee,
+      category:    'staff_signing',
+      description: `Signed ${ms.firstName} ${ms.lastName}`,
+      weekNumber,
+    });
     hireScout(ms.id, weekNumber);
   }
 
@@ -599,7 +610,6 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
                 <PixelText size={9} upper>{managerProfile.name}</PixelText>
                 <BodyText size={11} dim style={{ marginTop: 2 }}>{managerProfile.nationality}</BodyText>
               </View>
-              <Badge label="AMP" color="yellow" />
             </View>
             <View style={{ height: 2, backgroundColor: WK.border, marginBottom: 14 }} />
           </>

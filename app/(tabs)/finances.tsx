@@ -202,7 +202,7 @@ function BalancePane() {
 
 function InvestorsPane() {
   const club = useClubStore((s) => s.club);
-  const { addBalance, setInvestorId } = useClubStore();
+  const { setInvestorId } = useClubStore();
   const investors = useMarketStore((s) => s.investors);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const { totalValuation } = useClubMetrics();
@@ -210,20 +210,24 @@ function InvestorsPane() {
 
   const assignedInvestor = investors.find((inv) => inv.id === club.investorId) ?? null;
 
-  // Buyout cost = equity% of total club valuation (pence)
+  // Use accepted offer terms stored on club; fall back to market data if missing (legacy saves)
+  const equityTaken = club.investorEquityPct ?? assignedInvestor?.equityTaken ?? 0;
+  const originalInvestmentPence = club.investorInvestmentAmount ?? assignedInvestor?.investmentAmount ?? 0;
+
+  // Buyout cost = equity% of total club valuation + 50% of original investment (all in pence)
   const buyoutCostPence = assignedInvestor
-    ? Math.round((assignedInvestor.equityTaken / 100) * totalValuation)
+    ? Math.round((equityTaken / 100) * totalValuation + 0.5 * originalInvestmentPence)
     : 0;
   const canAfford = club.balance >= buyoutCostPence;
 
   function handleBuyout() {
     if (!assignedInvestor || !canAfford) return;
-    addBalance(-buyoutCostPence);
+    // addTransaction drives addBalance automatically
     addTransaction({
       weekNumber: club.weekNumber ?? 1,
       category: 'investor_buyout',
-      amount: -buyoutCostPence,
-      description: `Investor buyout — ${assignedInvestor.name} (${assignedInvestor.equityTaken}% equity)`,
+      amount: -Math.round(buyoutCostPence / 100),
+      description: `Investor buyout — ${assignedInvestor.name} (${equityTaken}% equity)`,
     });
     setInvestorId(null);
     setShowBuyout(false);
@@ -243,12 +247,12 @@ function InvestorsPane() {
             <PixelText size={9} upper style={{ marginBottom: 12 }}>{assignedInvestor.name}</PixelText>
             <FinanceRow
               label="EQUITY TAKEN"
-              value={`${assignedInvestor.equityTaken}%`}
+              value={`${equityTaken}%`}
               accent={WK.orange}
             />
             <FinanceRow
               label="INVESTMENT"
-              value={`£${Math.round(assignedInvestor.investmentAmount / 100).toLocaleString()}`}
+              value={`£${Math.round(originalInvestmentPence / 100).toLocaleString()}`}
               accent={WK.yellow}
             />
             <FinanceRow
@@ -261,21 +265,21 @@ function InvestorsPane() {
             <View style={{ marginTop: 14 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <BodyText size={12} dim>CLUB OWNERSHIP</BodyText>
-                <BodyText size={12} color={WK.green}>{100 - assignedInvestor.equityTaken}%</BodyText>
+                <BodyText size={12} color={WK.green}>{100 - equityTaken}%</BodyText>
               </View>
               <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, flexDirection: 'row' }}>
-                <View style={{ height: '100%', width: `${100 - assignedInvestor.equityTaken}%`, backgroundColor: WK.green }} />
+                <View style={{ height: '100%', width: `${100 - equityTaken}%`, backgroundColor: WK.green }} />
                 <View style={{ height: '100%', flex: 1, backgroundColor: WK.orange }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
                 <BodyText size={11} dim>CLUB</BodyText>
-                <BodyText size={11} color={WK.orange}>INVESTOR {assignedInvestor.equityTaken}%</BodyText>
+                <BodyText size={11} color={WK.orange}>INVESTOR {equityTaken}%</BodyText>
               </View>
             </View>
 
             <View style={{ marginTop: 12 }}>
               <BodyText size={12} dim>
-                INVESTOR RECEIVES {assignedInvestor.equityTaken}% OF ALL PLAYER SALES
+                INVESTOR RECEIVES {equityTaken}% OF ALL PLAYER SALES
               </BodyText>
             </View>
 
@@ -316,7 +320,7 @@ function InvestorsPane() {
                 <FinanceRow label="INVESTOR" value={assignedInvestor.name} />
                 <FinanceRow
                   label="EQUITY RECLAIMED"
-                  value={`${assignedInvestor.equityTaken}%`}
+                  value={`${equityTaken}%`}
                   accent={WK.green}
                 />
                 <FinanceRow
@@ -603,6 +607,8 @@ const CATEGORY_FILTER_OPTIONS: { label: string; value: FinancialCategory | 'all'
   { label: 'INVEST', value: 'investment' },
   { label: 'FACILITIES', value: 'facility_upgrade' },
   { label: 'EARNINGS', value: 'earnings' },
+  { label: 'TV DEAL', value: 'tv_deal' },
+  { label: 'LG SPNSR', value: 'league_sponsor' },
   { label: 'TERMINATION', value: 'contract_termination' },
 ];
 
@@ -614,6 +620,9 @@ const CAT_BADGE_CONFIG: Record<FinancialCategory, { label: string; color: string
   investment:           { label: 'INV', color: WK.green },
   facility_upgrade:     { label: 'FAC', color: WK.orange },
   earnings:             { label: 'ERN', color: WK.green },
+  tv_deal:              { label: 'TV',  color: WK.tealLight },
+  league_sponsor:       { label: 'LGS', color: WK.tealLight },
+  loan_repayment:       { label: 'LNR', color: WK.dim },
   contract_termination: { label: 'TRM', color: WK.red },
   investor_buyout:      { label: 'BYO', color: WK.red },
   guardian_payment:     { label: 'GRD', color: WK.yellow },
@@ -631,7 +640,7 @@ function LedgerPane() {
     ? allTx
     : allTx.filter((tx) => tx.category === catFilter);
 
-  const incomeCats: FinancialCategory[] = ['sponsor_payment', 'investment', 'earnings', 'transfer_fee'];
+  const incomeCats: FinancialCategory[] = ['sponsor_payment', 'investment', 'earnings', 'transfer_fee', 'tv_deal', 'league_sponsor', 'matchday_income'];
   const expenseCats: FinancialCategory[] = ['wages', 'upkeep', 'facility_upgrade', 'contract_termination'];
   const totalIncome = incomeCats.reduce((s, c) => s + Math.max(0, getTotalByCategory(c, rangeWeeks)), 0);
   const totalExpenses = expenseCats.reduce((s, c) => s + Math.abs(Math.min(0, getTotalByCategory(c, rangeWeeks))), 0);

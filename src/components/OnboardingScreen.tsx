@@ -4,7 +4,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   ScrollView,
   Pressable,
   Modal,
@@ -38,6 +37,18 @@ const RANDOM_LAST_NAMES         = ['Silva', 'Müller', 'Smith', 'García', 'Ross
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
+
+const SETUP_STEPS = [
+  'REGISTERING YOUR CLUB',
+  'BUILDING YOUR STADIUM',
+  'GENERATING YOUR SQUAD',
+  'ORGANISING LEAGUE STRUCTURE',
+  'ASSIGNING COACHING STAFF',
+  'SCOUTING THE REGION',
+  'SETTING UP FACILITIES',
+  'PREPARING YOUR FINANCES',
+  'FINALISING EVERYTHING',
+];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_MANAGER_AGE = 25;
@@ -222,8 +233,17 @@ export function OnboardingScreen({ onRegister, enabledCountries }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [setupStepIdx, setSetupStepIdx] = useState(0);
+  const [dots, setDots]               = useState(1);
+
+  useEffect(() => {
+    if (!loading) { setSetupStepIdx(0); setDots(1); return; }
+    const stepTimer = setInterval(() => setSetupStepIdx((i) => (i + 1) % SETUP_STEPS.length), 2200);
+    const dotTimer  = setInterval(() => setDots((d) => (d % 3) + 1), 450);
+    return () => { clearInterval(stepTimer); clearInterval(dotTimer); };
+  }, [loading]);
 
   const dob = buildDob(dobDay, dobMonth, dobYear);
 
@@ -608,14 +628,25 @@ export function OnboardingScreen({ onRegister, enabledCountries }: Props) {
 
               {loading ? (
                 <View style={{
-                  height: 48,
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   borderWidth: 3,
                   borderColor: WK.yellow,
-                  backgroundColor: 'rgba(245,200,66,0.15)',
+                  backgroundColor: 'rgba(245,200,66,0.08)',
+                  padding: 16,
                 }}>
-                  <ActivityIndicator color={WK.yellow} />
+                  <PixelText size={5} color={WK.yellow} style={{ textAlign: 'center', marginBottom: 12 }}>
+                    SETTING UP YOUR CLUB
+                  </PixelText>
+                  <PixelText size={6} style={{ textAlign: 'center', marginBottom: 14, minHeight: 20 }}>
+                    {SETUP_STEPS[setupStepIdx]}{'.'.repeat(dots)}
+                  </PixelText>
+                  {/* Pixel progress bar */}
+                  <View style={{ height: 6, backgroundColor: WK.border, borderWidth: 1, borderColor: WK.tealLight }}>
+                    <View style={{
+                      height: '100%',
+                      width: `${Math.round(((setupStepIdx + 1) / SETUP_STEPS.length) * 100)}%`,
+                      backgroundColor: WK.yellow,
+                    }} />
+                  </View>
                 </View>
               ) : (
                 <Button
@@ -634,7 +665,7 @@ export function OnboardingScreen({ onRegister, enabledCountries }: Props) {
               )}
 
               <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 16 }}>
-                YOU'LL RECEIVE 10 YOUTH PLAYERS + FULL CLUB SETUP
+                YOUR JOURNEY TO FOOTBALLING GREATNESS BEGINS HERE
               </PixelText>
             </>
           )}

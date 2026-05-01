@@ -39,10 +39,12 @@ class SimulationService {
 
   /** Call once per week tick to process effects and potentially fire a story event. */
   processDailyTick(): void {
+    const currentWeek = useClubStore.getState().club.weekNumber ?? 1;
+    useEventStore.getState().expireCooldowns(currentWeek);
     this.processActiveEffects();
     // ~20% chance per tick to fire a random narrative event (if templates are loaded)
     if (Math.random() < 0.2) {
-      this.triggerRandomEvent();
+      this.triggerRandomEvent(currentWeek);
     }
   }
 
@@ -251,9 +253,10 @@ class SimulationService {
 
   // ── Random event ───────────────────────────────────────────────────────────
 
-  private triggerRandomEvent(): void {
-    const template = useEventStore.getState().getWeightedRandomTemplate();
+  private triggerRandomEvent(currentWeek: number): void {
+    const template = useEventStore.getState().getWeightedRandomTemplate(undefined, currentWeek);
     if (!template) return;
+    useEventStore.getState().markFired(template.slug, currentWeek);
     if (template.category === EventCategory.GUARDIAN) return;
 
     let entityMap = this.resolveTargets(template.impacts.selection_logic);

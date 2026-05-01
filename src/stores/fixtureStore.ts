@@ -31,6 +31,12 @@ interface FixtureActions {
   generateFixtures: (league: LeagueSnapshot, ampClubId: string) => void;
   /** Generate fixtures from a WorldLeague (used at world init when no LeagueSnapshot exists yet). */
   generateFixturesFromWorldLeague: (league: WorldLeague, season: number, ampClubId?: string) => void;
+  /**
+   * Load pre-generated fixtures from a server fixture schedule.
+   * schedule format: outer = matchday (0-indexed), inner = [homeClubId, awayClubId] pairs.
+   * Safe to call on a league that already has fixtures for this season (no-op).
+   */
+  loadFromServerSchedule: (leagueId: string, season: number, schedule: [string, string][][]) => void;
   recordResult: (fixtureId: string, result: Omit<FixtureResult, 'synced'>) => void;
   advanceMatchday: () => void;
   markSynced: (fixtureIds: string[]) => void;
@@ -90,6 +96,34 @@ export const useFixtureStore = create<FixtureStore>()(
           awayClubId: g.awayClubId,
           result: null,
         }));
+
+        set((state) => ({
+          fixtures: [...state.fixtures, ...newFixtures],
+          currentMatchday: 1,
+        }));
+      },
+
+      loadFromServerSchedule: (leagueId, season, schedule) => {
+        const { fixtures } = get();
+        const alreadyLoaded = fixtures.some(
+          (f) => f.leagueId === leagueId && f.season === season,
+        );
+        if (alreadyLoaded) return;
+
+        const newFixtures: Fixture[] = [];
+        schedule.forEach((matchday, roundIndex) => {
+          matchday.forEach(([homeClubId, awayClubId]) => {
+            newFixtures.push({
+              id: `${leagueId}-s${season}-r${roundIndex + 1}-${homeClubId}-${awayClubId}`,
+              leagueId,
+              season,
+              round: roundIndex + 1,
+              homeClubId,
+              awayClubId,
+              result: null,
+            });
+          });
+        });
 
         set((state) => ({
           fixtures: [...state.fixtures, ...newFixtures],

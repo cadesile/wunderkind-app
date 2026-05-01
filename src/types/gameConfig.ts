@@ -15,6 +15,12 @@ export interface GameConfig {
    * Default: 1000  (OVR 50 → ~£50,000 fee)
    */
   playerFeeMultiplier: number;
+  /**
+   * Global multiplier applied to every player's weekly wage before deducting from balance.
+   * Formula: effectiveWages = Σ(player.wage) × playerWageMultiplier
+   * Default: 1.0  (no adjustment)
+   */
+  playerWageMultiplier: number;
 
   // ── Engine constants ──────────────────────────────────────────────────────
   /** Base XP awarded per player per week before facility/coach multipliers. Default: 10 */
@@ -160,6 +166,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   cliqueMinTenureWeeks: 3,
 
   playerFeeMultiplier: 1000,
+  playerWageMultiplier: 1.0,
 
   baseXP: 10,
   baseInjuryProbability: 0.05,

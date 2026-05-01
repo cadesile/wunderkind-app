@@ -92,6 +92,10 @@ export interface Club {
   sponsorContracts: SponsorContract[];
   /** ID of assigned investor, or null */
   investorId: string | null;
+  /** Equity % from the accepted investor offer (e.g. 10 = 10%) */
+  investorEquityPct: number | null;
+  /** Original investment amount in pence from the accepted offer */
+  investorInvestmentAmount: number | null;
   /** Club home country — restricts market/scouting at Local reputation tier */
   country: ClubCountryCode | null;
   /**

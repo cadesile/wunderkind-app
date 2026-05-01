@@ -341,8 +341,9 @@ export function processGuardianTick(weekNumber: number): void {
     if (worstGuardian.loyaltyToClub >= 90 && Math.random() > 0.0625) continue;
     else if (worstGuardian.loyaltyToClub >= 70 && Math.random() > 0.125) continue;
 
-    const template = useEventStore.getState().getWeightedRandomTemplate(EventCategory.GUARDIAN);
+    const template = useEventStore.getState().getWeightedRandomTemplate(EventCategory.GUARDIAN, weekNumber);
     if (!template) continue;
+    useEventStore.getState().markFired(template.slug, weekNumber);
 
     const guardianNames = guardians.map((g) => g.firstName).join(' & ');
     const body = template.bodyTemplate

@@ -336,9 +336,8 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
       const delta = managerOpinion.recommendation === 'sign' ? 5 : -5;
       useCoachStore.getState().updateMorale(manager.id, delta);
     }
-    // Transfer fee deduction (fee is in pence, addBalance takes whole pounds)
+    // Transfer fee deduction — addTransaction drives addBalance automatically
     if (player.requiresTransferFee && player.transferFee) {
-      useClubStore.getState().addBalance(-Math.round(player.transferFee / 100));
       useFinanceStore.getState().addTransaction({
         amount:      -Math.round(player.transferFee / 100),
         category:    'transfer_fee',
@@ -420,25 +419,34 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
         </View>
       </View>
 
-      {/* Asking price */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <PixelText size={14} variant="vt323" dim>ASKING PRICE</PixelText>
-        <PixelText size={18} variant="vt323" color={WK.text}>
-          {askingPrice === 0 ? 'FREE' : `£${askingPrice.toLocaleString()}`}
-        </PixelText>
-      </View>
-
-      {/* Transfer fee badge */}
-      {player.requiresTransferFee && player.transferFee && (
-        <View style={{
-          borderWidth: 2,
-          borderColor: WK.orange,
-          padding: 6,
-          marginBottom: 8,
-        }}>
-          <PixelText size={13} variant="vt323" color={WK.orange}>
-            TRANSFER FEE: {formatCurrencyWhole(Math.round(player.transferFee / 100))}
-          </PixelText>
+      {/* Club affiliation + fee */}
+      {player.requiresTransferFee ? (
+        <>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <PixelText size={14} variant="vt323" dim>TRANSFER FEE</PixelText>
+            <PixelText size={18} variant="vt323" color={WK.orange}>
+              {formatCurrencyWhole(player.transferFee ?? 0)}
+            </PixelText>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            {player.npcClubTier != null && (
+              <Badge label={`TIER ${player.npcClubTier}`} color="dim" />
+            )}
+            <PixelText size={14} variant="vt323" numberOfLines={1}>
+              {player.npcClubName ?? 'NPC CLUB'}
+            </PixelText>
+          </View>
+        </>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+          <View style={{
+            borderWidth: 2,
+            borderColor: WK.green,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+          }}>
+            <PixelText size={13} variant="vt323" color={WK.green}>FREE AGENT</PixelText>
+          </View>
         </View>
       )}
 
@@ -477,7 +485,7 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
   const manager = useCoachStore((s) => s.coaches.find((c) => c.role === 'manager'));
   const { respond, purgeForPlayer } = useInboxStore.getState();
   const { removePlayer } = useSquadStore.getState();
-  const { addBalance, addEarnings } = useClubStore.getState();
+  const { addEarnings } = useClubStore.getState();
 
   const [done, setDone] = useState(false);
 
@@ -530,10 +538,8 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
   );
 
   function handleAccept() {
-    // fee is in pence — addBalance and addEarnings both accumulate pence
-    addBalance(fee);
+    // addTransaction drives addBalance automatically; addEarnings tracks career total separately
     addEarnings(fee);
-    // Transaction amounts follow the GameLoop convention: whole pounds for ledger display
     const feeWholePounds = Math.round(fee / 100);
     useFinanceStore.getState().addTransaction({
       amount:      feeWholePounds,
@@ -574,7 +580,7 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
           <Badge label={`TIER ${biddingClubTier}`} color="dim" />
           <PixelText size={16} variant="vt323" color={WK.green}>
-            {formatCurrencyWhole(Math.round(fee / 100))}
+            {formatCurrencyWhole(fee)}
           </PixelText>
         </View>
         <PixelText size={13} variant="vt323" dim style={{ marginTop: 4 }}>
@@ -1013,7 +1019,7 @@ function InboxMessageDetail({
   onBack: () => void;
 }) {
   const { markRead, respond } = useInboxStore();
-  const { setInvestorId, addBalance, addSponsorContract, club } = useClubStore();
+  const { setInvestorId, addSponsorContract, club } = useClubStore();
   const activeManager = useCoachStore((s) => s.coaches.find((c) => c.role === 'manager'));
 
   const stableOnBack = useCallback(onBack, []);
@@ -1044,10 +1050,10 @@ function InboxMessageDetail({
 
   function handleAccept() {
     if (message.type === 'investor' && message.entityId && investorMeta) {
-      addBalance(investorMeta.investmentAmount); // investmentAmount is pence
-      setInvestorId(message.entityId);
+      setInvestorId(message.entityId, investorMeta.equityPct, investorMeta.investmentAmount);
+      // addTransaction drives addBalance automatically
       useFinanceStore.getState().addTransaction({
-        amount: Math.round(investorMeta.investmentAmount / 100), // pence → whole pounds for ledger
+        amount: Math.round(investorMeta.investmentAmount / 100), // pence → whole pounds
         category: 'investment',
         description: `${investorMeta.investorName} — ${investorMeta.equityPct}% equity deal`,
         weekNumber: message.week,

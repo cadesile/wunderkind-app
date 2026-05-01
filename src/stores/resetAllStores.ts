@@ -6,6 +6,12 @@ import { useSquadStore } from './squadStore';
 import { useCoachStore } from './coachStore';
 import { useScoutStore } from './scoutStore';
 import { useGuardianStore } from './guardianStore';
+import { useFixtureStore } from './fixtureStore';
+import { useWorldStore } from './worldStore';
+import { useLeagueStore } from './leagueStore';
+
+/** Prefix used by worldStore for per-league club maps. */
+const WORLD_CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 
 /**
  * All Zustand persist store keys registered in AsyncStorage.
@@ -22,6 +28,12 @@ const ALL_STORE_KEYS = [
   'inbox-store',
   'finance-store',
   'loan-store',
+  'fixture-store',
+  'worldStore_meta',
+  'league-store',
+  'league-history-store',
+  'fan-store',
+  'attendance-store',
   'altercation-store',
   'active-effect-store',
   'narrative-store',
@@ -45,14 +57,17 @@ const ALL_STORE_KEYS = [
 export function resetInMemoryStores(): void {
   useAuthStore.getState().clearAuth();
 
-  useClubStore.setState({
-    club: DEFAULT_CLUB,
-    managerPersonality: null,
-  });
-
+  useClubStore.setState({ club: DEFAULT_CLUB, managerPersonality: null });
   useSquadStore.setState({ players: [] });
   useCoachStore.setState({ coaches: [] });
   useScoutStore.setState({ scouts: [] });
+
+  // Clear fixture and world state so stale completed fixtures don't fire the
+  // season-end overlay during a fresh initialization.
+  useFixtureStore.getState().clearSeason();
+  useWorldStore.setState({ isInitialized: false, leagues: [], clubs: {}, ampLeagueId: null, clubsLoadError: null });
+  useLeagueStore.getState().clear();
+
   useGuardianStore.getState().clearAll();
   useEventChainStore.getState().clearAll();
 }
@@ -67,8 +82,15 @@ export function resetInMemoryStores(): void {
  * After this returns, the caller is responsible for redirecting to onboarding.
  */
 export async function clearAllClubData(): Promise<void> {
-  // Remove all persisted store data so the next app launch starts clean
+  // Remove all fixed-key persisted stores
   await AsyncStorage.multiRemove(ALL_STORE_KEYS);
+
+  // Remove dynamic per-league club maps (worldStore_clubs_<leagueId>)
+  const allKeys = await AsyncStorage.getAllKeys();
+  const worldClubKeys = allKeys.filter((k) => k.startsWith(WORLD_CLUBS_KEY_PREFIX));
+  if (worldClubKeys.length > 0) {
+    await AsyncStorage.multiRemove(worldClubKeys);
+  }
 
   // Reset in-memory state so the current session also behaves correctly
   resetInMemoryStores();

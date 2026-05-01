@@ -33,7 +33,7 @@ interface ClubState {
    * Keeps sponsorIds in sync.
    */
   removeSponsorContract: (id: string) => void;
-  setInvestorId: (id: string | null) => void;
+  setInvestorId: (id: string | null, equityPct?: number | null, investmentAmount?: number | null) => void;
   setCountry: (country: Club['country']) => void;
   incrementWeek: () => void;
   /** 409 conflict resolution: hard-reset weekNumber to the server's authoritative value */
@@ -77,6 +77,8 @@ export const DEFAULT_CLUB: Club = {
   sponsorIds: [],
   sponsorContracts: [],
   investorId: null,
+  investorEquityPct: null,
+  investorInvestmentAmount: null,
   country: null,
   lastRepActivityWeek: 1,
   stadiumName: null,
@@ -146,8 +148,15 @@ export const useClubStore = create<ClubState>()(
             sponsorIds: state.club.sponsorIds.filter((sid) => sid !== id),
           },
         })),
-      setInvestorId: (id) =>
-        set((state) => ({ club: { ...state.club, investorId: id } })),
+      setInvestorId: (id, equityPct, investmentAmount) =>
+        set((state) => ({
+          club: {
+            ...state.club,
+            investorId: id,
+            investorEquityPct: id === null ? null : (equityPct ?? state.club.investorEquityPct),
+            investorInvestmentAmount: id === null ? null : (investmentAmount ?? state.club.investorInvestmentAmount),
+          },
+        })),
       setCountry: (country) =>
         set((state) => ({ club: { ...state.club, country } })),
       incrementWeek: () =>

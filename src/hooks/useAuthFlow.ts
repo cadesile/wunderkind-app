@@ -21,6 +21,7 @@ import { randomBaseMorale } from '@/utils/morale';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import type { Player, Position } from '@/types/player';
 import type { Coach, StaffRole } from '@/types/coach';
+import type { Scout } from '@/types/market';
 import type { ClubCountryCode } from '@/utils/nationality';
 import type { ManagerProfileInput } from '@/types/api';
 import type { ManagerProfile, ClubTier } from '@/types/club';
@@ -29,7 +30,7 @@ import { initializeWorld } from '@/api/endpoints/initialize';
 import { useWorldStore } from '@/stores/worldStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { syncQueue } from '@/api/syncQueue';
-import type { WorldPlayer, WorldStaff } from '@/types/world';
+import type { WorldPlayer, WorldStaff, WorldScout } from '@/types/world';
 
 function generateDeviceEmail(): string {
   const chars = 'abcdef0123456789';
@@ -127,6 +128,50 @@ function worldPlayerToPlayer(wp: WorldPlayer, weekNumber: number): Player {
   } as Player;
 }
 
+/** Build a Scout from a WorldStaff entry in the ampStarter pack. */
+function worldStaffToScout(ws: WorldStaff, weekNumber: number): Scout {
+  const ability = ws.coachingAbility;
+  const scoutingRange: Scout['scoutingRange'] =
+    ability >= 60 ? 'international' : ability >= 30 ? 'national' : 'local';
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
+  return {
+    id:               ws.id,
+    name:             `${ws.firstName} ${ws.lastName}`,
+    role:             'scout',
+    salary:           ability * 100,
+    scoutingRange,
+    successRate:      Math.max(10, Math.min(90, ability)),
+    nationality:      ws.nationality ?? '',
+    joinedWeek:       weekNumber,
+    appearance:       generateAppearance(ws.id, 'SCOUT', 35),
+    morale:           randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
+    relationships:    [],
+    assignedPlayerIds: [],
+  };
+}
+
+/** Build a Scout from a dedicated WorldScout entry in the ampStarter.scouts array. */
+function worldScoutEntryToScout(ws: WorldScout, weekNumber: number): Scout {
+  const exp = ws.experience;
+  const scoutingRange: Scout['scoutingRange'] =
+    exp >= 60 ? 'international' : exp >= 30 ? 'national' : 'local';
+  const { defaultMoraleMin, defaultMoraleMax } = useGameConfigStore.getState().config;
+  return {
+    id:               ws.id,
+    name:             ws.name,
+    role:             'scout',
+    salary:           exp * 100,
+    scoutingRange,
+    successRate:      Math.max(10, Math.min(90, exp)),
+    nationality:      ws.nationality,
+    joinedWeek:       weekNumber,
+    appearance:       generateAppearance(ws.id, 'SCOUT', 35),
+    morale:           randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
+    relationships:    [],
+    assignedPlayerIds: [],
+  };
+}
+
 /** Build a Coach from a WorldStaff entry in the ampStarter pack. */
 function worldStaffToCoach(ws: WorldStaff, weekNumber: number): Coach {
   const personality = generatePersonality();
@@ -179,6 +224,7 @@ export function useAuthFlow(): AuthFlowResult {
     useClubStore();
   const { setPlayers } = useSquadStore();
   const { addCoach } = useCoachStore();
+  const { addScout } = useScoutStore();
   const { initAllLevels } = useFacilityStore();
   const { fetchMarketData } = useMarketStore();
   const setFromWorldPack = useWorldStore((s) => s.setFromWorldPack);
@@ -364,6 +410,7 @@ export function useAuthFlow(): AuthFlowResult {
     // 3. World initialization — single call replaces fetchMarketData + assignMarketEntity loop
     let players:         Player[] = [];
     let assignedCoaches: Coach[]  = [];
+    let assignedScouts:  Scout[]  = [];
 
     try {
       const initResp = await initializeWorld();
@@ -375,24 +422,20 @@ export function useAuthFlow(): AuthFlowResult {
       // Map AMP starter entities to local types
       players = ampStarter.players.map((wp) => worldPlayerToPlayer(wp, weekNumber));
 
-      // Use starter config counts to limit how many of each staff role we assign
-      const staffRoleLimits: Record<string, number> = {
-        manager:               starterConfig.starterManagerCount,
-        head_coach:            starterConfig.starterCoachCount,
-        director_of_football:  starterConfig.starterDirectorOfFootballCount,
-        facility_manager:      starterConfig.starterFacilityManagerCount,
-        chairman:              starterConfig.starterChairmanCount,
-      };
-      const roleCounts: Record<string, number> = {};
-      const selectedStaff = ampStarter.staff.filter((ws) => {
-        if (ws.role === 'scout') return false;
-        const limit = staffRoleLimits[ws.role] ?? 0;
-        roleCounts[ws.role] = (roleCounts[ws.role] ?? 0) + 1;
-        return roleCounts[ws.role] <= limit;
-      });
-      assignedCoaches = selectedStaff.map((ws) => worldStaffToCoach(ws, weekNumber));
+      // Take all staff from ampStarter — backend handles counts and nationality
+      assignedCoaches = ampStarter.staff
+        .filter((ws) => ws.role !== 'scout')
+        .map((ws) => worldStaffToCoach(ws, weekNumber));
 
-      console.log(`[useAuthFlow] World initialized: ${players.length}p / ${assignedCoaches.length}c`);
+      assignedScouts = [
+        ...ampStarter.staff
+          .filter((ws) => ws.role === 'scout')
+          .map((ws) => worldStaffToScout(ws, weekNumber)),
+        ...(ampStarter.scouts ?? [])
+          .map((ws) => worldScoutEntryToScout(ws, weekNumber)),
+      ];
+
+      console.log(`[useAuthFlow] World initialized: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s`);
     } catch (err) {
       console.error('[useAuthFlow] World initialization failed — squad will be empty:', err);
     }
@@ -400,31 +443,7 @@ export function useAuthFlow(): AuthFlowResult {
     setPlayers(players);
     backfillGuardians(players);
     for (const coach of assignedCoaches) { addCoach(coach); }
-
-    // ── Scout selection from market data pool ─────────────────────────────────
-    // Pick starterScoutCount scouts from the market pool that match the club tier.
-    // fetchMarketData() ran in parallel with initializeClub above, so the pool
-    // is warm by this point. hireScout() handles Scout construction + pool removal.
-    {
-      const poolScouts = useMarketStore.getState().marketScouts;
-      const eligible = poolScouts.filter(
-        (s) => !s.tier || s.tier === (clubTier as ClubTier),
-      );
-      // Fisher-Yates shuffle for random selection
-      for (let i = eligible.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
-      }
-      const picks = eligible.slice(0, starterConfig.starterScoutCount);
-      for (const scout of picks) {
-        useMarketStore.getState().hireScout(scout.id, weekNumber);
-      }
-      if (picks.length === 0) {
-        console.warn('[useAuthFlow] No tier-matched scouts in market pool — scout store will be empty');
-      } else {
-        console.log(`[useAuthFlow] Assigned ${picks.length} starter scout(s) from market pool`);
-      }
-    }
+    for (const scout of assignedScouts)  { addScout(scout); }
 
     // 7. Apply sponsor/investor assignments
     setSponsorIds(sponsorIds);

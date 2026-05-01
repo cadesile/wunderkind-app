@@ -132,7 +132,12 @@ export default function useClubMetrics(): ClubMetrics {
   // ── Base Asset Sum & Valuation ─────────────────────────────────────────────
   const baseAssetSum = totalPlayerValue + totalInfraValue + totalStaffValue + cashBalance;
   const totalValuation = Math.round(baseAssetSum * (1 + reputation / 1_000));
-  const reputationBonusPct = reputation / 10;
+  const reputationBonusPct = facilityTemplates.reduce((sum, t) => {
+    const level = levels[t.slug] ?? 0;
+    if (level === 0) return sum;
+    const cond = conditions[t.slug] ?? 100;
+    return sum + t.reputationBonus * level * (cond / 100);
+  }, 0);
 
   // ── Crown Jewel ────────────────────────────────────────────────────────────
   // Highest current OVR; potential is the tiebreaker.

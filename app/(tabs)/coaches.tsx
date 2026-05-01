@@ -7,6 +7,7 @@ import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useCoachStore } from '@/stores/coachStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useMarketStore } from '@/stores/marketStore';
+import { useFinanceStore } from '@/stores/financeStore';
 import { generateAppearance } from '@/engine/appearance';
 import { Avatar } from '@/components/ui/Avatar';
 import { PixelText } from '@/components/ui/PixelText';
@@ -111,7 +112,7 @@ function ProspectCard({ coach, onSign }: { coach: MarketCoach; onSign: () => voi
 
 export default function CoachesScreen() {
   const { coaches, removeCoach } = useCoachStore();
-  const { club, addBalance } = useClubStore();
+  const { club } = useClubStore();
   const { coaches: marketCoaches, hireCoach } = useMarketStore();
   const [showModal, setShowModal] = useState(false);
 
@@ -137,7 +138,12 @@ export default function CoachesScreen() {
       return;
     }
     setSignError(null);
-    addBalance(-signingFeePounds);
+    useFinanceStore.getState().addTransaction({
+      amount:      -signingFeePounds,
+      category:    'staff_signing',
+      description: `Signed ${coach.firstName} ${coach.lastName}`,
+      weekNumber,
+    });
     hireCoach(coach.id, weekNumber);
   }
 

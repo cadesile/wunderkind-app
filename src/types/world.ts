@@ -1,4 +1,5 @@
 import { Appearance, PersonalityMatrix } from './player';
+import type { StaffRole } from './coach';
 
 /** Player as delivered in the world pack — full attributes + personality */
 export interface WorldPlayer {
@@ -27,7 +28,7 @@ export interface WorldStaff {
   id: string;
   firstName: string;
   lastName: string;
-  role: 'manager' | 'head_coach' | 'chairman' | 'scout' | 'director_of_football' | 'facility_manager';
+  role: StaffRole;
   coachingAbility: number;
   nationality: string;
   /** Deterministic visual appearance generated client-side during initialization */
@@ -69,13 +70,83 @@ export interface WorldLeague {
   clubIds: string[]; // references into clubs Record
 }
 
+/** Scout as delivered in the ampStarter pack — uses experience + judgements, not coachingAbility */
+export interface WorldScout {
+  id: string;
+  name: string; // full name (not split into firstName/lastName)
+  nationality: string;
+  experience: number; // 0–100
+  judgements: {
+    potential: number;
+    technical: number;
+    physical: number;
+    mental: number;
+    personality: number;
+  };
+}
+
+/**
+ * Financial fields present on league objects in both /initialize and /conclude-season responses.
+ * All monetary values are in pence.
+ */
+export interface WorldLeagueFinancials {
+  tvDeal: number;
+  sponsorPot: number;
+  prizeMoney: number;
+  leaguePositionPot: number;
+  leaguePositionDecreasePercent: number;
+}
+
 /** Shape of POST /api/initialize response body */
 export interface WorldPackResponse {
   worldPack: {
-    leagues: Array<WorldLeague & { clubs: WorldClub[] }>;
+    leagues: Array<WorldLeague & { clubs: WorldClub[] } & WorldLeagueFinancials>;
     ampStarter: {
       players: WorldPlayer[];
       staff: WorldStaff[];
+      scouts?: WorldScout[];
     };
   };
+}
+
+// ─── conclude-season league update shapes ────────────────────────────────────
+
+/**
+ * Slim club entry as received inside /api/league/conclude-season leagues array.
+ * Only identity + tier — full roster is held locally and must NOT be replaced.
+ */
+export interface SeasonUpdateClub {
+  id: string;
+  name: string;
+  tier: number;
+}
+
+/**
+ * League shape as received inside /api/league/conclude-season leagues array.
+ * Financial fields are per-league (already the AMP's share).
+ * clubs contains only slim identity entries — match against local WorldClub data.
+ * fixtures format: outer = matchday (0-indexed), inner = [homeClubId, awayClubId] pairs.
+ */
+export interface SeasonUpdateLeague {
+  id: string;
+  tier: number;
+  name: string;
+  country: string;
+  promotionSpots: number | null;
+  reputationTier: string | null;
+  /** AMP club's share of the league TV rights deal (pence) */
+  tvDeal: number;
+  /** AMP club's share of the league sponsor pot (pence) */
+  sponsorPot: number;
+  /** Flat prize money for finishing the season (pence) */
+  prizeMoney: number;
+  /**
+   * Base position prize pot (pence).
+   * Per-club value = leaguePositionPot × (1 − leaguePositionDecreasePercent/100 × (pos − 1))
+   */
+  leaguePositionPot: number;
+  /** Integer percentage decrease per position, e.g. 10 = 10% */
+  leaguePositionDecreasePercent: number;
+  clubs: SeasonUpdateClub[];
+  fixtures: [string, string][][];
 }

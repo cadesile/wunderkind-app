@@ -9,53 +9,60 @@
 /**
  * Weekly XP gained by each player.
  *
- * Formula: baseXP × (1 + technicalZoneEffective × 0.05) × (1 + totalCoachPerformance / 100)
+ * Formula: baseXP × (1 + xpMultiplierTotal) × (1 + totalCoachPerformance / 100)
+ * xpMultiplierTotal is the aggregated facility effect from computeFacilityEffects().
  */
 export function calculateWeeklyXP(
-  technicalZoneEffective: number,
+  xpMultiplierTotal: number,
   totalCoachPerformance: number,
   baseXP: number,
 ): number {
-  return baseXP * (1 + technicalZoneEffective * 0.05) * (1 + totalCoachPerformance / 100);
+  return baseXP * (1 + xpMultiplierTotal) * (1 + totalCoachPerformance / 100);
 }
 
 /**
  * Per-player weekly injury probability.
  *
- * Formula: max(0, baseInjuryProbability × (1 − physioClinicEffective × 0.08))
+ * Formula: max(0, baseInjuryProbability − injuryProbabilityDelta)
+ * injuryProbabilityDelta is the aggregated facility effect from computeFacilityEffects().
  */
 export function calculateInjuryProbability(
-  physioClinicEffective: number,
+  injuryProbabilityDelta: number,
   baseInjuryProbability: number,
 ): number {
-  return Math.max(0, baseInjuryProbability * (1 - physioClinicEffective * 0.08));
+  return Math.max(0, baseInjuryProbability - injuryProbabilityDelta);
 }
 
 /**
  * Passive weekly reputation gain before tier drain and inactivity decay.
  *
- * Formula: reputationDeltaBase + mediaCenterEffective × reputationDeltaFacilityMultiplier
+ * Formula: sum of (reputationBonus × effectiveLevel) for each owned facility (level > 0).
+ * effectiveLevel = level × (condition / 100), so poorly maintained facilities contribute less.
  */
 export function calculateReputationDelta(
-  mediaCenterEffective: number,
-  reputationDeltaBase: number,
-  reputationDeltaFacilityMultiplier: number,
+  facilityTemplates: Array<{ slug: string; reputationBonus: number }>,
+  levels: Record<string, number>,
+  conditions: Record<string, number>,
 ): number {
-  return reputationDeltaBase + mediaCenterEffective * reputationDeltaFacilityMultiplier;
+  return facilityTemplates.reduce((sum, template) => {
+    const level = levels[template.slug] ?? 0;
+    if (level === 0) return sum;
+    const cond = conditions[template.slug] ?? 100;
+    const effectiveLevel = level * (cond / 100);
+    return sum + template.reputationBonus * effectiveLevel;
+  }, 0);
 }
 
 /**
- * Injury duration in weeks for a given tier, reduced by physio and hydro facilities.
+ * Injury duration in weeks for a given tier, reduced by the aggregated facility recovery delta.
  *
- * Uses fixed 0.08 / 0.10 per-level multipliers (not config-driven).
+ * Formula: max(1, round(baseDuration − injuryRecoveryWeeksDelta))
+ * injuryRecoveryWeeksDelta is the aggregated facility effect from computeFacilityEffects().
  */
 export function calculateInjuryDuration(
   tier: { minWeeks: number; maxWeeks: number },
-  physioClinicEffective: number,
-  hydroPoolEffective: number,
+  injuryRecoveryWeeksDelta: number,
 ): number {
   const base = tier.minWeeks + Math.floor(Math.random() * (tier.maxWeeks - tier.minWeeks + 1));
-  const reduction = (1 - physioClinicEffective * 0.08) * (1 - hydroPoolEffective * 0.10);
-  const reduced = Math.round(base * Math.max(reduction, 0.2));
-  return Math.max(reduced, 1);
+  return Math.max(1, Math.round(base - injuryRecoveryWeeksDelta));
 }

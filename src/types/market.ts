@@ -141,6 +141,10 @@ export interface MarketPlayer {
   requiresTransferFee?: boolean;
   /** Transfer fee in pence — set when scout fully reveals an NPC-club player */
   transferFee?: number;
+  /** Name of the NPC club this player belongs to */
+  npcClubName?: string;
+  /** Numeric league tier of the NPC club (1 = top flight) */
+  npcClubTier?: number;
 }
 
 /** A coach available in the backend market. */

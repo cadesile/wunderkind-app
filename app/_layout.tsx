@@ -158,8 +158,8 @@ function AppNavigator() {
     return (
       <OnboardingScreen
         onRegister={async (name, country, managerProfile) => {
-          setNewGameOnboarding(false);
           await registerClub(name, country, managerProfile);
+          setNewGameOnboarding(false);
         }}
         enabledCountries={enabledCountries}
       />

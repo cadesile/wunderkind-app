@@ -36,11 +36,14 @@ export function calculateWeeklyFinances(
   sponsors: Sponsor[] = [],
   weeklyLoanRepayment: number = 0,
   facilityTemplates: FacilityTemplate[] = [],
+  playerWageMultiplier: number = 1.0,
 ): FinancialRecord {
   const breakdown: ExpenseItem[] = [];
 
-  // Player wages
-  const playerWageTotal = players.reduce((sum, p) => sum + (p.wage ?? 0), 0);
+  // Player wages — scaled by admin-configured playerWageMultiplier (floored at 0)
+  const playerWageTotal = Math.round(
+    players.reduce((sum, p) => sum + (p.wage ?? 0), 0) * Math.max(0, playerWageMultiplier),
+  );
   if (playerWageTotal > 0) {
     breakdown.push({ label: 'Player wages', amount: playerWageTotal });
   }

@@ -38,25 +38,30 @@ export function WelcomeSplash({ clubName, onDismiss }: Props) {
             marginVertical: 16,
           }} />
 
-          <PixelText size={7} color={WK.yellow} style={{ textAlign: 'center' }}>
+          <PixelText size={8} color={WK.yellow} style={{ textAlign: 'center' }}>
             {clubName.toUpperCase()} IS YOURS NOW.
           </PixelText>
 
-          <PixelText size={6} dim style={{ textAlign: 'center', marginTop: 14, lineHeight: 16 }}>
-            SCOUT THE RIGHT PROSPECTS, BACK YOUR COACHES, AND INVEST WISELY — AND YOU MIGHT JUST BUILD SOMETHING THE FOOTBALL WORLD WON'T FORGET.
+          <PixelText size={7} style={{ textAlign: 'center', marginTop: 16, lineHeight: 18 }}>
+            BUILD YOUR SQUAD, CLIMB THE LEAGUE, AND DEVELOP YOUR FACILITIES INTO SOMETHING THAT RIVALS FEAR.
           </PixelText>
 
+          <PixelText size={7} style={{ textAlign: 'center', marginTop: 12, lineHeight: 18 }}>
+            EVERY SIGNING, EVERY MATCH, EVERY DECISION — IT ALL COUNTS.
+          </PixelText>
+
+          {/* Scout tip */}
           <View style={{
-            height: 2,
-            width: 40,
-            backgroundColor: WK.dim,
-            alignSelf: 'center',
-            marginVertical: 14,
-          }} />
-
-          <PixelText size={6} color={WK.red} style={{ textAlign: 'center', lineHeight: 16 }}>
-            OR DRAIN THE BUDGET, IGNORE YOUR PLAYERS, AND WATCH IT ALL COLLAPSE. THE GAME DOESN'T CARE EITHER WAY.
-          </PixelText>
+            borderWidth: 2,
+            borderColor: WK.yellow,
+            backgroundColor: 'rgba(245,200,66,0.1)',
+            padding: 12,
+            marginTop: 18,
+          }}>
+            <PixelText size={6} color={WK.yellow} style={{ textAlign: 'center', lineHeight: 16 }}>
+              ★ FIRST MOVE: HEAD TO THE MARKET AND SET UP YOUR SCOUT — TALENT WON'T FIND ITSELF.
+            </PixelText>
+          </View>
 
           <View style={{ marginTop: 20 }}>
             <Button label="▶ LET'S GET STARTED" variant="yellow" fullWidth onPress={onDismiss} />

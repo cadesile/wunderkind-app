@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Pressable, Modal } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Home, Users, Building2, PoundSterling, Briefcase, Trophy, Settings, RefreshCw } from 'lucide-react-native';
@@ -25,6 +25,7 @@ import { useFixtureStore } from '@/stores/fixtureStore';
 import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { WeeklyTickOverlay } from '@/components/WeeklyTickOverlay';
+import { SeasonEndOverlay } from '@/components/SeasonEndOverlay';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
@@ -111,7 +112,7 @@ const TAB_BAR_HEIGHT = 60;
  */
 export const FAB_CLEARANCE = 72;
 
-function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
+function BottomFABRow({ onAdvance, isSeasonComplete }: { onAdvance: () => void; isSeasonComplete: boolean }) {
   const insets = useSafeAreaInsets();
   const backFabCallback = useNavStore((s) => s.backFabCallback);
   const backActive = backFabCallback !== null;
@@ -170,18 +171,18 @@ function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
         <Home size={20} color={WK.tealLight} />
       </Pressable>
 
-      {/* ADVANCE FAB */}
+      {/* ADVANCE FAB — shows "END" when season is complete to block further advances */}
       <Pressable
-        onPress={() => { if (!isSimulating) { hapticPress(); onAdvance(); } }}
-        disabled={isSimulating}
+        onPress={() => { if (!isSimulating && !isSeasonComplete) { hapticPress(); onAdvance(); } }}
+        disabled={isSimulating || isSeasonComplete}
         style={[
           {
             marginBottom: fabBottom,
             width: 52,
             height: 52,
-            backgroundColor: isSimulating ? WK.tealMid : WK.yellow,
+            backgroundColor: isSimulating ? WK.tealMid : isSeasonComplete ? WK.orange : WK.yellow,
             borderWidth: 3,
-            borderColor: WK.border,
+            borderColor: isSeasonComplete ? WK.yellow : WK.border,
             alignItems: 'center',
             justifyContent: 'center',
           },
@@ -190,6 +191,8 @@ function BottomFABRow({ onAdvance }: { onAdvance: () => void }) {
       >
         {isSimulating ? (
           <RefreshCw size={24} color={WK.yellow} />
+        ) : isSeasonComplete ? (
+          <Trophy size={20} color={WK.yellow} />
         ) : (
           <PixelText size={12} color={WK.border}>{'>>'}</PixelText>
         )}
@@ -210,6 +213,25 @@ export default function TabLayout() {
 
   const [showAltercationDialog, setShowAltercationDialog] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
+  const [showSeasonEnd, setShowSeasonEnd] = useState(false);
+
+  // Reactive season-complete detection — subscribes to fixture state directly so
+  // the overlay fires the moment the last result is recorded, before any button press.
+  // Gated on world being initialized + AMP having an active league to prevent
+  // stale completed fixtures from triggering the overlay during a new-game init.
+  const fixtures         = useFixtureStore((s) => s.fixtures);
+  const isWorldReady     = useWorldStore((s) => s.isInitialized && s.ampLeagueId !== null);
+  const isSeasonComplete = useMemo(
+    () => isWorldReady && fixtures.length > 0 && fixtures.every((f) => f.result !== null),
+    [isWorldReady, fixtures],
+  );
+
+  useEffect(() => {
+    if (isSeasonComplete && !showSeasonEnd) {
+      hapticConfirm();
+      setShowSeasonEnd(true);
+    }
+  }, [isSeasonComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to game over screen whenever a loss condition fires
   useEffect(() => {
@@ -338,6 +360,10 @@ export default function TabLayout() {
       setShowAltercationDialog(true);
       return;
     }
+
+    // Guard: season is complete — overlay is already shown reactively; don't advance
+    if (isSeasonComplete) return;
+
     doAdvanceWeek();
   }
 
@@ -423,10 +449,16 @@ export default function TabLayout() {
         <Tabs.Screen name="debug"   options={{ href: null, title: 'DEBUG' }} />
       </Tabs>
 
-      <BottomFABRow onAdvance={handleAdvanceButton} />
+      <BottomFABRow onAdvance={handleAdvanceButton} isSeasonComplete={isSeasonComplete} />
 
       {/* Weekly tick processing overlay */}
       <WeeklyTickOverlay />
+
+      {/* Season end overlay — shown when all fixtures have results */}
+      <SeasonEndOverlay
+        visible={showSeasonEnd}
+        onComplete={() => setShowSeasonEnd(false)}
+      />
 
       {/* Hard-block altercation dialog — forces AMP to release one player before advancing */}
       <Modal

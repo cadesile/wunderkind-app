@@ -277,6 +277,45 @@ export const useMarketStore = create<MarketState>()(
           players: state.players.filter((p) => p.id !== playerId),
         }));
 
+        // Remove player from their NPC club roster so the world stays consistent.
+        // Works for any club player signed by the AMP — free agents have no entry to remove.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { useWorldStore } = require('@/stores/worldStore') as typeof import('@/stores/worldStore');
+        const { clubs, mutateClubRoster } = useWorldStore.getState();
+        for (const npcClub of Object.values(clubs)) {
+          const inRoster = npcClub.players.some((wp) => wp.id === playerId);
+          if (inRoster) {
+            void mutateClubRoster(npcClub.id, npcClub.players.filter((wp) => wp.id !== playerId));
+            break;
+          }
+        }
+
+        // Add the signed player to the AMP club's WorldClub roster so the league
+        // simulation and fixture engine know about them.
+        const ampClubId = useClubStore.getState().club.id;
+        const ampWorldClub = clubs[ampClubId];
+        if (ampWorldClub) {
+          // Map app position format (FWD) → world position format (ATT)
+          const worldPosition = (player.position === 'FWD' ? 'ATT' : player.position) as 'GK' | 'DEF' | 'MID' | 'ATT';
+          const worldPlayer: import('@/types/world').WorldPlayer = {
+            id: player.id,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            position: worldPosition,
+            nationality: player.nationality ?? 'ENG',
+            dateOfBirth: player.dateOfBirth ?? '2000-01-01',
+            pace:      player.attributes?.pace      ?? player.currentAbility,
+            technical: player.attributes?.technical ?? player.currentAbility,
+            vision:    player.attributes?.vision    ?? player.currentAbility,
+            power:     player.attributes?.power     ?? player.currentAbility,
+            stamina:   player.attributes?.stamina   ?? player.currentAbility,
+            heart:     player.attributes?.heart     ?? player.currentAbility,
+            personality,
+            npcClubId: null,
+          };
+          void mutateClubRoster(ampClubId, [...ampWorldClub.players, worldPlayer]);
+        }
+
         // Signing a player is a visible club activity — meaningful rep boost
         const { setReputation: setRep, markRepActivity } = useClubStore.getState();
         setRep(1.0);

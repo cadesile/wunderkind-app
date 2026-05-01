@@ -2,9 +2,12 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useSquadStore } from '@/stores/squadStore';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useWorldStore } from '@/stores/worldStore';
+import { useFacilityStore } from '@/stores/facilityStore';
+import { computeFacilityEffects } from './facilityEffects';
 import { MarketPlayer } from '@/types/market';
 import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
@@ -16,6 +19,84 @@ function clamp(v: number, min: number, max: number): number {
 
 function randomInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function ageFromDob(dob: string): number {
+  const d = new Date(dob);
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now < new Date(now.getFullYear(), d.getMonth(), d.getDate())) age--;
+  return Math.max(14, age);
+}
+
+function derivePotential(age: number): number {
+  if (age < 18) return 5;
+  if (age < 21) return 4;
+  if (age < 25) return 3;
+  if (age < 29) return 2;
+  return 1;
+}
+
+/**
+ * Build a candidate pool from NPC club rosters in worldStore.
+ * Excludes players already in the AMP squad or already visible in the market.
+ * NPC candidates carry requiresTransferFee + club metadata so the signing UI
+ * displays club name and tier correctly.
+ */
+function buildNPCCandidates(
+  signedIds: Set<string>,
+  marketIds: Set<string>,
+): MarketPlayer[] {
+  const { clubs, leagues, ampLeagueId } = useWorldStore.getState();
+  const { playerFeeMultiplier } = useGameConfigStore.getState().config;
+
+  // Only include players from NPC clubs in the same league tier as the AMP.
+  // This keeps scout results immersive — a local-tier club finds local-tier players.
+  const ampLeagueTier = ampLeagueId
+    ? leagues.find((l) => l.id === ampLeagueId)?.tier ?? null
+    : null;
+
+  const candidates: MarketPlayer[] = [];
+
+  for (const club of Object.values(clubs)) {
+    if (ampLeagueTier !== null && club.tier !== ampLeagueTier) continue;
+    for (const wp of club.players) {
+      if (!wp.npcClubId) continue;
+      if (signedIds.has(wp.id) || marketIds.has(wp.id)) continue;
+
+      const avgAbility = Math.round(
+        (wp.pace + wp.technical + wp.vision + wp.power + wp.stamina + wp.heart) / 6,
+      );
+      const age = ageFromDob(wp.dateOfBirth);
+      const potential = derivePotential(age);
+      const transferFee = calculateMarketPlayerValue(avgAbility, potential, wp.dateOfBirth, playerFeeMultiplier);
+
+      candidates.push({
+        id:               wp.id,
+        firstName:        wp.firstName,
+        lastName:         wp.lastName,
+        dateOfBirth:      wp.dateOfBirth,
+        nationality:      wp.nationality,
+        position:         wp.position === 'ATT' ? 'FWD' : wp.position,
+        currentAbility:   avgAbility,
+        potential,
+        personality:      wp.personality,
+        agent:            null,
+        scoutingStatus:   'hidden',
+        scoutingProgress: 0,
+        marketValue:      transferFee,
+        currentOffer:     transferFee,
+        perceivedAbility: avgAbility,
+        isLocalGem:       true,
+        requiresTransferFee: true,
+        transferFee,
+        npcClubName:      club.name,
+        npcClubTier:      club.tier,
+      });
+    }
+  }
+
+  return candidates;
 }
 
 /**
@@ -72,6 +153,16 @@ export function processScoutingTasks(): void {
   const { scoutMoraleThreshold, scoutRevealWeeks, scoutAbilityErrorRange } =
     useGameConfigStore.getState().config;
 
+  // Apply facility effects to scouting parameters
+  const { levels: facilityLevels, conditions: facilityConditions, templates: facilityTemplates } =
+    useFacilityStore.getState();
+  const facilityEffLevels = Object.fromEntries(
+    Object.keys(facilityLevels).map((s) => [s, (facilityLevels[s] ?? 0) * ((facilityConditions[s] ?? 100) / 100)]),
+  );
+  const scoutFx = computeFacilityEffects(facilityTemplates, facilityEffLevels);
+  const effectiveRevealWeeks = Math.max(1, scoutRevealWeeks - scoutFx.scoutRevealWeeksDelta);
+  const effectiveErrorRange  = Math.max(0, scoutAbilityErrorRange - scoutFx.scoutErrorRangeDelta);
+
   scouts.forEach((scout) => {
     if ((scout.morale ?? 70) < scoutMoraleThreshold) return;
 
@@ -85,11 +176,11 @@ export function processScoutingTasks(): void {
 
       const newProgress = (player.scoutingProgress ?? 0) + 1;
 
-      if (newProgress >= scoutRevealWeeks) {
-        // Reveal the player with scout-error variance
+      if (newProgress >= effectiveRevealWeeks) {
+        // Reveal the player with scout-error variance (reduced by scouting_center effects)
         const errorMargin = (100 - (scout.successRate ?? 50)) / 100;
         const perceivedAbility = clamp(
-          player.currentAbility + Math.round(randomInt(-scoutAbilityErrorRange, scoutAbilityErrorRange) * errorMargin),
+          player.currentAbility + Math.round(randomInt(-effectiveErrorRange, effectiveErrorRange) * errorMargin),
           0,
           100,
         );
@@ -98,6 +189,8 @@ export function processScoutingTasks(): void {
         const { clubs } = useWorldStore.getState();
         let requiresTransferFee = false;
         let transferFee: number | undefined;
+        let npcClubName: string | undefined;
+        let npcClubTier: number | undefined;
 
         for (const club of Object.values(clubs)) {
           const wp = club.players.find((p) => p.id === playerId);
@@ -108,15 +201,17 @@ export function processScoutingTasks(): void {
             );
             const { playerFeeMultiplier } = useGameConfigStore.getState().config;
             transferFee = calculateMarketPlayerValue(avgAbility, 3, wp.dateOfBirth, playerFeeMultiplier);
+            npcClubName = club.name;
+            npcClubTier = club.tier;
             break;
           }
         }
 
         updateMarketPlayer(playerId, {
           scoutingStatus: 'revealed',
-          scoutingProgress: 2,
+          scoutingProgress: effectiveRevealWeeks,
           perceivedAbility: isNaN(perceivedAbility) ? player.currentAbility : perceivedAbility,
-          ...(requiresTransferFee ? { requiresTransferFee: true, transferFee } : {}),
+          ...(requiresTransferFee ? { requiresTransferFee: true, transferFee, npcClubName, npcClubTier } : {}),
         });
         removeScoutAssignment(scout.id, playerId);
       } else {
@@ -150,13 +245,14 @@ export function processMissions(): void {
       roll >= t1 ? 2 :
       roll >= t0 ? 1 : 0;
 
-    // 3. Pull from the backend prospect pool — never generate locally.
-    //    Allowed nationalities are determined by the club's reputation tier and
-    //    the scout's range. Domestic nationality is derived from club.country.
+    // 3. Build candidate pool: NPC club players first (world-immersive), free agents as fallback.
+    //    Allowed nationalities are determined by the club's reputation tier and the scout's range.
     const foundPlayers: MarketPlayer[] = [];
     if (count > 0) {
       const { prospects, consumeProspect } = useProspectPoolStore.getState();
       const { club } = useClubStore.getState();
+      const signedIds  = new Set(useSquadStore.getState().players.map((p) => p.id));
+      const marketIds  = new Set(useMarketStore.getState().players.map((p) => p.id));
 
       // Build allowed nationality set for this scout
       const availableRegions = getAvailableRegions(club.reputationTier, scout.scoutingRange);
@@ -171,39 +267,51 @@ export function processMissions(): void {
         ...poolNationalities,
       ];
 
-      const byPosition = mission.position
+      // NPC club players — primary pool for world immersion
+      const npcAll = buildNPCCandidates(signedIds, marketIds);
+      const npcByPosition = mission.position
+        ? npcAll.filter((p) => p.position === mission.position)
+        : [...npcAll];
+
+      // Free-agent backend prospects — fallback only
+      const freeAgentByPosition = mission.position
         ? prospects.filter((p) => p.position === mission.position)
         : [...prospects];
 
+      // Combine: NPC first so they are preferentially selected
+      const combined = [...npcByPosition, ...freeAgentByPosition];
+
       let candidates: MarketPlayer[];
       if (allowedNationalities.length === 0) {
-        candidates = byPosition;
+        candidates = combined;
       } else if (mission.targetNationality && allowedNationalities.includes(mission.targetNationality)) {
-        // Targeted mission: prefer target nationality, then other allowed, then any position match
-        const natMatch = byPosition.filter((p) => p.nationality === mission.targetNationality);
-        const otherAllowed = byPosition.filter(
+        const natMatch    = combined.filter((p) => p.nationality === mission.targetNationality);
+        const otherAllowed = combined.filter(
           (p) => allowedNationalities.includes(p.nationality) && p.nationality !== mission.targetNationality,
         );
-        candidates = natMatch.length > 0 ? [...natMatch, ...otherAllowed] : byPosition;
+        candidates = natMatch.length > 0 ? [...natMatch, ...otherAllowed] : combined;
       } else {
-        // Filter by allowed nationalities — fall back to full position pool if none match
-        const natFiltered = byPosition.filter((p) => allowedNationalities.includes(p.nationality));
-        candidates = natFiltered.length > 0 ? natFiltered : byPosition;
+        const natFiltered = combined.filter((p) => allowedNationalities.includes(p.nationality));
+        candidates = natFiltered.length > 0 ? natFiltered : combined;
       }
 
       const actualCount = Math.min(count, candidates.length);
 
       for (let i = 0; i < actualCount; i++) {
         const prospect = candidates[i];
-        // Mark as revealed and flag as local gem so market refresh doesn't wipe it
+        const isFromProspectPool = prospects.some((p) => p.id === prospect.id);
+
         const gem: MarketPlayer = {
           ...prospect,
-          scoutingStatus: 'revealed',
+          scoutingStatus:   'revealed',
           scoutingProgress: 2,
           perceivedAbility: prospect.currentAbility,
-          isLocalGem: true,
+          isLocalGem:       true,
         };
-        consumeProspect(prospect.id);
+
+        // Only consume from the backend pool if the player came from there
+        if (isFromProspectPool) consumeProspect(prospect.id);
+
         addMarketPlayer(gem);
         foundPlayers.push(gem);
       }

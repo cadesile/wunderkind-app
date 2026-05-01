@@ -2,10 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
-import type { WorldClub, WorldLeague, WorldPackResponse, WorldPlayer } from '@/types/world';
+import type { WorldClub, WorldLeague, WorldPackResponse, WorldPlayer, SeasonUpdateLeague } from '@/types/world';
 import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { useFinanceStore } from '@/stores/financeStore';
+import { penceToPounds } from '@/utils/currency';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
@@ -15,6 +17,18 @@ const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 const VALID_REPUTATION_TIERS = ['local', 'regional', 'national', 'elite'] as const;
 
 const FORMATIONS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '5-3-2', '4-5-1'] as const;
+
+/**
+ * Maximum reputation score while in a league of each tier.
+ * Prevents the club's reputationTier from advancing beyond the league tier
+ * without actual promotion.
+ */
+const LEAGUE_TIER_REP_CAP: Record<string, number> = {
+  local:    14,
+  regional: 39,
+  national: 74,
+  elite:    100,
+};
 
 interface WorldState {
   isInitialized: boolean;
@@ -36,6 +50,12 @@ interface WorldState {
    * Called by MarketEngine after NPC-to-NPC transfers.
    */
   mutateClubRoster: (clubId: string, updatedPlayers: WorldPlayer[]) => Promise<void>;
+  /**
+   * Replace all league + club data from a conclude-season API response.
+   * Assigns client-side formation and appearance, persists per-league clubs to AsyncStorage.
+   * Pass newAmpLeagueId when the AMP has been promoted/relegated; null = stay in current league.
+   */
+  applySeasonUpdate: (responseLeagues: SeasonUpdateLeague[], newAmpLeagueId: string | null) => Promise<void>;
 }
 
 export const useWorldStore = create<WorldState>()(
@@ -88,14 +108,16 @@ export const useWorldStore = create<WorldState>()(
           const key = `${CLUBS_KEY_PREFIX}${leagueData.id}`;
           await AsyncStorage.setItem(key, JSON.stringify(leagueClubMap));
 
-          // Verify the write round-tripped successfully
-          const verification = await AsyncStorage.getItem(key);
-          if (!verification) {
-            throw new Error(`WorldStore: storage write did not persist for league ${leagueData.id}`);
-          }
-          const parsed = JSON.parse(verification) as Record<string, WorldClub>;
-          if (Object.keys(parsed).length === 0) {
-            throw new Error(`WorldStore: persisted club map is empty for league ${leagueData.id}`);
+          // Verify the write round-tripped successfully (only when we had clubs to persist)
+          if (leagueData.clubs.length > 0) {
+            const verification = await AsyncStorage.getItem(key);
+            if (!verification) {
+              throw new Error(`WorldStore: storage write did not persist for league ${leagueData.id}`);
+            }
+            const parsed = JSON.parse(verification) as Record<string, WorldClub>;
+            if (Object.keys(parsed).length === 0) {
+              throw new Error(`WorldStore: persisted club map is empty for league ${leagueData.id}`);
+            }
           }
         }
 
@@ -130,6 +152,14 @@ export const useWorldStore = create<WorldState>()(
               facilities:     c.facilities,
             }));
 
+          // Read financial fields from the matching world pack league entry
+          const ampLeagueData = pack.leagues.find((l) => l.id === bottomLeague.id);
+          const tvDeal                        = ampLeagueData?.tvDeal                        ?? 0;
+          const sponsorPot                    = ampLeagueData?.sponsorPot                    ?? 0;
+          const prizeMoney                    = ampLeagueData?.prizeMoney                    ?? 0;
+          const leaguePositionPot             = ampLeagueData?.leaguePositionPot             ?? 0;
+          const leaguePositionDecreasePercent = ampLeagueData?.leaguePositionDecreasePercent ?? 0;
+
           const syntheticLeague: LeagueSnapshot = {
             id:                            bottomLeague.id,
             tier:                          bottomLeague.tier,
@@ -140,16 +170,30 @@ export const useWorldStore = create<WorldState>()(
             reputationTier:                (VALID_REPUTATION_TIERS as readonly string[]).includes(bottomLeague.reputationTier ?? '')
                                              ? (bottomLeague.reputationTier as LeagueSnapshot['reputationTier'])
                                              : null,
-            reputationCap:                 null,
-            tvDeal:                        null,
-            sponsorPot:                    0,
-            prizeMoney:                    null,
-            leaguePositionPot:             null,
-            leaguePositionDecreasePercent: 0,
+            reputationCap:                 bottomLeague.reputationTier
+                                             ? (LEAGUE_TIER_REP_CAP[bottomLeague.reputationTier] ?? null)
+                                             : null,
+            tvDeal:                        tvDeal   || null,
+            sponsorPot,
+            prizeMoney:                    prizeMoney           || null,
+            leaguePositionPot:             leaguePositionPot    || null,
+            leaguePositionDecreasePercent,
             clubs:                         clubSnapshots,
           };
 
           useLeagueStore.getState().setFromSync(syntheticLeague);
+
+          // Credit Season 1 TV deal immediately — covers the whole season upfront
+          if (tvDeal > 0) {
+            const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
+            useFinanceStore.getState().addTransaction({
+              amount:      penceToPounds(tvDeal),
+              category:    'tv_deal',
+              description: 'Season 1 TV deal',
+              weekNumber,
+            });
+          }
+
           useFixtureStore.getState().generateFixturesFromWorldLeague(bottomLeague, 1, ampClubId);
         } else if (!bottomLeague) {
           if (ampCountry) {
@@ -203,6 +247,56 @@ export const useWorldStore = create<WorldState>()(
         return league.clubIds
           .map((id) => clubs[id])
           .filter((c): c is WorldClub => c !== undefined);
+      },
+
+      applySeasonUpdate: async (responseLeagues, newAmpLeagueId) => {
+        const updatedAmpLeagueId = newAmpLeagueId ?? get().ampLeagueId;
+
+        // Rebuild WorldLeague metadata.
+        // NPC club rosters are NOT replaced — only clubIds, league metadata, and club.tier update.
+        const leagues: WorldLeague[] = responseLeagues.map((l) => ({
+          id:             l.id,
+          tier:           l.tier,
+          name:           l.name,
+          country:        l.country,
+          promotionSpots: l.promotionSpots,
+          reputationTier: l.reputationTier,
+          clubIds:        l.clubs.map((c) => c.id),
+        }));
+
+        // Patch WorldClub.tier for any NPC club that moved leagues.
+        // Persist each affected league's club map to AsyncStorage so the update survives restart.
+        const currentClubs = get().clubs;
+        const updatedClubs: Record<string, WorldClub> = { ...currentClubs };
+        const dirtyLeagueIds = new Set<string>();
+
+        for (const l of responseLeagues) {
+          for (const slim of l.clubs) {
+            const existing = updatedClubs[slim.id];
+            if (existing && existing.tier !== slim.tier) {
+              updatedClubs[slim.id] = { ...existing, tier: slim.tier };
+              dirtyLeagueIds.add(l.id);
+            }
+          }
+        }
+
+        for (const leagueId of dirtyLeagueIds) {
+          const leagueClubIds = responseLeagues.find((l) => l.id === leagueId)?.clubs.map((c) => c.id) ?? [];
+          const leagueClubMap: Record<string, WorldClub> = {};
+          for (const id of leagueClubIds) {
+            if (updatedClubs[id]) leagueClubMap[id] = updatedClubs[id];
+          }
+          await AsyncStorage.setItem(
+            `${CLUBS_KEY_PREFIX}${leagueId}`,
+            JSON.stringify(leagueClubMap),
+          );
+        }
+
+        set({
+          leagues,
+          clubs: dirtyLeagueIds.size > 0 ? updatedClubs : currentClubs,
+          ampLeagueId: updatedAmpLeagueId,
+        });
       },
 
       mutateClubRoster: async (clubId, updatedPlayers) => {

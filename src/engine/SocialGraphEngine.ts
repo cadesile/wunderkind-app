@@ -380,8 +380,12 @@ export function processSocialGraph(): void {
       if (isOnCooldown(actor.id, weekNumber)) continue;
       if (isOnCooldown(subject.id, weekNumber)) continue;
 
+      const { recentlyFired } = useEventStore.getState();
       const eligible = templates.filter((t) => {
         if (!t.firingConditions) return false;
+        // Skip templates on cooldown
+        if ((recentlyFired[t.slug] ?? 0) > weekNumber) return false;
+
         const c = t.firingConditions;
 
         if (c.maxSquadMorale !== undefined && squadMoraleAverage > c.maxSquadMorale) return false;
@@ -432,6 +436,7 @@ export function processSocialGraph(): void {
         isMajor,
       );
 
+      useEventStore.getState().markFired(template.slug, weekNumber);
       extractChainedSlugsAndActivate(template, actor.id, subject.id, weekNumber);
 
       const subtype = deriveSubtype(template.slug);

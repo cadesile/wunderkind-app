@@ -7,6 +7,7 @@ import {
   calculateInjuryDuration,
 } from './FormulaEngine';
 import { simulationService } from './SimulationService';
+import { computeFacilityEffects } from './facilityEffects';
 
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
 import { processScoutingTasks, processMissions, refreshMarketOffers } from './ScoutingService';
@@ -76,17 +77,23 @@ export function processWeeklyTick(): WeeklyTick {
     { severity: 'serious',  minWeeks: 8, maxWeeks: 12, weight: config.injurySeriousWeight },
   ];
 
-  const { players: allPlayers, applyWeeklyPlayerUpdates, setPlayerInjury, tickInjuries } = useSquadStore.getState();
+  const { players: allPlayers, applyWeeklyPlayerUpdates, setPlayerInjury, tickInjuries, updateMorale } = useSquadStore.getState();
   // Only process active players — inactive players (guardian withdrawals, etc.) must not
   // generate new incidents, injuries, or trait shifts.
   const players = allPlayers.filter((p) => p.isActive !== false);
-  const { club, addBalance, addEarnings, setReputation, incrementWeek } = useClubStore.getState();
+  const { club, addEarnings, setReputation, incrementWeek } = useClubStore.getState();
   const { addIncident, addMessage, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
   const { levels, conditions, templates: facilityTemplates } = useFacilityStore.getState();
 
   // Effective level = level × (condition / 100), used to scale all facility benefits
   const eff = (slug: string) => (levels[slug] ?? 0) * ((conditions[slug] ?? 100) / 100);
+
+  // Pre-compute effective levels and aggregate gameplay effects for this tick
+  const effectiveLevels: FacilityLevels = Object.fromEntries(
+    Object.keys(levels).map((slug) => [slug, eff(slug)]),
+  );
+  const facilityEffects = computeFacilityEffects(facilityTemplates, effectiveLevels);
   const { processWeeklyRepayments, totalWeeklyRepayment } = useLoanStore.getState();
   const { sponsors: allSponsors, investors: allInvestors } = useMarketStore.getState();
 
@@ -160,15 +167,15 @@ export function processWeeklyTick(): WeeklyTick {
   }
 
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
-  // Tactical Room boosts coach performance; conditions scale all benefits
-  const tacticalBoost = 1 + eff('tactical_room') * 0.05;
+  // Tactical Room boosts coach performance via cohesionBonusPerLevel
+  const tacticalBoost = 1 + facilityEffects.cohesionBonusTotal;
   const totalCoachPerformance = coaches.reduce(
     (sum, c) => sum + computeCoachPerformanceScore(c), 0,
   ) * tacticalBoost;
-  const weeklyXP = calculateWeeklyXP(eff('technical_zone'), totalCoachPerformance, config.baseXP);
+  const weeklyXP = calculateWeeklyXP(facilityEffects.xpMultiplierTotal, totalCoachPerformance, config.baseXP);
 
   // ── 2. Injury Probability ─────────────────────────────────────────────────────
-  const injuryProb = calculateInjuryProbability(eff('physio_clinic'), config.baseInjuryProbability);
+  const injuryProb = calculateInjuryProbability(facilityEffects.injuryProbabilityDelta, config.baseInjuryProbability);
 
   // ── 3. Personality shifts ─────────────────────────────────────────────────────
   const traitShifts: Record<string, Partial<PersonalityMatrix>> = {};
@@ -204,7 +211,7 @@ export function processWeeklyTick(): WeeklyTick {
   const newInjuries: NewInjury[] = [];
   injuredPlayerIds.forEach((id) => {
     const tier = pickInjurySeverity(INJURY_TIERS);
-    const weeksRemaining = calculateInjuryDuration(tier, eff('physio_clinic'), eff('hydro_pool'));
+    const weeksRemaining = calculateInjuryDuration(tier, facilityEffects.injuryRecoveryWeeksDelta);
     setPlayerInjury(id, { severity: tier.severity, weeksRemaining, injuredWeek: weekNumber });
     newInjuries.push({ playerId: id, severity: tier.severity, weeksRemaining });
   });
@@ -281,54 +288,15 @@ export function processWeeklyTick(): WeeklyTick {
     });
   }
 
-  // ── 4. Injury incidents ────────────────────────────────────────────────────────
-  const { ManagerBrain } = require('./ManagerBrain');
-  const activeManager = coaches.find((c: any) => c.role === 'manager');
-  const isAutoManaging = activeManager?.autoManageEvents === true;
+  // ── 4. Injury morale impact ───────────────────────────────────────────────────
+  const INJURY_MORALE_DELTA: Record<'minor' | 'moderate' | 'serious', number> = {
+    minor:    -3,
+    moderate: -7,
+    serious:  -12,
+  };
 
-  // Per-player injury incident + inbox message with severity and duration
-  newInjuries.forEach(({ playerId, severity, weeksRemaining }) => {
-    const player = players.find((p) => p.id === playerId);
-    if (!player) return;
-    
-    const incidentDescription = `${player.name} picked up a ${severity} injury in training this week.`;
-    
-    addIncident({
-      id: `${playerId}-${weekNumber}-injury`,
-      playerId,
-      week: weekNumber,
-      type: 'negative',
-      description: incidentDescription,
-      traitAffected: 'consistency',
-      delta: -1,
-    });
-
-    if (isAutoManaging) {
-       const action = ManagerBrain.handleBehavioralIncident(activeManager, player, incidentDescription, weekNumber, false);
-       const autoManagedChoiceIndex = action === 'support' ? 0 : 1;
-       addMessage({
-         id: `injury-auto-${playerId}-wk${weekNumber}`,
-         type: 'system',
-         week: weekNumber,
-         subject: 'Training Injury (Auto)',
-         body: incidentDescription,
-         isRead: false,
-         entityId: playerId,
-         metadata: { playerIds: [playerId] },
-         autoManagedChoiceIndex,
-         autoManagedPlayerChoices: { [playerId]: autoManagedChoiceIndex },
-       });
-    } else {
-      addMessage({
-        id: `injury-${playerId}-wk${weekNumber}`,
-        type: 'system',
-        week: weekNumber,
-        subject: 'Training Injury',
-        body: `${player.name} picked up a ${severity} injury in training this week. Expected recovery: ${weeksRemaining} week${weeksRemaining !== 1 ? 's' : ''}.`,
-        isRead: false,
-        entityId: playerId,
-      });
-    }
+  newInjuries.forEach(({ playerId, severity }) => {
+    updateMorale(playerId, INJURY_MORALE_DELTA[severity]);
   });
 
   // ── 5. Loan repayments ────────────────────────────────────────────────────────
@@ -344,24 +312,19 @@ export function processWeeklyTick(): WeeklyTick {
   // Pass empty sponsors array — income is handled separately below.
   const financialSummary = calculateWeeklyFinances(
     weekNumber, club, players, coaches, levels, [], weeklyLoanRepayment, facilityTemplates,
+    config.playerWageMultiplier,
   );
 
-  // Balance tracks spendable cash — net is in pence, stored directly in pence
-  addBalance(financialSummary.net);
-
-  // Add sponsor income separately (contracts are source of truth)
+  // Sponsor earnings tracker (separate from balance — career metric)
   if (sponsorIncomePence > 0) {
-    addBalance(sponsorIncomePence);
     addEarnings(sponsorIncomePence);
   }
 
   // Facility income — calculated every advance, scaled by condition + reputation
   const facilityIncomePence = calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation);
-  if (facilityIncomePence > 0) {
-    addBalance(facilityIncomePence);
-  }
 
   // ── Ledger: record categorised transactions ────────────────────────────────
+  // addTransaction is the source of truth — it drives addBalance automatically.
   const { addTransaction, clearOldTransactions } = useFinanceStore.getState();
   const nextWeek = weekNumber + 1; // transactions belong to the week just processed
 
@@ -386,6 +349,9 @@ export function processWeeklyTick(): WeeklyTick {
   if (maintenancePounds > 0) {
     addTransaction({ amount: -maintenancePounds, category: 'upkeep', description: `Week ${nextWeek} facility maintenance`, weekNumber: nextWeek });
   }
+  if (weeklyLoanRepayment > 0) {
+    addTransaction({ amount: -Math.round(weeklyLoanRepayment / 100), category: 'loan_repayment', description: `Week ${nextWeek} loan repayment`, weekNumber: nextWeek });
+  }
   if (sponsorIncomePence > 0) {
     addTransaction({ amount: Math.round(sponsorIncomePence / 100), category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`, weekNumber: nextWeek });
   }
@@ -402,13 +368,9 @@ export function processWeeklyTick(): WeeklyTick {
   // Re-read players to pick up injuries set in step 3b so the injury check
   // inside computePlayerDevelopment sees the current state.
   const playersWithInjuries = useSquadStore.getState().players;
-  // Pass effective levels (scaled by condition) so development benefits degrade with facility wear
-  const effectiveLevels: FacilityLevels = Object.fromEntries(
-    Object.keys(levels).map((slug) => [slug, eff(slug)]),
-  );
   const effectiveTier = getEffectiveTier(club.reputationTier, levels);
   const tierOvrCap = TIER_OVR_CEILING[effectiveTier];
-  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, effectiveLevels, weekNumber, tierOvrCap);
+  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, facilityEffects, weekNumber, tierOvrCap);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
 
   // Re-read players after development updates to ensure transfer values and bid
@@ -698,9 +660,9 @@ export function processWeeklyTick(): WeeklyTick {
   // Scouting Center adds to this on top.
   const rep = club.reputation;
   const passiveRepDelta = calculateReputationDelta(
-    eff('scouting_center'),
-    config.reputationDeltaBase,
-    config.reputationDeltaFacilityMultiplier,
+    facilityTemplates,
+    levels,
+    conditions,
   );
 
   // Tier maintenance drain — each tier requires progressively more active investment
@@ -742,15 +704,16 @@ export function processWeeklyTick(): WeeklyTick {
       const cond = repairConditions[template.slug] ?? 100;
       if (lvl === 0 || cond >= 100) continue;
 
-      const costPounds = repairFacilityCost(lvl, cond, template.baseCost);
-      if (costPounds === 0) continue;
+      const costPence = repairFacilityCost(lvl, cond, template.weeklyUpkeepBase);
+      if (costPence === 0) continue;
 
       const currentBalance = useClubStore.getState().club.balance; // pence
-      if (currentBalance >= costPounds * 100) {
-        useFacilityStore.getState().repairFacility(template.slug);
-        repairedFacilities.push({ name: template.label, cost: costPounds });
+      if (currentBalance >= costPence) {
+        // resetCondition only — GameLoop handles all accounting below via addTransaction
+        useFacilityStore.getState().resetCondition(template.slug);
+        repairedFacilities.push({ name: template.label, cost: costPence }); // pence, for formatCurrencyWhole
         addTransaction({
-          amount: -costPounds,
+          amount: -Math.round(costPence / 100), // whole pounds for ledger
           category: 'upkeep',
           description: `Auto-repair: ${template.label}`,
           weekNumber: nextWeek,

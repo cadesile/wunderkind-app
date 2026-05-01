@@ -1,7 +1,7 @@
 import { Player, PlayerAttributes, AttributeName } from '@/types/player';
 import { Coach } from '@/types/coach';
-import { FacilityLevels } from '@/types/facility';
 import { PlayerDevelopmentUpdate } from '@/stores/squadStore';
+import type { FacilityEffects } from './facilityEffects';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
 
@@ -55,8 +55,8 @@ export function computeCoachPerformanceScore(coach: Coach): number {
 function calcGains(
   player: Player,
   assignedCoach: Coach | null,
-  facilityLevel: number,
-  strengthLevel: number,
+  techGrowthBonus: number,
+  powerGrowthBonus: number,
   weekNumber: number,
   tierOvrCap: number,
 ): Partial<PlayerAttributes> {
@@ -65,7 +65,7 @@ function calcGains(
     pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
   };
 
-  const facilityMod = 1 + (facilityLevel - 1) * 0.1; // 1.0–1.9
+  const facilityMod = 1 + techGrowthBonus;
   const am = ageMod(player.age);
   const det = player.personality.determination;
   const personalityMod = 1 + (det / 20) * 0.3; // 1.0–1.3
@@ -102,9 +102,9 @@ function calcGains(
     // Focus bonus: +10% on the prioritised attribute
     const focusBonus = focusActive && focus!.attribute === attr ? 0.1 : 0;
 
-    // Strength Suite bonus: +2% for power/stamina per level
+    // Strength Suite bonus for power/stamina via powerGrowthMultiplierPerLevel
     const strengthBonus = (attr === 'power' || attr === 'stamina')
-      ? 1 + strengthLevel * 0.02
+      ? 1 + powerGrowthBonus
       : 1;
 
     const rawGain =
@@ -206,12 +206,12 @@ export function checkBreakthroughSpike(
 export function computePlayerDevelopment(
   players: Player[],
   coaches: Coach[],
-  facilityLevels: FacilityLevels,
+  facilityEffects: FacilityEffects,
   weekNumber: number,
   tierOvrCap: number = 100,
 ): Record<string, PlayerDevelopmentUpdate> {
-  const trainingLevel = facilityLevels['technical_zone'] ?? 1;
-  const strengthLevel = facilityLevels['strength_suite'] ?? 0;
+  const techGrowthBonus  = facilityEffects.technicalGrowthMultiplierTotal;
+  const powerGrowthBonus = facilityEffects.powerGrowthMultiplierTotal;
   const devUpdates: Record<string, PlayerDevelopmentUpdate> = {};
   const highlights: { id: string; name: string; attr: string; newVal: number }[] = [];
 
@@ -229,7 +229,7 @@ export function computePlayerDevelopment(
       pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
     };
 
-    const gains = calcGains(player, assignedCoach, trainingLevel, strengthLevel, weekNumber, tierOvrCap);
+    const gains = calcGains(player, assignedCoach, techGrowthBonus, powerGrowthBonus, weekNumber, tierOvrCap);
 
     const updated: PlayerAttributes = { ...currentAttrs };
     ATTRIBUTE_NAMES.forEach((attr) => {

@@ -27,6 +27,14 @@ export interface FacilityTemplate {
   /** Weekly condition decay base. App formula: decayBase + level */
   decayBase: number;
   sortOrder: number;
+  /**
+   * Per-level gameplay effect deltas applied during the weekly tick.
+   * Each value is multiplied by the facility's effective level (level × condition/100).
+   * Keys: xpMultiplierPerLevel, technicalGrowthMultiplierPerLevel, powerGrowthMultiplierPerLevel,
+   *       injuryProbabilityDeltaPerLevel, injuryRecoveryWeeksDeltaPerLevel,
+   *       scoutErrorRangeDeltaPerLevel, scoutRevealWeeksDeltaPerLevel, cohesionBonusPerLevel
+   */
+  gameplayEffects?: Record<string, number>;
 }
 
 // ─── Static fallback ──────────────────────────────────────────────────────────
@@ -46,6 +54,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
     maxLevel:                5,
     decayBase:               2.0,
     sortOrder:               1,
+    gameplayEffects: { xpMultiplierPerLevel: 0.1, technicalGrowthMultiplierPerLevel: 0.05 },
   },
   {
     slug:                    'strength_suite',
@@ -60,6 +69,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
     maxLevel:                5,
     decayBase:               2.0,
     sortOrder:               2,
+    gameplayEffects: { powerGrowthMultiplierPerLevel: 0.06, technicalGrowthMultiplierPerLevel: 0.02 },
   },
   {
     slug:                    'physio_clinic',
@@ -74,6 +84,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
     maxLevel:                5,
     decayBase:               2.0,
     sortOrder:               3,
+    gameplayEffects: { injuryProbabilityDeltaPerLevel: 0.01, injuryRecoveryWeeksDeltaPerLevel: 0.25 },
   },
   {
     slug:                    'hydro_pool',
@@ -88,6 +99,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
     maxLevel:                5,
     decayBase:               2.0,
     sortOrder:               4,
+    gameplayEffects: { injuryRecoveryWeeksDeltaPerLevel: 0.5 },
   },
   {
     slug:                    'tactical_room',
@@ -102,6 +114,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
     maxLevel:                5,
     decayBase:               2.0,
     sortOrder:               5,
+    gameplayEffects: { cohesionBonusPerLevel: 0.04 },
   },
   {
     slug:                    'scouting_center',
@@ -116,6 +129,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
     maxLevel:                5,
     decayBase:               2.0,
     sortOrder:               6,
+    gameplayEffects: { scoutErrorRangeDeltaPerLevel: 5, scoutRevealWeeksDeltaPerLevel: 0.25 },
   },
 ];
 
@@ -129,14 +143,21 @@ export function weeklyDecayRate(level: number, decayBase: number): number {
 }
 
 /**
- * Repair cost in whole pounds to restore a facility to 100% condition.
- * Formula: ceil((100 - condition) / 100 × level × (baseCost / 100) × 0.5)
+ * Repair cost in PENCE to restore a facility to 100% condition.
+ * Formula: ceil(effectiveUpkeepPence × degradation% × 10)
+ * where effectiveUpkeepPence = weeklyUpkeepBase × 1.5^level
+ * (i.e. full repair costs ~10× the facility's weekly upkeep, pro-rated by how degraded it is)
+ *
+ * Returns pence — callers must divide by 100 before passing to addTransaction (whole pounds).
+ * Use formatCurrencyWhole() for display (it expects pence).
  */
 export function repairFacilityCost(
   level: number,
   condition: number,
-  baseCostPence: number,
-): number {
+  weeklyUpkeepBase: number,  // pence
+): number {  // pence
   if (level === 0 || condition >= 100) return 0;
-  return Math.ceil(((100 - condition) / 100) * level * (baseCostPence / 100) * 0.5);
+  const degradationPct = (100 - condition) / 100;
+  const effectiveUpkeepPence = Math.floor(weeklyUpkeepBase * Math.pow(1.5, level));
+  return Math.ceil(effectiveUpkeepPence * degradationPct * 10);
 }
