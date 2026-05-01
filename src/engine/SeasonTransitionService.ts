@@ -347,12 +347,12 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
   });
 
   const responseLeagues: SeasonUpdateLeague[] = response.leagues ?? [];
-
-  if (responseLeagues.length > 0) {
-    await applySeasonResponse(responseLeagues, currentLeague, nextSeason);
-    const ampSeasonLeague = responseLeagues.find((l) => l.clubs.some((c) => c.isAmp));
-    distributeSeasonFinances(ampSeasonLeague, currentLeague, nextSeason, snapshot.finalPosition, snapshot.weekNumber);
+  if (responseLeagues.length === 0) {
+    throw new Error('[SeasonTransitionService] performSeasonTransition: server returned empty leagues array');
   }
 
+  await applySeasonResponse(responseLeagues, currentLeague, nextSeason);
+  const ampSeasonLeague = responseLeagues.find((l) => l.clubs.some((c) => c.isAmp));
+  distributeSeasonFinances(ampSeasonLeague, currentLeague, nextSeason, snapshot.finalPosition, snapshot.weekNumber);
   recordSeasonHistory(snapshot, snapshot.displayStandings, ampClubId);
 }

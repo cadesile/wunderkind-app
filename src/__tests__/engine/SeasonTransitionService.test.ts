@@ -483,6 +483,15 @@ describe('recordSeasonHistory', () => {
     expect(record.standings[2].relegated).toBe(true);
     expect(record.standings[0].relegated).toBe(false);
   });
+
+  it('maps gf/ga/gd fields to goalsFor/goalsAgainst/goalDifference correctly', () => {
+    recordSeasonHistory(baseSnapshot, mockStandings, 'amp1');
+    const record = addSeasonRecordMock.mock.calls[0][0];
+    const ampEntry = record.standings.find((s: { clubId: string }) => s.clubId === 'amp1')!;
+    expect(ampEntry.goalsFor).toBe(15);      // mockStandings[0].gf = 15
+    expect(ampEntry.goalsAgainst).toBe(5);   // mockStandings[0].ga = 5
+    expect(ampEntry.goalDifference).toBe(10); // mockStandings[0].gd = 10
+  });
 });
 
 // --- performSeasonTransition ---
@@ -525,8 +534,19 @@ describe('performSeasonTransition', () => {
     expect(addSeasonRecordMock).toHaveBeenCalledTimes(1);
   });
 
+  it('calls addTransaction for financial distributions', async () => {
+    await performSeasonTransition(baseSnapshot);
+    const addTransactionMock = jest.requireMock('@/stores/financeStore').useFinanceStore.getState().addTransaction as jest.Mock;
+    expect(addTransactionMock).toHaveBeenCalled();
+  });
+
   it('propagates API errors to the caller', async () => {
     concludeSeasonMock.mockRejectedValue(new Error('Network error'));
     await expect(performSeasonTransition(baseSnapshot)).rejects.toThrow('Network error');
+  });
+
+  it('throws when server returns empty leagues array', async () => {
+    concludeSeasonMock.mockResolvedValue({ seasonRecordId: 'r1', newLeague: null, leagues: [] });
+    await expect(performSeasonTransition(baseSnapshot)).rejects.toThrow('empty leagues array');
   });
 });
