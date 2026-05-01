@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import { useClubStore } from '@/stores/clubStore';
 import { useLeagueHistoryStore } from '@/stores/leagueHistoryStore';
 import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
@@ -9,13 +8,12 @@ import type { LeagueSeasonRecord, LeagueStandingEntry } from '@/types/leagueHist
 
 export function SeasonHistory() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const ampClubId = useClubStore((s) => s.club.id);
   const history   = useLeagueHistoryStore((s) => s.history);
 
   // Flatten all tier records and sort newest season first
   const allRecords: LeagueSeasonRecord[] = Object.values(history)
     .flat()
-    .sort((a, b) => b.season - a.season || b.tier - a.tier);
+    .sort((a, b) => b.season - a.season || b.tier - a.tier); // lower tier number = higher prestige → show first within same season
 
   if (allRecords.length === 0) {
     return (
@@ -31,7 +29,7 @@ export function SeasonHistory() {
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
       {allRecords.map((record) => {
-        const recordId    = `${record.tier}-${record.season}`;
+        const recordId    = `${record.tier}-${record.season}-${record.weekCompleted}`;
         const isExpanded  = expandedId === recordId;
         const ampEntry    = record.standings.find((s) => s.isAmp);
         const ampPos      = ampEntry?.position ?? 0;
@@ -119,7 +117,7 @@ export function SeasonHistory() {
                   .slice()
                   .sort((a, b) => a.position - b.position)
                   .map((entry: LeagueStandingEntry, i: number, arr: LeagueStandingEntry[]) => {
-                    const isAmp = entry.clubId === ampClubId;
+                    const isAmp = entry.isAmp;
                     return (
                       <View
                         key={entry.clubId}
