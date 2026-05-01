@@ -329,3 +329,204 @@ describe('applySeasonResponse', () => {
     expect(mockAddMessage.mock.calls[0][0].body).toContain('relegated');
   });
 });
+
+// ─── Task 4 mocks ─────────────────────────────────────────────────────────────
+import {
+  distributeSeasonFinances,
+  recordSeasonHistory,
+  performSeasonTransition,
+} from '@/engine/SeasonTransitionService';
+import type { SeasonTransitionSnapshot, SeasonStanding } from '@/engine/SeasonTransitionService';
+
+// These are lazily resolved via jest.requireMock — hoisting-safe
+const mockAddTransaction = jest.fn();
+const mockAddSeasonRecord = jest.fn();
+const mockConcludeSeason = jest.fn();
+
+jest.mock('@/stores/financeStore', () => {
+  const _addTransaction = jest.fn();
+  const _state = { addTransaction: _addTransaction };
+  return { useFinanceStore: { getState: () => _state } };
+});
+jest.mock('@/stores/leagueHistoryStore', () => {
+  const _addSeasonRecord = jest.fn();
+  const _state = { addSeasonRecord: _addSeasonRecord };
+  return { useLeagueHistoryStore: { getState: () => _state } };
+});
+jest.mock('@/api/endpoints/season', () => ({
+  concludeSeason: jest.fn(),
+}));
+
+const league8: LeagueSnapshot = {
+  id: 'L8', tier: 8, name: 'League 8', country: 'BR', season: 1,
+  promotionSpots: 1, reputationTier: 'local', reputationCap: 14,
+  tvDeal: 500000, sponsorPot: 18329782, prizeMoney: 500000,
+  leaguePositionPot: 500000, leaguePositionDecreasePercent: 8, clubs: [],
+};
+
+const mockStandings: SeasonStanding[] = [
+  { id: 'amp1', name: 'My Club', primaryColor: '#0f0', pts: 20, gd: 10, gf: 15, ga: 5, played: 10, wins: 6, draws: 2, losses: 2 },
+  { id: 'c12', name: 'Rival', primaryColor: '#f00', pts: 15, gd: 3, gf: 10, ga: 7, played: 10, wins: 4, draws: 3, losses: 3 },
+  { id: 'c13', name: 'Last FC', primaryColor: '#00f', pts: 5, gd: -13, gf: 4, ga: 17, played: 10, wins: 1, draws: 2, losses: 7 },
+];
+
+const baseSnapshot: SeasonTransitionSnapshot = {
+  currentLeague:    league8,
+  currentSeason:    1,
+  finalPosition:    1,
+  promoted:         true,
+  relegated:        false,
+  weekNumber:       38,
+  gamesPlayed:      10,
+  wins:             6,
+  draws:            2,
+  losses:           2,
+  goalsFor:         15,
+  goalsAgainst:     5,
+  points:           20,
+  displayStandings: mockStandings,
+};
+
+// --- distributeSeasonFinances ---
+
+describe('distributeSeasonFinances', () => {
+  let addTransactionMock: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    addTransactionMock = jest.requireMock('@/stores/financeStore').useFinanceStore.getState().addTransaction as jest.Mock;
+  });
+
+  it('credits TV deal for next season', () => {
+    distributeSeasonFinances(undefined, league8, 2, 1, 38);
+    const tvCall = addTransactionMock.mock.calls.find((c) => c[0].category === 'tv_deal');
+    expect(tvCall).toBeDefined();
+    expect(tvCall![0].description).toContain('Season 2');
+    expect(tvCall![0].amount).toBe(5000); // 500000 pence = £5000
+  });
+
+  it('credits sponsor pot for next season', () => {
+    distributeSeasonFinances(undefined, league8, 2, 1, 38);
+    const sponsorCall = addTransactionMock.mock.calls.find((c) => c[0].category === 'league_sponsor');
+    expect(sponsorCall).toBeDefined();
+  });
+
+  it('credits prize money with correct season label', () => {
+    distributeSeasonFinances(undefined, league8, 2, 1, 38);
+    const prizeCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('prize money'));
+    expect(prizeCall![0].description).toContain('Season 1');
+  });
+
+  it('calculates position prize correctly for Pos 1 (no decrease)', () => {
+    // pos 1: multiplier = 1 - 0.08/100 * 0 = 1.0 → posPrize = 500000 pence = £5000
+    distributeSeasonFinances(undefined, league8, 2, 1, 38);
+    const posCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('position prize'));
+    expect(posCall![0].amount).toBe(5000);
+  });
+
+  it('reduces position prize for lower positions', () => {
+    // pos 2: multiplier = 1 - (8/100)*(2-1) = 0.92 → posPrize = Math.round(500000*0.92) = 460000 pence = £4600
+    distributeSeasonFinances(undefined, league8, 2, 2, 38);
+    const posCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('position prize'));
+    expect(posCall![0].amount).toBe(4600);
+  });
+
+  it('uses ampSeasonLeague financials when provided', () => {
+    const newLeague: SeasonUpdateLeague = {
+      ...twoLeagueResponse[0],
+      tvDeal: 10000000,
+    };
+    distributeSeasonFinances(newLeague, league8, 2, 1, 38);
+    const tvCall = addTransactionMock.mock.calls.find((c) => c[0].category === 'tv_deal');
+    expect(tvCall![0].amount).toBe(100000); // 10000000 pence = £100000
+  });
+});
+
+// --- recordSeasonHistory ---
+
+describe('recordSeasonHistory', () => {
+  let addSeasonRecordMock: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    addSeasonRecordMock = jest.requireMock('@/stores/leagueHistoryStore').useLeagueHistoryStore.getState().addSeasonRecord as jest.Mock;
+  });
+
+  it('calls addSeasonRecord with correct tier and season', () => {
+    recordSeasonHistory(baseSnapshot, mockStandings, 'amp1');
+    expect(addSeasonRecordMock).toHaveBeenCalledTimes(1);
+    const record = addSeasonRecordMock.mock.calls[0][0];
+    expect(record.tier).toBe(8);
+    expect(record.season).toBe(1);
+    expect(record.leagueName).toBe('League 8');
+    expect(record.weekCompleted).toBe(38);
+  });
+
+  it('records all clubs in standings with correct positions', () => {
+    recordSeasonHistory(baseSnapshot, mockStandings, 'amp1');
+    const record = addSeasonRecordMock.mock.calls[0][0];
+    expect(record.standings).toHaveLength(3);
+    expect(record.standings[0].position).toBe(1);
+    expect(record.standings[2].position).toBe(3);
+  });
+
+  it('marks AMP club entry with isAmp=true', () => {
+    recordSeasonHistory(baseSnapshot, mockStandings, 'amp1');
+    const record = addSeasonRecordMock.mock.calls[0][0];
+    expect(record.standings.find((s: { clubId: string }) => s.clubId === 'amp1')?.isAmp).toBe(true);
+    expect(record.standings.find((s: { clubId: string }) => s.clubId === 'c12')?.isAmp).toBe(false);
+  });
+
+  it('sets relegated=true only for last-place club', () => {
+    recordSeasonHistory(baseSnapshot, mockStandings, 'amp1');
+    const record = addSeasonRecordMock.mock.calls[0][0];
+    expect(record.standings[2].relegated).toBe(true);
+    expect(record.standings[0].relegated).toBe(false);
+  });
+});
+
+// --- performSeasonTransition ---
+
+describe('performSeasonTransition', () => {
+  let concludeSeasonMock: jest.Mock;
+  let addSeasonRecordMock: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    concludeSeasonMock = jest.requireMock('@/api/endpoints/season').concludeSeason as jest.Mock;
+    concludeSeasonMock.mockResolvedValue({ seasonRecordId: 'rec1', newLeague: null, leagues: twoLeagueResponse });
+    addSeasonRecordMock = jest.requireMock('@/stores/leagueHistoryStore').useLeagueHistoryStore.getState().addSeasonRecord as jest.Mock;
+    const { useClubStore } = jest.requireMock('@/stores/clubStore');
+    useClubStore.getState = () => ({ club: { id: 'amp1', weekNumber: 38 } });
+    const { useWorldStore } = jest.requireMock('@/stores/worldStore');
+    useWorldStore.getState = () => ({
+      clubs: {},
+      leagues: mockWorldLeagues,
+      applySeasonUpdate: mockApplySeasonUpdate,
+    });
+  });
+
+  it('calls concludeSeason with the correct payload shape', async () => {
+    await performSeasonTransition(baseSnapshot);
+    expect(concludeSeasonMock).toHaveBeenCalledTimes(1);
+    const payload = concludeSeasonMock.mock.calls[0][0];
+    expect(payload.finalPosition).toBe(1);
+    expect(payload.promoted).toBe(true);
+    expect(payload.pyramidSnapshot.leagues).toBeDefined();
+  });
+
+  it('calls applySeasonUpdate when response has leagues', async () => {
+    await performSeasonTransition(baseSnapshot);
+    expect(mockApplySeasonUpdate).toHaveBeenCalledWith(twoLeagueResponse);
+  });
+
+  it('calls addSeasonRecord (history) after successful API call', async () => {
+    await performSeasonTransition(baseSnapshot);
+    expect(addSeasonRecordMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates API errors to the caller', async () => {
+    concludeSeasonMock.mockRejectedValue(new Error('Network error'));
+    await expect(performSeasonTransition(baseSnapshot)).rejects.toThrow('Network error');
+  });
+});

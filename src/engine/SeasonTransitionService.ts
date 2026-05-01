@@ -240,3 +240,119 @@ export function buildLeagueSnapshot(
     clubs,
   };
 }
+
+/**
+ * Credit leagueStore-derived financial distributions to financeStore.
+ * Uses ampSeasonLeague financials when available; falls back to currentLeague.
+ * All API values are in pence — converted to pounds via penceToPounds.
+ */
+export function distributeSeasonFinances(
+  ampSeasonLeague: SeasonUpdateLeague | undefined,
+  currentLeague: LeagueSnapshot,
+  nextSeason: number,
+  finalPosition: number,
+  weekNumber: number,
+): void {
+  const { addTransaction }   = useFinanceStore.getState();
+  const currentSeason        = nextSeason - 1;
+  const tvDeal               = ampSeasonLeague?.tvDeal                        ?? currentLeague.tvDeal                        ?? 0;
+  const sponsorPot           = ampSeasonLeague?.sponsorPot                    ?? currentLeague.sponsorPot                    ?? 0;
+  const prizeMoney           = ampSeasonLeague?.prizeMoney                    ?? currentLeague.prizeMoney                    ?? 0;
+  const leaguePositionPot    = ampSeasonLeague?.leaguePositionPot             ?? currentLeague.leaguePositionPot             ?? 0;
+  const leaguePositionDecPct = ampSeasonLeague?.leaguePositionDecreasePercent ?? currentLeague.leaguePositionDecreasePercent ?? 0;
+
+  if (tvDeal > 0) {
+    addTransaction({ amount: penceToPounds(tvDeal), category: 'tv_deal', description: `Season ${nextSeason} TV deal`, weekNumber });
+  }
+  if (sponsorPot > 0) {
+    addTransaction({ amount: penceToPounds(sponsorPot), category: 'league_sponsor', description: `Season ${nextSeason} league sponsor`, weekNumber });
+  }
+  if (prizeMoney > 0) {
+    addTransaction({ amount: penceToPounds(prizeMoney), category: 'earnings', description: `Season ${currentSeason} prize money (Pos ${finalPosition})`, weekNumber });
+  }
+  const posMultiplier = Math.max(0, 1 - (leaguePositionDecPct / 100) * (finalPosition - 1));
+  const posPrize      = Math.round(leaguePositionPot * posMultiplier);
+  if (posPrize > 0) {
+    addTransaction({ amount: penceToPounds(posPrize), category: 'earnings', description: `Season ${currentSeason} position prize (Pos ${finalPosition})`, weekNumber });
+  }
+}
+
+/**
+ * Write the completed season's final standings to leagueHistoryStore.
+ * Uses the displayStandings captured before store mutations — the authoritative
+ * record of how the season actually ended.
+ */
+export function recordSeasonHistory(
+  snapshot: SeasonTransitionSnapshot,
+  displayStandings: SeasonStanding[],
+  ampClubId: string,
+): void {
+  const { currentLeague, currentSeason, weekNumber } = snapshot;
+  const totalClubs = displayStandings.length;
+  useLeagueHistoryStore.getState().addSeasonRecord({
+    tier:          currentLeague.tier,
+    leagueName:    currentLeague.name,
+    season:        currentSeason,
+    weekCompleted: weekNumber,
+    standings:     displayStandings.map((s, i) => {
+      const pos = i + 1;
+      return {
+        clubId:         s.id,
+        clubName:       s.name,
+        isAmp:          s.id === ampClubId,
+        position:       pos,
+        played:         s.played,
+        wins:           s.wins,
+        draws:          s.draws,
+        losses:         s.losses,
+        goalsFor:       s.gf,
+        goalsAgainst:   s.ga,
+        goalDifference: s.gd,
+        points:         s.pts,
+        promoted:       currentLeague.promotionSpots != null && pos <= currentLeague.promotionSpots,
+        relegated:      pos === totalClubs,
+      };
+    }),
+  });
+}
+
+// ─── Orchestrator ─────────────────────────────────────────────────────────────
+
+/**
+ * The single entry point called by SeasonEndOverlay.
+ * Builds the pyramid payload, calls the conclude-season API, then applies
+ * the response to all stores in the correct order.
+ * Throws on API failure — there is no offline fallback.
+ */
+export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot): Promise<void> {
+  const { currentLeague, currentSeason } = snapshot;
+  const nextSeason   = currentSeason + 1;
+  const ampClubId    = useClubStore.getState().club.id;
+  const worldLeagues = useWorldStore.getState().leagues;
+
+  const pyramidLeagues = buildPyramidPayload(currentLeague.id, worldLeagues, currentSeason);
+
+  const response = await concludeSeason({
+    finalPosition: snapshot.finalPosition,
+    gamesPlayed:   snapshot.gamesPlayed,
+    wins:          snapshot.wins,
+    draws:         snapshot.draws,
+    losses:        snapshot.losses,
+    goalsFor:      snapshot.goalsFor,
+    goalsAgainst:  snapshot.goalsAgainst,
+    points:        snapshot.points,
+    promoted:      snapshot.promoted,
+    relegated:     snapshot.relegated,
+    pyramidSnapshot: { leagues: pyramidLeagues },
+  });
+
+  const responseLeagues: SeasonUpdateLeague[] = response.leagues ?? [];
+
+  if (responseLeagues.length > 0) {
+    await applySeasonResponse(responseLeagues, currentLeague, nextSeason);
+    const ampSeasonLeague = responseLeagues.find((l) => l.clubs.some((c) => c.isAmp));
+    distributeSeasonFinances(ampSeasonLeague, currentLeague, nextSeason, snapshot.finalPosition, snapshot.weekNumber);
+  }
+
+  recordSeasonHistory(snapshot, snapshot.displayStandings, ampClubId);
+}
