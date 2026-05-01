@@ -88,7 +88,7 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
   const posLabel      = dispPromoted ? 'PROMOTED!' : dispRelegated ? 'RELEGATED' : `#${dispAmpPos}`;
 
   async function handleTransition() {
-    if (isLoading) return;
+    // processedRef (in useEffect) is the double-invocation guard.
     setIsLoading(true);
     setHasError(false);
 
@@ -103,31 +103,30 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
     setDisplayPromotionSpots(currentLeague?.promotionSpots ?? null);
     setDisplayLeagueName(currentLeague?.name ?? '');
 
-    if (!currentLeague || !capturedAmpEntry) {
-      setIsLoading(false);
-      return;
-    }
-
-    const snapshot: SeasonTransitionSnapshot = {
-      currentLeague,
-      currentSeason,
-      finalPosition:    capturedAmpPos,
-      promoted:         currentLeague.promotionSpots != null
-                          && capturedAmpPos > 0
-                          && capturedAmpPos <= currentLeague.promotionSpots,
-      relegated:        capturedStandings.length > 0 && capturedAmpPos === capturedStandings.length,
-      weekNumber:       useClubStore.getState().club.weekNumber ?? 1,
-      gamesPlayed:      capturedAmpEntry.played,
-      wins:             capturedAmpEntry.wins,
-      draws:            capturedAmpEntry.draws,
-      losses:           capturedAmpEntry.losses,
-      goalsFor:         capturedAmpEntry.gf,
-      goalsAgainst:     capturedAmpEntry.ga,
-      points:           capturedAmpEntry.pts,
-      displayStandings: capturedStandings,
-    };
-
     try {
+      if (!currentLeague || !capturedAmpEntry) return;
+
+      const snapshot: SeasonTransitionSnapshot = {
+        currentLeague,
+        currentSeason,
+        finalPosition:    capturedAmpPos,
+        promoted:         currentLeague.promotionSpots != null
+                            && capturedAmpPos > 0
+                            && capturedAmpPos <= currentLeague.promotionSpots,
+        relegated:        capturedStandings.length > 0 && capturedAmpPos === capturedStandings.length,
+        weekNumber:       useClubStore.getState().club.weekNumber ?? 1,
+        gamesPlayed:      capturedAmpEntry.played,
+        wins:             capturedAmpEntry.wins,
+        draws:            capturedAmpEntry.draws,
+        losses:           capturedAmpEntry.losses,
+        goalsFor:         capturedAmpEntry.gf,
+        goalsAgainst:     capturedAmpEntry.ga,
+        points:           capturedAmpEntry.pts,
+        displayStandings: capturedStandings,
+      };
+
+      // Season transition requires a server response — no offline fallback by design.
+      // On failure, the user can retry via the error footer's TRY AGAIN button.
       await performSeasonTransition(snapshot);
     } catch (err) {
       console.warn('[SeasonEndOverlay] conclude-season failed:', err);
@@ -237,6 +236,16 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
                 <BodyText size={12} dim style={{ textAlign: 'center' }}>
                   Check your connection and try again.
                 </BodyText>
+                <Button
+                  label="TRY AGAIN"
+                  variant="yellow"
+                  fullWidth
+                  onPress={() => {
+                    processedRef.current = false;
+                    setHasError(false);
+                    void handleTransition();
+                  }}
+                />
               </View>
             ) : (
               <Button label="CONTINUE TO NEXT SEASON" variant="yellow" fullWidth onPress={onComplete} />
