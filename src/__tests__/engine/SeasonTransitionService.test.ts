@@ -4,7 +4,6 @@ import {
   buildLeagueSnapshot,
 } from '@/engine/SeasonTransitionService';
 import type { WorldLeague, SeasonUpdateLeague } from '@/types/world';
-import type { LeagueSnapshot } from '@/types/api';
 
 const mockFixtures = [
   // c1 beat c2 3-0
@@ -29,6 +28,7 @@ jest.mock('@/stores/clubStore', () => ({
   useClubStore: { getState: () => ({ club: { id: 'amp-not-in-this-league' } }) },
 }));
 
+// Used by applySeasonResponse tests (Task 3)
 const mockApplySeasonUpdate = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/stores/worldStore', () => ({
@@ -101,6 +101,11 @@ describe('buildPyramidPayload', () => {
   beforeEach(() => {
     const { useClubStore } = jest.requireMock('@/stores/clubStore');
     useClubStore.getState = () => ({ club: { id: 'amp1' } });
+  });
+
+  afterEach(() => {
+    const { useClubStore } = jest.requireMock('@/stores/clubStore');
+    useClubStore.getState = () => ({ club: { id: 'amp-not-in-this-league' } });
   });
 
   it('returns one PyramidLeague per world league', () => {

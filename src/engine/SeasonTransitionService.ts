@@ -57,7 +57,8 @@ export interface SeasonStanding {
 
 // ─── Internal constants ───────────────────────────────────────────────────────
 
-const VALID_REP_TIERS = ['local', 'regional', 'national', 'elite'] as const;
+type RepTier = Exclude<LeagueSnapshot['reputationTier'], null>;
+const VALID_REP_TIERS: readonly RepTier[] = ['local', 'regional', 'national', 'elite'];
 
 const LEAGUE_TIER_REP_CAP: Record<string, number> = {
   local: 14, regional: 39, national: 74, elite: 100,
@@ -121,6 +122,8 @@ export function buildPyramidPayload(
 ): PyramidLeague[] {
   const ampClubId = useClubStore.getState().club.id;
   return worldLeagues.map((wLeague) => {
+    // worldLeague.clubIds contains only NPC clubs — AMP is never stored there.
+    // We inject ampClubId here so the API receives the full league membership.
     const clubIds = wLeague.id === currentLeagueId
       ? [...wLeague.clubIds, ampClubId]
       : wLeague.clubIds;
@@ -141,9 +144,11 @@ export function buildLeagueSnapshot(
   seasonLeague: SeasonUpdateLeague,
   season: number,
 ): LeagueSnapshot {
-  const repTier = (VALID_REP_TIERS as readonly string[]).includes(seasonLeague.reputationTier ?? '')
-    ? (seasonLeague.reputationTier as LeagueSnapshot['reputationTier'])
-    : null;
+  const raw = seasonLeague.reputationTier;
+  const repTier: LeagueSnapshot['reputationTier'] =
+    raw !== null && (VALID_REP_TIERS as readonly string[]).includes(raw)
+      ? (raw as RepTier)
+      : null;
 
   const worldClubs = useWorldStore.getState().clubs;
   const clubs: ClubSnapshot[] = seasonLeague.clubs
