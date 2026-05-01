@@ -35,7 +35,7 @@ export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
 
 export interface FinancialTransaction {
   id: string;
-  /** Amount in pence. Negative = expense, positive = income. */
+  /** Amount in whole pounds. Negative = expense, positive = income. */
   amount: number;
   category: FinancialCategory;
   description: string;

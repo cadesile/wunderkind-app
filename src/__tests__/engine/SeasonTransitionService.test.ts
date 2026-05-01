@@ -338,11 +338,6 @@ import {
 } from '@/engine/SeasonTransitionService';
 import type { SeasonTransitionSnapshot, SeasonStanding } from '@/engine/SeasonTransitionService';
 
-// These are lazily resolved via jest.requireMock — hoisting-safe
-const mockAddTransaction = jest.fn();
-const mockAddSeasonRecord = jest.fn();
-const mockConcludeSeason = jest.fn();
-
 jest.mock('@/stores/financeStore', () => {
   const _addTransaction = jest.fn();
   const _state = { addTransaction: _addTransaction };
@@ -418,7 +413,7 @@ describe('distributeSeasonFinances', () => {
   });
 
   it('calculates position prize correctly for Pos 1 (no decrease)', () => {
-    // pos 1: multiplier = 1 - 0.08/100 * 0 = 1.0 → posPrize = 500000 pence = £5000
+    // pos 1: multiplier = 1 - (8/100)*(1-1) = 1 - 0.08*0 = 1.0 → posPrize = 500000 pence = £5000
     distributeSeasonFinances(undefined, league8, 2, 1, 38);
     const posCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('position prize'));
     expect(posCall![0].amount).toBe(5000);

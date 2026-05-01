@@ -310,7 +310,7 @@ export function recordSeasonHistory(
         goalDifference: s.gd,
         points:         s.pts,
         promoted:       currentLeague.promotionSpots != null && pos <= currentLeague.promotionSpots,
-        relegated:      pos === totalClubs,
+        relegated:      totalClubs > 1 && pos === totalClubs,
       };
     }),
   });
@@ -351,8 +351,8 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
     throw new Error('[SeasonTransitionService] performSeasonTransition: server returned empty leagues array');
   }
 
-  await applySeasonResponse(responseLeagues, currentLeague, nextSeason);
   const ampSeasonLeague = responseLeagues.find((l) => l.clubs.some((c) => c.isAmp));
+  await applySeasonResponse(responseLeagues, currentLeague, nextSeason);
   distributeSeasonFinances(ampSeasonLeague, currentLeague, nextSeason, snapshot.finalPosition, snapshot.weekNumber);
   recordSeasonHistory(snapshot, snapshot.displayStandings, ampClubId);
 }
