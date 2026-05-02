@@ -15,6 +15,7 @@ import { formatCurrencyCompact } from '@/utils/currency';
 import { LeagueTable } from '@/components/competitions/LeagueTable';
 import { FixtureList } from '@/components/competitions/FixtureList';
 import { LeagueBrowser } from '@/components/competitions/LeagueBrowser';
+import { SeasonHistory } from '@/components/competitions/SeasonHistory';
 import type { LeaderboardEntry } from '@/types/api';
 
 // ─── Leaderboard helpers (ported from world.tsx) ────────────────────────────
@@ -50,7 +51,7 @@ const RANK_COLORS: Record<number, string> = {
 
 // ─── Tab definition ─────────────────────────────────────────────────────────
 
-const COMP_TABS = ['LEAGUE', 'FIXTURES', 'BROWSE', 'RANKINGS'] as const;
+const COMP_TABS = ['LEAGUE', 'FIXTURES', 'BROWSE', 'RANKINGS', 'HISTORY'] as const;
 type CompTab = typeof COMP_TABS[number];
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ export default function CompetitionsScreen() {
       )}
 
       {activeTab === 'RANKINGS' && <RankingsPane />}
+      {activeTab === 'HISTORY' && <SeasonHistory />}
     </View>
   );
 }
