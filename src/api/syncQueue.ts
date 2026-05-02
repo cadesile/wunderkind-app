@@ -20,6 +20,7 @@ import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { useWorldStore } from '@/stores/worldStore';
 import { SyncRequest } from '@/types/api';
 
 const QUEUE_STORAGE_KEY = 'wk-sync-queue';
@@ -132,13 +133,34 @@ class SyncQueue {
           useLeagueStore.getState().clear();
           useFixtureStore.getState().clearSeason();
         } else {
-          useLeagueStore.getState().setFromSync(res.league);
-          const { fixtures } = useFixtureStore.getState();
-          const hasFixtures = fixtures.some(
-            (f) => f.leagueId === res.league!.id && f.season === res.league!.season,
-          );
-          if (!hasFixtures) {
-            useFixtureStore.getState().generateFixtures(res.league, res.club.id);
+          const currentLeague = useLeagueStore.getState().league;
+          // Skip entirely if the sync response is from a previous season —
+          // performSeasonTransition may have already advanced leagueStore.
+          if (!currentLeague || res.league.season >= currentLeague.season) {
+            // Use worldStore as the authoritative source for NPC club membership.
+            // The sync endpoint can return pre-transition club lists when it resolves
+            // after applySeasonUpdate has already rewritten league memberships. Rebuilding
+            // from worldStore.leagues ensures promoted/relegated clubs are reflected correctly.
+            const worldState = useWorldStore.getState();
+            const worldLeague = worldState.leagues.find((l) => l.id === res.league!.id);
+            const hasWorldClubs = Object.keys(worldState.clubs).length > 0;
+            const clubs = (worldLeague && hasWorldClubs)
+              ? worldLeague.clubIds.flatMap((id) => {
+                  const c = worldState.clubs[id];
+                  if (!c) return [];
+                  return [{ id: c.id, name: c.name, reputation: c.reputation, tier: c.tier,
+                            primaryColor: c.primaryColor, secondaryColor: c.secondaryColor,
+                            stadiumName: c.stadiumName ?? null, facilities: c.facilities }];
+                })
+              : res.league.clubs;
+            useLeagueStore.getState().setFromSync({ ...res.league, clubs });
+            const { fixtures } = useFixtureStore.getState();
+            const hasFixtures = fixtures.some(
+              (f) => f.leagueId === res.league!.id && f.season === res.league!.season,
+            );
+            if (!hasFixtures) {
+              useFixtureStore.getState().generateFixtures(res.league, res.club.id);
+            }
           }
         }
         this.queue.shift();

@@ -1,4 +1,5 @@
 import { calculateTraitShifts } from './personality';
+import { shouldRetire } from './retirementEngine';
 import { calculateWeeklyFinances } from './finance';
 import {
   calculateWeeklyXP,
@@ -10,7 +11,7 @@ import { simulationService } from './SimulationService';
 import { computeFacilityEffects } from './facilityEffects';
 
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
-import { processScoutingTasks, processMissions, refreshMarketOffers } from './ScoutingService';
+import { processScoutingTasks, processMissions, refreshMarketOffers, assignScoutToPlayer } from './ScoutingService';
 import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { processMoraleAndRelationships } from './MoraleEngine';
 import { processSocialGraph } from './SocialGraphEngine';
@@ -20,6 +21,9 @@ import { getRelationshipValue, updatePlayerRelationship } from './RelationshipSe
 import { FanEngine } from './FanEngine';
 import { calculateTransferValue, generateNPCBids } from './MarketEngine';
 import { useWorldStore } from '@/stores/worldStore';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
+import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import { uuidv7 } from '@/utils/uuidv7';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
@@ -30,6 +34,8 @@ import { useFanStore } from '@/stores/fanStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLoanStore } from '@/stores/loanStore';
 import { useMarketStore } from '@/stores/marketStore';
+import { useScoutStore } from '@/stores/scoutStore';
+import { ManagerBrain } from './ManagerBrain';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useEventChainStore } from '@/stores/eventChainStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
@@ -409,24 +415,90 @@ export function processWeeklyTick(): WeeklyTick {
       playerFeeMultiplier,
     );
 
+    const dof = coaches.find((c) => c.role === 'director_of_football');
+    const dofAutoSell = dof?.dofAutoSellPlayers ?? false;
+    const manager = coaches.find((c) => c.role === 'manager');
+
     for (const bid of npcBids) {
-      useInboxStore.getState().addMessage({
-        id:               uuidv7(),
-        type:             'transfer_offer',
-        week:             weekNumber,
-        subject:          `Transfer Bid: ${bid.biddingClubName}`,
-        body:             `${bid.biddingClubName} have submitted a bid for one of your players.`,
-        isRead:           false,
-        requiresResponse: true,
-        entityId:         bid.playerId,
-        metadata: {
-          fee:             bid.fee,
-          biddingClubId:   bid.biddingClubId,
-          biddingClubName: bid.biddingClubName,
-          biddingClubTier: bid.biddingClubTier,
-          expiresWeek:     bid.expiresWeek,
-        },
-      });
+      if (dofAutoSell) {
+        // DOF intercepts — auto-decide based on manager opinion
+        const biddingPlayer = playersCurrentTick.find((p) => p.id === bid.playerId);
+        if (!biddingPlayer) continue;
+
+        const opinion = manager
+          ? ManagerBrain.assessTransferOffer(
+              manager,
+              biddingPlayer,
+              {
+                id:              uuidv7(),
+                playerId:        bid.playerId,
+                biddingClubId:   bid.biddingClubId,
+                biddingClubName: bid.biddingClubName,
+                biddingClubTier: bid.biddingClubTier,
+                fee:             bid.fee,
+                weekGenerated:   weekNumber,
+                expiresWeek:     bid.expiresWeek,
+              },
+              club.balance ?? 0,
+              playersCurrentTick.filter((p) => p.isActive !== false),
+              club.formation ?? '4-4-2',
+            )
+          : null;
+
+        if (opinion?.recommendation === 'sell') {
+          const feeWholePounds = Math.round(bid.fee / 100);
+          addEarnings(bid.fee);
+          useFinanceStore.getState().addTransaction({
+            amount:      feeWholePounds,
+            category:    'transfer_fee',
+            description: `Transfer: ${biddingPlayer.name} → ${bid.biddingClubName}`,
+            weekNumber,
+          });
+          useSquadStore.getState().removePlayer(bid.playerId);
+          useInboxStore.getState().purgeForPlayer(bid.playerId);
+          useInboxStore.getState().addMessage({
+            id:      `dof-sell-${bid.playerId}-wk${weekNumber}`,
+            type:    'system',
+            week:    weekNumber,
+            subject: `${biddingPlayer.name} sold`,
+            body:    `Your DOF accepted a £${feeWholePounds.toLocaleString()} bid from ${bid.biddingClubName} for ${biddingPlayer.name} (${biddingPlayer.position}, Age ${biddingPlayer.age}). Manager's view: ${opinion.reasoning}`,
+            isRead:  false,
+            metadata: {
+              systemType:            'dof_transfer',
+              playerName:            biddingPlayer.name,
+              playerPosition:        biddingPlayer.position,
+              playerAge:             biddingPlayer.age,
+              playerAppearance:      biddingPlayer.appearance ?? null,
+              playerMorale:          biddingPlayer.morale ?? 70,
+              overallRating:         biddingPlayer.overallRating ?? 0,
+              fee:                   bid.fee,
+              biddingClubName:       bid.biddingClubName,
+              biddingClubTier:       bid.biddingClubTier,
+              managerRecommendation: 'sell',
+              managerReasoning:      opinion.reasoning,
+            },
+          });
+        }
+        // If 'keep', silently reject — offer expires without AMP involvement
+      } else {
+        useInboxStore.getState().addMessage({
+          id:               uuidv7(),
+          type:             'transfer_offer',
+          week:             weekNumber,
+          subject:          `Transfer Bid: ${bid.biddingClubName}`,
+          body:             `${bid.biddingClubName} have submitted a bid for one of your players.`,
+          isRead:           false,
+          requiresResponse: true,
+          entityId:         bid.playerId,
+          metadata: {
+            fee:             bid.fee,
+            biddingClubId:   bid.biddingClubId,
+            biddingClubName: bid.biddingClubName,
+            biddingClubTier: bid.biddingClubTier,
+            expiresWeek:     bid.expiresWeek,
+          },
+        });
+      }
     }
   }
 
@@ -695,7 +767,7 @@ export function processWeeklyTick(): WeeklyTick {
   // If a facility_manager is on staff and balance covers the cost, automatically
   // repair all degraded facilities (condition < 100) at end of the weekly tick.
   const facilityManager = coaches.find((c) => c.role === 'facility_manager');
-  if (facilityManager) {
+  if (facilityManager?.facilityManagerAutoRepair) {
     const { templates: repairTemplates, levels: repairLevels, conditions: repairConditions } = useFacilityStore.getState();
     const repairedFacilities: Array<{ name: string; cost: number }> = [];
 
@@ -897,6 +969,166 @@ export function processWeeklyTick(): WeeklyTick {
 
   // ── 13. Guardian tick ─────────────────────────────────────────────────────────
   processGuardianTick(weekNumber);
+
+  // ── 14. Director of Football automations ─────────────────────────────────────
+  {
+    const dof = coaches.find((c) => c.role === 'director_of_football');
+    if (dof) {
+      const activeManager = coaches.find((c) => c.role === 'manager');
+
+      // ── 14a. Auto-renew contracts ───────────────────────────────────────────
+      // Extend contracts for players within the 12-week warning window whose
+      // loyalty trait is ≥ 10 (willing to stay). One extension per player per season.
+      if (dof.dofAutoRenewContracts) {
+        const { extendContract } = useSquadStore.getState();
+
+        players.forEach((player) => {
+          if (player.enrollmentEndWeek === undefined) return;
+          const weeksLeft = player.enrollmentEndWeek - weekNumber;
+          if (weeksLeft <= 0 || weeksLeft > 12) return;
+          if ((player.personality?.loyalty ?? 0) < 10) return;
+
+          // Guard: skip if already renewed this season
+          const alreadyRenewed = useInboxStore.getState().messages.some(
+            (m) => m.id === `dof-renew-${player.id}-s${useLeagueStore.getState().league?.season ?? 0}`,
+          );
+          if (alreadyRenewed) return;
+
+          extendContract(player.id);
+          addMessage({
+            id:      `dof-renew-${player.id}-s${useLeagueStore.getState().league?.season ?? 0}`,
+            type:    'system',
+            week:    weekNumber,
+            subject: `${player.name} Contract Extended`,
+            body:    `${dof.name} has extended ${player.name}'s contract by one year on your behalf.`,
+            isRead:  false,
+            entityId: player.id,
+            metadata: { systemType: 'dof_contract_renewal' },
+          });
+        });
+      }
+
+      // ── 14b. Auto-assign scouts ─────────────────────────────────────────────
+      // Assign scouts with spare capacity to unscreened market players.
+      // Each scout gets filled up to scoutMaxAssignments; fires at most once per week.
+      if (dof.dofAutoAssignScouts) {
+        const { scouts } = useScoutStore.getState();
+        const { players: marketPlayers } = useMarketStore.getState();
+        const { scoutMaxAssignments } = config;
+
+        // Pool of market players that aren't yet revealed and have no scout assigned
+        const unassigned = marketPlayers.filter(
+          (mp) => mp.scoutingStatus !== 'revealed' && !mp.assignedScoutId,
+        );
+
+        let poolIdx = 0;
+        for (const scout of scouts) {
+          const workload = (scout.assignedPlayerIds ?? []).length;
+          const capacity = scoutMaxAssignments - workload;
+          for (let i = 0; i < capacity && poolIdx < unassigned.length; i++, poolIdx++) {
+            assignScoutToPlayer(scout.id, unassigned[poolIdx].id);
+          }
+        }
+      }
+
+      // ── 14c. Auto-sign players ──────────────────────────────────────────────
+      // When manager's assessment is positive, sign revealed market players.
+      if (dof.dofAutoSignPlayers && activeManager) {
+        const { players: marketPlayers, signPlayer } = useMarketStore.getState();
+        const currentSquad = useSquadStore.getState().players;
+        const { balance } = useClubStore.getState().club;
+
+        const revealed = marketPlayers.filter((mp) => mp.scoutingStatus === 'revealed');
+        for (const mp of revealed) {
+          const weeklyWage = mp.currentAbility * 100; // pence/wk — mirrors marketStore.signPlayer
+          const { recommendation, reasoning } = ManagerBrain.assessScoutedPlayer(
+            activeManager,
+            mp,
+            currentSquad,
+            balance ?? 0,
+            weeklyWage,
+          );
+          if (recommendation === 'sign') {
+            const playerAge = mp.dateOfBirth
+              ? Math.floor((Date.now() - new Date(mp.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+              : null;
+            signPlayer(mp.id);
+            addMessage({
+              id:      `dof-sign-${mp.id}-wk${weekNumber}`,
+              type:    'system',
+              week:    weekNumber,
+              subject: `${mp.firstName} ${mp.lastName} Signed`,
+              body:    `${dof.name} signed ${mp.firstName} ${mp.lastName} based on the manager's recommendation.`,
+              isRead:  false,
+              entityId: mp.id,
+              metadata: {
+                systemType:           'dof_signing',
+                playerName:           `${mp.firstName} ${mp.lastName}`,
+                playerPosition:       mp.position,
+                playerAge,
+                perceivedAbility:     mp.perceivedAbility ?? mp.currentAbility,
+                potential:            mp.potential ?? 0,
+                requiresTransferFee:  mp.requiresTransferFee ?? false,
+                transferFee:          mp.transferFee,
+                npcClubName:          mp.npcClubName,
+                npcClubTier:          mp.npcClubTier,
+                managerRecommendation: recommendation,
+                managerReasoning:     reasoning,
+              },
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // ── 15. Retirement consideration notice (last matchday of the season) ────────
+  // Sends one inbox message listing AMP players who may retire at season end.
+  // Deduplication is by message ID (retirement-notice-s<season>) so re-runs are safe.
+  {
+    const league = useLeagueStore.getState().league;
+    if (league) {
+      const alreadySent = useInboxStore.getState().messages.some(
+        (m) => m.id === `retirement-notice-s${league.season}`,
+      );
+      if (!alreadySent) {
+        const { fixtures, currentMatchday } = useFixtureStore.getState();
+        const leagueFixtures = fixtures.filter(
+          (f) => f.leagueId === league.id && f.season === league.season,
+        );
+        const maxRound = leagueFixtures.length > 0
+          ? Math.max(...leagueFixtures.map((f) => f.round))
+          : -1;
+
+        if (maxRound >= 0 && currentMatchday === maxRound) {
+          const { retirementMinAge, retirementMaxAge, retirementChance } = config;
+          const gameDate = getGameDate(weekNumber);
+          const retiringPlayers = players.filter((p) => {
+            if (!p.dateOfBirth) return false;
+            const age = computePlayerAge(p.dateOfBirth, gameDate);
+            return shouldRetire(age, retirementMinAge, retirementMaxAge, retirementChance);
+          });
+
+          if (retiringPlayers.length > 0) {
+            const names = retiringPlayers.map((p) => p.name).join(', ');
+            const plural = retiringPlayers.length > 1;
+            addMessage({
+              id:      `retirement-notice-s${league.season}`,
+              type:    'system',
+              week:    weekNumber,
+              subject: `Player${plural ? 's' : ''} Considering Retirement`,
+              body:    `${names} ${plural ? 'are' : 'is'} considering retiring at the end of this season and will leave the club when the season concludes.`,
+              isRead:  false,
+              metadata: {
+                systemType: 'retirement_notice',
+                playerIds:  retiringPlayers.map((p) => p.id),
+              },
+            });
+          }
+        }
+      }
+    }
+  }
 
   return {
     week: weekNumber,

@@ -3,6 +3,7 @@ import { useMarketStore } from '@/stores/marketStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
+import { useCoachStore } from '@/stores/coachStore';
 import { useProspectPoolStore } from '@/stores/prospectPoolStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useWorldStore } from '@/stores/worldStore';
@@ -329,26 +330,43 @@ export function processMissions(): void {
     const isComplete = weeksElapsed >= mission.weeksTotal;
 
     // 6. Fire inbox messages
+    const dof = useCoachStore.getState().coaches.find((c) => c.role === 'director_of_football');
+    const dofHandlesSigning = dof?.dofAutoSignPlayers ?? false;
+
     if (foundPlayers.length > 0) {
-      let body = '';
-      if (foundPlayers.length === 1) {
-        body = `${scout.name} has identified ${foundPlayers[0].firstName} ${foundPlayers[0].lastName}, a highly-rated ${foundPlayers[0].position} prospect. Move fast — opportunities like this don't wait.`;
-      } else if (foundPlayers.length === 2) {
-        body = `${scout.name} has unearthed two prospects worth your attention: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}) and ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}).`;
-      } else if (foundPlayers.length === 3) {
-        body = `${scout.name} has had a remarkable week, identifying three prospects: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}), ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}), and ${foundPlayers[2].firstName} ${foundPlayers[2].lastName} (${foundPlayers[2].position}).`;
+      if (dofHandlesSigning) {
+        // DOF intercepts — send a brief system update; GameLoop section 14c handles sign/pass
+        const names = foundPlayers.map((p) => `${p.firstName} ${p.lastName} (${p.position})`).join(', ');
+        addMessage({
+          id: `dof-review-${scout.id}-wk${weekNumber}-${Math.random().toString(36).slice(2, 7)}`,
+          type: 'system',
+          week: weekNumber,
+          subject: `DOF reviewing ${foundPlayers.length} prospect${foundPlayers.length > 1 ? 's' : ''}`,
+          body: `${scout.name} found ${foundPlayers.length > 1 ? 'prospects' : 'a prospect'}: ${names}. Your Director of Football is assessing them.`,
+          isRead: false,
+          metadata: { gemDiscovery: true, playerIds: foundPlayers.map((p) => p.id) },
+        });
       } else {
-        body = `${scout.name} has delivered an extraordinary report — four prospects found: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}), ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}), ${foundPlayers[2].firstName} ${foundPlayers[2].lastName} (${foundPlayers[2].position}), and ${foundPlayers[3].firstName} ${foundPlayers[3].lastName} (${foundPlayers[3].position}).`;
+        let body = '';
+        if (foundPlayers.length === 1) {
+          body = `${scout.name} has identified ${foundPlayers[0].firstName} ${foundPlayers[0].lastName}, a highly-rated ${foundPlayers[0].position} prospect. Move fast — opportunities like this don't wait.`;
+        } else if (foundPlayers.length === 2) {
+          body = `${scout.name} has unearthed two prospects worth your attention: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}) and ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}).`;
+        } else if (foundPlayers.length === 3) {
+          body = `${scout.name} has had a remarkable week, identifying three prospects: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}), ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}), and ${foundPlayers[2].firstName} ${foundPlayers[2].lastName} (${foundPlayers[2].position}).`;
+        } else {
+          body = `${scout.name} has delivered an extraordinary report — four prospects found: ${foundPlayers[0].firstName} ${foundPlayers[0].lastName} (${foundPlayers[0].position}), ${foundPlayers[1].firstName} ${foundPlayers[1].lastName} (${foundPlayers[1].position}), ${foundPlayers[2].firstName} ${foundPlayers[2].lastName} (${foundPlayers[2].position}), and ${foundPlayers[3].firstName} ${foundPlayers[3].lastName} (${foundPlayers[3].position}).`;
+        }
+        addMessage({
+          id: `gem-${scout.id}-wk${weekNumber}-${Math.random().toString(36).slice(2, 7)}`,
+          type: 'scout',
+          week: weekNumber,
+          subject: `${scout.name} has found a gem!`,
+          body,
+          isRead: false,
+          metadata: { gemDiscovery: true, playerIds: foundPlayers.map(p => p.id) },
+        });
       }
-      addMessage({
-        id: `gem-${scout.id}-wk${weekNumber}-${Math.random().toString(36).slice(2, 7)}`,
-        type: 'scout',
-        week: weekNumber,
-        subject: `${scout.name} has found a gem!`,
-        body,
-        isRead: false,
-        metadata: { gemDiscovery: true, playerIds: foundPlayers.map(p => p.id) },
-      });
     }
 
     if (isComplete) {

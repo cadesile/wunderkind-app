@@ -67,26 +67,39 @@ jest.mock('@/stores/inboxStore', () => ({
 describe('buildLeagueStandings', () => {
   it('sorts clubs by pts then gd then gf', () => {
     // c1: 4pts (W+D), gd +3; c3: 4pts (W+D), gd +1; c2: 0pts, gd -4
-    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1);
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1, 1);
     expect(standings[0].clubId).toBe('c1');
     expect(standings[1].clubId).toBe('c3');
     expect(standings[2].clubId).toBe('c2');
   });
 
-  it('marks last-place club as relegated', () => {
-    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1);
+  it('marks last-place club as relegated when relegationSpots=1', () => {
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1, 1);
     expect(standings[2].relegated).toBe(true);
+    expect(standings[1].relegated).toBe(false);
     expect(standings[0].relegated).toBe(false);
   });
 
+  it('marks bottom N clubs as relegated when relegationSpots=2', () => {
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 2, 1);
+    expect(standings[2].relegated).toBe(true);
+    expect(standings[1].relegated).toBe(true);
+    expect(standings[0].relegated).toBe(false);
+  });
+
+  it('marks nobody as relegated when relegationSpots=0', () => {
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 0, 1);
+    expect(standings.every((s) => !s.relegated)).toBe(true);
+  });
+
   it('marks top N clubs as promoted when promotionSpots set', () => {
-    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1);
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1, 1);
     expect(standings[0].promoted).toBe(true);
     expect(standings[1].promoted).toBe(false);
   });
 
   it('marks nobody as promoted when promotionSpots is null', () => {
-    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], null, 1);
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], null, 1, 1);
     expect(standings.every((s) => !s.promoted)).toBe(true);
   });
 
@@ -94,7 +107,7 @@ describe('buildLeagueStandings', () => {
     // Override mock to put c1 as AMP
     const { useClubStore } = jest.requireMock('@/stores/clubStore');
     useClubStore.getState = () => ({ club: { id: 'c1' } });
-    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1);
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1, 1);
     expect(standings.find((s) => s.clubId === 'c1')?.isAmp).toBe(true);
     expect(standings.find((s) => s.clubId === 'c2')?.isAmp).toBe(false);
     // Restore
@@ -102,13 +115,13 @@ describe('buildLeagueStandings', () => {
   });
 
   it('ignores fixtures from other leagues and seasons', () => {
-    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1);
+    const standings = buildLeagueStandings('L1', ['c1', 'c2', 'c3'], 1, 1, 1);
     // c1 should only have stats from L1/season1 — not inflated by the OTHER-league fixture
     expect(standings[0].clubId).toBe('c1');
   });
 
   it('does not relegate any club in a single-club league', () => {
-    const standings = buildLeagueStandings('L1', ['c1'], null, 1);
+    const standings = buildLeagueStandings('L1', ['c1'], null, 1, 1);
     expect(standings[0].relegated).toBe(false);
   });
 });

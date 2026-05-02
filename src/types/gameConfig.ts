@@ -108,6 +108,18 @@ export interface GameConfig {
   /** Sibling loyalty trait penalty on ignore. Default: 2 */
   guardianIgnoreSiblingLoyaltyTraitPenalty: number;
 
+  // ── Retirement ────────────────────────────────────────────────────────────
+  /** Minimum age at which a player can voluntarily retire. Default: 30 */
+  retirementMinAge: number;
+  /** Age at which retirement is forced (player retires regardless of roll). Default: 38 */
+  retirementMaxAge: number;
+  /**
+   * Maximum retirement probability, applied when age = retirementMaxAge - 1.
+   * Probability scales linearly from 0 at retirementMinAge to retirementChance at retirementMaxAge - 1.
+   * Default: 0.35
+   */
+  retirementChance: number;
+
   // ── Developer / Debug ────────────────────────────────────────────────
   /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
   debugLoggingEnabled: boolean;
@@ -204,6 +216,10 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   guardianIgnoreGuardianDemandIncrease: 2,
   guardianIgnoreSiblingMoralePenalty: 5,
   guardianIgnoreSiblingLoyaltyTraitPenalty: 2,
+
+  retirementMinAge: 30,
+  retirementMaxAge: 38,
+  retirementChance: 0.35,
 
   debugLoggingEnabled: false,
 

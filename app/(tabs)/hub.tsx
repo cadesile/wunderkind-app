@@ -228,8 +228,13 @@ const RANGE_LABEL: Record<Scout['scoutingRange'], string> = {
 
 function ScoutRow({ scout }: { scout: Scout }) {
   const router = useRouter();
-  const isOnMission = scout.activeMission?.status === 'active';
+  const isOnMission  = scout.activeMission?.status === 'active';
+  const dofAutoScouts = useCoachStore(
+    (s) => s.coaches.find((c) => c.role === 'director_of_football')?.dofAutoAssignScouts ?? false,
+  );
   const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
+
+  const borderColor = isOnMission ? WK.orange : dofAutoScouts ? WK.tealLight : WK.border;
 
   return (
     <View style={{ marginBottom: 6 }}>
@@ -237,7 +242,7 @@ function ScoutRow({ scout }: { scout: Scout }) {
         <View style={{
           backgroundColor: WK.tealCard,
           borderWidth: 3,
-          borderColor: isOnMission ? WK.orange : WK.border,
+          borderColor,
           padding: 10,
           flexDirection: 'row',
           alignItems: 'center',
@@ -249,10 +254,11 @@ function ScoutRow({ scout }: { scout: Scout }) {
 
           {/* Main content */}
           <View style={{ flex: 1 }}>
-            {/* Name + mission badge */}
+            {/* Name + status badges */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
               <BodyText size={14} upper numberOfLines={1} style={{ flex: 1 }}>{scout.name}</BodyText>
               {isOnMission && <Badge label="ACTIVE" color="yellow" />}
+              {!isOnMission && dofAutoScouts && <Badge label="DOF" color="green" />}
             </View>
 
             <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{RANGE_LABEL[scout.scoutingRange]} {formatStaffRole(scout.role).toUpperCase()}</PixelText>

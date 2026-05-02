@@ -33,6 +33,16 @@ export interface Coach {
   relationships?: import('./player').Relationship[];
   /** If true, this staff member (usually manager) handles certain player/guardian events automatically. */
   autoManageEvents?: boolean;
+  /** DOF: automatically extend contracts for players who want to renew (loyalty ≥ 10). */
+  dofAutoRenewContracts?: boolean;
+  /** DOF: automatically assign scouts to unscreened market players. */
+  dofAutoAssignScouts?: boolean;
+  /** DOF: automatically sign revealed market players when manager assessment is positive. */
+  dofAutoSignPlayers?: boolean;
+  /** DOF: automatically accept/reject incoming transfer offers based on manager opinion. */
+  dofAutoSellPlayers?: boolean;
+  /** Facility Manager: automatically repair degraded facilities each week if balance allows. */
+  facilityManagerAutoRepair?: boolean;
   /** Club tier this coach belongs to — from backend */
   tier?: ClubTier;
 }

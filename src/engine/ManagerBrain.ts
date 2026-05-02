@@ -183,10 +183,23 @@ export class ManagerBrain {
     if (ratio >= 1.2) score += (ratio - 1.2) * 40;
     if (ratio < 0.9)  score -= 20;
 
-    // Squad depth at this position after the sale (exclude the player being sold)
-    const posDepth = squad.filter(
+    // Squad players at this position after the sale (exclude the player being sold)
+    const posPlayers = squad.filter(
       (p) => p.position === player.position && p.isActive && p.id !== player.id,
-    ).length;
+    );
+    const posDepth = posPlayers.length;
+
+    // Quality comparison: is this player the best at their position?
+    const playerOvr       = player.overallRating ?? 0;
+    const bestRemainingOvr = posPlayers.reduce((best, p) => Math.max(best, p.overallRating ?? 0), 0);
+    const ovrGap           = playerOvr - bestRemainingOvr; // positive = player is better than next best
+    const isSquadBest      = posDepth > 0 && ovrGap > 0;
+
+    // Quality-based score adjustment
+    if (isSquadBest && ovrGap >= 10) score -= 25; // significantly better than anyone else — strong keep signal
+    else if (isSquadBest && ovrGap >= 5) score -= 15; // notably better
+    else if (isSquadBest)              score -= 8;  // marginally better
+    else if (ovrGap <= -10)            score += 12; // player is noticeably below next best — easier to sell
 
     // Formation-aware depth targets
     const targets = getFormationTargets(formation);
@@ -213,14 +226,22 @@ export class ManagerBrain {
     if (recommendation === 'sell') {
       if (ratio >= 1.5) {
         reasoning = `The offer is ${Math.round(ratio * 100)}% of transfer value — an excellent return. I'd take it.`;
+      } else if (isSquadBest && ratio >= 1.2) {
+        reasoning = `They're our best ${player.position}, but the fee is too good to turn down. Worth selling if we reinvest well.`;
       } else if (clubBalance < 20000) {
         reasoning = 'We are tight on funds. Selling could give us room to strengthen elsewhere.';
+      } else if (ovrGap <= -10) {
+        reasoning = `We have better ${player.position}s in the squad. The fee is decent — move them on.`;
       } else {
         reasoning = 'We have good cover at this position and the fee is reasonable.';
       }
     } else {
       if (posDepth < 1) {
         reasoning = `${player.name} is our only player in this position. Losing them now would hurt us badly.`;
+      } else if (isSquadBest && ovrGap >= 10) {
+        reasoning = `They're significantly better than anyone else we have at ${player.position}. Selling would leave a real gap in quality.`;
+      } else if (isSquadBest) {
+        reasoning = `${player.name} is our best ${player.position}. I wouldn't sell without a quality replacement lined up.`;
       } else if (posDepth < minTarget) {
         reasoning = `We only have ${posDepth} player${posDepth === 1 ? '' : 's'} left in this position — we need at least ${minTarget} for our ${formation}. I'd keep them.`;
       } else if (ratio < 1.0) {

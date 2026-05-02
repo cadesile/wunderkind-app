@@ -221,7 +221,9 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
   // fixtures are generated. Build standings from fixture results so the AMP
   // appears naturally in the table.
   const npcClubs = league.clubs;
-  const allIds   = [ampClubId, ...npcClubs.map((c) => c.id)];
+  // Filter out any clubs the server returned with a missing id (defensive against API nulls)
+  const npcIds  = npcClubs.map((c) => c.id).filter((id): id is string => !!id);
+  const allIds  = [ampClubId, ...npcIds];
 
   type Standing = {
     id: string; name: string; primaryColor: string;
@@ -234,8 +236,8 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
     const snap  = npcClubs.find((c) => c.id === id);
     map[id] = {
       id,
-      name:         isAmp ? club.name        : (snap?.name         ?? id),
-      primaryColor: isAmp ? club.primaryColor : (snap?.primaryColor ?? '#888888'),
+      name:         isAmp ? (club.name ?? '')        : (snap?.name         ?? id),
+      primaryColor: isAmp ? (club.primaryColor ?? '#888888') : (snap?.primaryColor ?? '#888888'),
       pts: 0, gd: 0, gf: 0, played: 0,
     };
   }

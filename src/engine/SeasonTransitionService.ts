@@ -1,5 +1,6 @@
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -9,8 +10,11 @@ import { concludeSeason } from '@/api/endpoints/season';
 import type { PyramidStanding, PyramidLeague } from '@/api/endpoints/season';
 import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
 import type { SeasonUpdateLeague, WorldLeague } from '@/types/world';
+import type { GameConfig } from '@/types/gameConfig';
 import { uuidv7 } from '@/utils/uuidv7';
 import { penceToPounds } from '@/utils/currency';
+import { shouldRetire } from './retirementEngine';
+import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +39,10 @@ export interface SeasonTransitionSnapshot {
   points:           number;
   // Full captured standings table for history recording
   displayStandings: SeasonStanding[];
+  // Retirement config — passed from SeasonEndOverlay's gameConfigStore snapshot
+  retirementMinAge: number;
+  retirementMaxAge: number;
+  retirementChance: number;
 }
 
 /**
@@ -69,13 +77,16 @@ const LEAGUE_TIER_REP_CAP: Record<string, number> = {
 /**
  * Derive PyramidStanding[] for a league from recorded fixture results.
  * Reads fixtureStore (read-only). Works for both the AMP's league and NPC leagues.
- * relegated: true is set only for the last-place club.
+ * relegated: true is set for the bottom `relegationSpots` clubs.
  * promoted: true is set for clubs finishing in the top `promotionSpots` positions.
+ * relegationSpots should equal the promotionSpots of the league one tier below so
+ * the number of clubs going down always matches the number going up.
  */
 export function buildLeagueStandings(
   leagueId: string,
   clubIds: string[],
   promotionSpots: number | null,
+  relegationSpots: number,
   season: number,
 ): PyramidStanding[] {
   const ampClubId   = useClubStore.getState().club.id;
@@ -106,7 +117,9 @@ export function buildLeagueStandings(
     clubId,
     isAmp:     clubId === ampClubId,
     promoted:  promotionSpots != null && (i + 1) <= promotionSpots,
-    relegated: total > 1 && (i + 1) === total,
+    // Relegate the bottom `relegationSpots` clubs. Guard total > relegationSpots to
+    // avoid relegating all clubs in a very small league.
+    relegated: relegationSpots > 0 && total > relegationSpots && (i + 1) > (total - relegationSpots),
   }));
 }
 
@@ -127,9 +140,15 @@ export function buildPyramidPayload(
     const clubIds = wLeague.id === currentLeagueId
       ? [...wLeague.clubIds, ampClubId]
       : wLeague.clubIds;
+    // Relegation spots = promotionSpots of the league one tier below (same country).
+    // This ensures the number of clubs going down matches the number going up.
+    const leagueBelow = worldLeagues.find(
+      (l) => l.tier === wLeague.tier + 1 && l.country === wLeague.country,
+    );
+    const relegationSpots = leagueBelow?.promotionSpots ?? 0;
     return {
       leagueId:  wLeague.id,
-      standings: buildLeagueStandings(wLeague.id, clubIds, wLeague.promotionSpots, season),
+      standings: buildLeagueStandings(wLeague.id, clubIds, wLeague.promotionSpots, relegationSpots, season),
     };
   });
 }
@@ -316,6 +335,54 @@ export function recordSeasonHistory(
   });
 }
 
+// ─── Retirement helpers ───────────────────────────────────────────────────────
+
+/**
+ * Retire eligible NPC players from all world clubs.
+ * Mutates worldStore club rosters in-place (persists to AsyncStorage via mutateClubRoster).
+ * NPC players aged >= retirementMaxAge are always removed; those in the voluntary window
+ * are rolled against shouldRetire.
+ */
+export async function retireNPCPlayers(
+  config: Pick<GameConfig, 'retirementMinAge' | 'retirementMaxAge' | 'retirementChance'>,
+  weekNumber: number,
+): Promise<void> {
+  const { clubs } = useWorldStore.getState();
+  const gameDate = getGameDate(weekNumber);
+
+  for (const club of Object.values(clubs)) {
+    const survivors = club.players.filter((p) => {
+      const age = computePlayerAge(p.dateOfBirth, gameDate);
+      return !shouldRetire(age, config.retirementMinAge, config.retirementMaxAge, config.retirementChance);
+    });
+
+    if (survivors.length !== club.players.length) {
+      await useWorldStore.getState().mutateClubRoster(club.id, survivors);
+    }
+  }
+}
+
+/**
+ * Retire eligible AMP players from squadStore.
+ * Runs independent of the pre-game notification roll — players who reach retirementMaxAge
+ * are always retired; voluntary retirees are re-rolled here.
+ */
+export function retireAMPPlayers(
+  config: Pick<GameConfig, 'retirementMinAge' | 'retirementMaxAge' | 'retirementChance'>,
+  weekNumber: number,
+): void {
+  const { players, removePlayer } = useSquadStore.getState();
+  const gameDate = getGameDate(weekNumber);
+
+  for (const player of players) {
+    if (!player.dateOfBirth) continue;
+    const age = computePlayerAge(player.dateOfBirth, gameDate);
+    if (shouldRetire(age, config.retirementMinAge, config.retirementMaxAge, config.retirementChance)) {
+      removePlayer(player.id);
+    }
+  }
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
 /**
@@ -355,4 +422,14 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
   await applySeasonResponse(responseLeagues, currentLeague, nextSeason);
   distributeSeasonFinances(ampSeasonLeague, currentLeague, nextSeason, snapshot.finalPosition, snapshot.weekNumber);
   recordSeasonHistory(snapshot, snapshot.displayStandings, ampClubId);
+
+  // Retire players at season end — NPC clubs and AMP squad.
+  // Runs after all store updates so league membership and rosters are final.
+  const retirementConfig = {
+    retirementMinAge:  snapshot.retirementMinAge,
+    retirementMaxAge:  snapshot.retirementMaxAge,
+    retirementChance:  snapshot.retirementChance,
+  };
+  await retireNPCPlayers(retirementConfig, snapshot.weekNumber);
+  retireAMPPlayers(retirementConfig, snapshot.weekNumber);
 }

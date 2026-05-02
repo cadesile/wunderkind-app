@@ -112,13 +112,15 @@ export interface WorldPackResponse {
 // ─── conclude-season league update shapes ────────────────────────────────────
 
 /**
- * Slim club entry as received inside /api/league/conclude-season leagues array.
- * Only identity + tier — full roster is held locally and must NOT be replaced.
+ * Club entry as received inside /api/league/conclude-season leagues array.
+ * Tier is implicit from the parent league object.
+ * Full roster is held locally and must NOT be replaced.
  */
 export interface SeasonUpdateClub {
-  id: string;
-  name: string;
-  tier: number;
+  clubId: string;
+  isAmp: boolean;
+  promoted: boolean;
+  relegated: boolean;
 }
 
 /**

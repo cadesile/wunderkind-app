@@ -79,7 +79,8 @@ export function LeagueBrowser({
           .map((id) => worldClubs[id])
           .filter((c): c is WorldClub => c !== undefined);
 
-        const clubCount = isAmpLeague ? league.clubs.length : npcClubs.length;
+        // league.clubs holds only NPC clubs — add 1 to include the AMP club itself
+        const clubCount = isAmpLeague ? league.clubs.length + 1 : npcClubs.length;
 
         // Filter fixtures to this league only
         const leagueFixtures = fixtures.filter((f) => f.leagueId === lg.id);

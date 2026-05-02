@@ -1099,6 +1099,184 @@ function InboxMessageDetail({
         <PixelText size={11} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
         <PixelText size={14} variant="body" style={{ color: WK.dim }}>{message.body}</PixelText>
 
+        {/* ── DOF signing report ──────────────────────────────────────────────── */}
+        {message.metadata?.systemType === 'dof_signing' && (() => {
+          const m         = message.metadata as Record<string, unknown>;
+          const ovr       = (m.perceivedAbility as number) ?? 0;
+          const potential = Math.min(5, Math.max(0, (m.potential as number) ?? 0));
+          const stars     = '★'.repeat(potential) + '☆'.repeat(5 - potential);
+          const rec       = m.managerRecommendation as string | undefined;
+          const reasoning = m.managerReasoning as string | undefined;
+          // Look up the signed player from squad for live avatar
+          const signedPlayer = useSquadStore.getState().players.find((p) => p.id === message.entityId);
+          const appearance   = signedPlayer?.appearance ?? null;
+          return (
+            <View style={{ marginTop: 16, borderWidth: 3, borderColor: WK.tealLight, overflow: 'hidden', ...pixelShadow }}>
+              {/* ── Hero banner: avatar + headline ── */}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                backgroundColor: WK.tealDark, padding: 14,
+                borderBottomWidth: 2, borderBottomColor: WK.border,
+              }}>
+                <View style={{ borderWidth: 3, borderColor: WK.tealLight }}>
+                  <Avatar appearance={appearance} role="PLAYER" size={72} morale={70} />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <PixelText size={8} color={WK.tealLight} upper>Player Signed</PixelText>
+                  <PixelText size={11} upper numberOfLines={2}>{m.playerName as string}</PixelText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <View style={{ borderWidth: 2, borderColor: WK.yellow, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <PixelText size={13} variant="vt323" color={WK.yellow}>{m.playerPosition as string}</PixelText>
+                    </View>
+                    {m.playerAge != null && (
+                      <PixelText size={13} variant="vt323" dim>AGE {m.playerAge as number}</PixelText>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* ── Stats section ── */}
+              <View style={{ padding: 14, gap: 10 }}>
+                {/* Potential stars + OVR row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <PixelText size={18} variant="vt323" color={WK.yellow}>{stars}</PixelText>
+                  <View style={{ borderWidth: 2, borderColor: WK.green, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <PixelText size={9} color={WK.green}>OVR {ovr}</PixelText>
+                  </View>
+                </View>
+
+                {/* OVR bar */}
+                <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+                  <View style={{ height: '100%', width: `${ovr}%`, backgroundColor: WK.green }} />
+                </View>
+
+                {/* Fee / club affiliation */}
+                {m.requiresTransferFee ? (
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    paddingVertical: 8, borderTopWidth: 2, borderTopColor: WK.border,
+                  }}>
+                    <View style={{ gap: 3 }}>
+                      <PixelText size={12} variant="vt323" dim>TRANSFER FEE</PixelText>
+                      {m.npcClubName && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {m.npcClubTier != null && <Badge label={`TIER ${m.npcClubTier as number}`} color="dim" />}
+                          <PixelText size={12} variant="vt323" dim numberOfLines={1}>{m.npcClubName as string}</PixelText>
+                        </View>
+                      )}
+                    </View>
+                    <PixelText size={18} variant="vt323" color={WK.orange}>
+                      {formatCurrencyWhole((m.transferFee as number) ?? 0)}
+                    </PixelText>
+                  </View>
+                ) : (
+                  <View style={{ paddingTop: 8, borderTopWidth: 2, borderTopColor: WK.border }}>
+                    <View style={{ borderWidth: 2, borderColor: WK.green, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' }}>
+                      <PixelText size={13} variant="vt323" color={WK.green}>FREE AGENT</PixelText>
+                    </View>
+                  </View>
+                )}
+
+                {/* Manager opinion */}
+                {rec && reasoning && (
+                  <View style={{
+                    backgroundColor: WK.greenDark, borderWidth: 2,
+                    borderColor: rec === 'sign' ? WK.green : WK.dim, padding: 10,
+                  }}>
+                    <PixelText size={7} upper style={{ marginBottom: 4 }}>Manager's Opinion</PixelText>
+                    <PixelText size={13} variant="vt323" color={rec === 'sign' ? WK.green : WK.dim}>
+                      {rec === 'sign' ? '✓ SIGN HIM' : '✗ PASS'}
+                    </PixelText>
+                    <PixelText size={12} variant="vt323" dim style={{ marginTop: 3 }}>{reasoning}</PixelText>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* ── DOF transfer (sold) report ───────────────────────────────────────── */}
+        {message.metadata?.systemType === 'dof_transfer' && (() => {
+          const m          = message.metadata as Record<string, unknown>;
+          const fee        = (m.fee as number) ?? 0;
+          const clubName   = (m.biddingClubName as string) ?? '';
+          const clubTier   = m.biddingClubTier as number | undefined;
+          const position   = m.playerPosition as string | undefined;
+          const age        = m.playerAge as number | null | undefined;
+          const reasoning  = m.managerReasoning as string | undefined;
+          const appearance = (m.playerAppearance as any) ?? null;
+          const morale     = (m.playerMorale as number) ?? 70;
+          const ovr        = (m.overallRating as number) ?? 0;
+          return (
+            <View style={{ marginTop: 16, borderWidth: 3, borderColor: WK.yellow, overflow: 'hidden', ...pixelShadow }}>
+              {/* ── Hero banner: avatar + headline ── */}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                backgroundColor: WK.tealDark, padding: 14,
+                borderBottomWidth: 2, borderBottomColor: WK.border,
+              }}>
+                <View style={{ borderWidth: 3, borderColor: WK.yellow }}>
+                  <Avatar appearance={appearance} role="PLAYER" size={72} morale={morale} />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <PixelText size={8} color={WK.yellow} upper>Player Sold</PixelText>
+                  <PixelText size={11} upper numberOfLines={2}>{m.playerName as string}</PixelText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    {position && (
+                      <View style={{ borderWidth: 2, borderColor: WK.yellow, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <PixelText size={13} variant="vt323" color={WK.yellow}>{position}</PixelText>
+                      </View>
+                    )}
+                    {age != null && (
+                      <PixelText size={13} variant="vt323" dim>AGE {age}</PixelText>
+                    )}
+                  </View>
+                </View>
+                {/* OVR chip top-right */}
+                {ovr > 0 && (
+                  <View style={{ borderWidth: 2, borderColor: WK.tealLight, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}>
+                    <PixelText size={9} color={WK.tealLight}>OVR {ovr}</PixelText>
+                  </View>
+                )}
+              </View>
+
+              {/* ── Transfer detail rows ── */}
+              <View style={{ padding: 14, gap: 0 }}>
+                {/* Fee received */}
+                <View style={{
+                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                  paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: WK.border,
+                }}>
+                  <PixelText size={12} variant="vt323" dim>FEE RECEIVED</PixelText>
+                  <PixelText size={20} variant="vt323" color={WK.green}>{formatCurrencyWhole(fee)}</PixelText>
+                </View>
+
+                {/* Signing club */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: WK.border,
+                }}>
+                  <PixelText size={12} variant="vt323" dim style={{ marginRight: 4 }}>SIGNED BY</PixelText>
+                  {clubTier != null && <Badge label={`TIER ${clubTier}`} color="dim" />}
+                  <PixelText size={13} variant="vt323" numberOfLines={1} style={{ flex: 1 }}>{clubName}</PixelText>
+                </View>
+
+                {/* Manager opinion */}
+                {reasoning && (
+                  <View style={{
+                    backgroundColor: WK.greenDark, borderWidth: 2, borderColor: WK.green,
+                    padding: 10, marginTop: 10,
+                  }}>
+                    <PixelText size={7} upper style={{ marginBottom: 4 }}>Manager's Opinion</PixelText>
+                    <PixelText size={13} variant="vt323" color={WK.green}>↑ SELL</PixelText>
+                    <PixelText size={12} variant="vt323" dim style={{ marginTop: 3 }}>{reasoning}</PixelText>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })()}
+
         {/* ── Facility repair breakdown ───────────────────────────────────────── */}
         {message.metadata?.systemType === 'facility_repair' && Array.isArray(message.metadata?.items) && (
           <View style={{ marginTop: 16 }}>

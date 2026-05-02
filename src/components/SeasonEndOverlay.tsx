@@ -2,8 +2,10 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Modal, ScrollView } from 'react-native';
 import { Trophy } from 'lucide-react-native';
 import { useLeagueStore } from '@/stores/leagueStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useWorldStore } from '@/stores/worldStore';
 import {
   performSeasonTransition,
   type SeasonTransitionSnapshot,
@@ -41,10 +43,20 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const league   = useLeagueStore((s) => s.league);
-  const fixtures = useFixtureStore((s) => s.fixtures);
-  const club     = useClubStore((s) => s.club);
-  const ampClubId = club.id;
+  const league       = useLeagueStore((s) => s.league);
+  const fixtures     = useFixtureStore((s) => s.fixtures);
+  const club         = useClubStore((s) => s.club);
+  const worldLeagues = useWorldStore((s) => s.leagues);
+  const ampClubId    = club.id;
+
+  // How many clubs drop from this league = promotionSpots of the league one tier below.
+  const relegationSpots = useMemo(() => {
+    if (!league) return 0;
+    const leagueBelow = worldLeagues.find(
+      (l) => l.tier === league.tier + 1 && (league.country == null || l.country === league.country),
+    );
+    return leagueBelow?.promotionSpots ?? 0;
+  }, [league, worldLeagues]);
 
   const standings = useMemo<SeasonStanding[]>(() => {
     if (!league) return [];
@@ -83,7 +95,7 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
   const dispAmpPos    = dispAmpIndex + 1;
   const dispAmpEntry  = displayStandings[dispAmpIndex] ?? null;
   const dispPromoted  = displayPromotionSpots != null && dispAmpPos > 0 && dispAmpPos <= displayPromotionSpots;
-  const dispRelegated = displayStandings.length > 0 && dispAmpPos === displayStandings.length;
+  const dispRelegated = relegationSpots > 0 && dispAmpPos > 0 && dispAmpPos > (displayStandings.length - relegationSpots);
   const posColor      = dispPromoted ? WK.green : dispRelegated ? WK.red : WK.yellow;
   const posLabel      = dispPromoted ? 'PROMOTED!' : dispRelegated ? 'RELEGATED' : `#${dispAmpPos}`;
 
@@ -106,6 +118,7 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
     try {
       if (!currentLeague || !capturedAmpEntry) return;
 
+      const retirementCfg = useGameConfigStore.getState().config;
       const snapshot: SeasonTransitionSnapshot = {
         currentLeague,
         currentSeason,
@@ -113,7 +126,7 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
         promoted:         currentLeague.promotionSpots != null
                             && capturedAmpPos > 0
                             && capturedAmpPos <= currentLeague.promotionSpots,
-        relegated:        capturedStandings.length > 0 && capturedAmpPos === capturedStandings.length,
+        relegated:        relegationSpots > 0 && capturedAmpPos > 0 && capturedAmpPos > (capturedStandings.length - relegationSpots),
         weekNumber:       useClubStore.getState().club.weekNumber ?? 1,
         gamesPlayed:      capturedAmpEntry.played,
         wins:             capturedAmpEntry.wins,
@@ -123,6 +136,9 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
         goalsAgainst:     capturedAmpEntry.ga,
         points:           capturedAmpEntry.pts,
         displayStandings: capturedStandings,
+        retirementMinAge: retirementCfg.retirementMinAge,
+        retirementMaxAge: retirementCfg.retirementMaxAge,
+        retirementChance: retirementCfg.retirementChance,
       };
 
       // Season transition requires a server response — no offline fallback by design.

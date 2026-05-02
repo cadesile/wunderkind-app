@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { useScoutStore } from '@/stores/scoutStore';
+import { useCoachStore } from '@/stores/coachStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { moraleLabel } from '@/utils/morale';
@@ -62,6 +63,9 @@ export default function ScoutDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  const dof = useCoachStore((s) => s.coaches.find((c) => c.role === 'director_of_football'));
+  const dofAutoScouts = dof?.dofAutoAssignScouts ?? false;
 
   const morale = scout.morale ?? 70;
   const isOnMission = scout.activeMission?.status === 'active';
@@ -213,10 +217,10 @@ export default function ScoutDetailScreen() {
 
         {/* Assign mission button */}
         <Button
-          label={isOnMission ? 'SCOUT ON MISSION' : 'ASSIGN SCOUTING MISSION'}
+          label={isOnMission ? 'SCOUT ON MISSION' : dofAutoScouts ? 'MANAGED BY DOF' : 'ASSIGN SCOUTING MISSION'}
           variant="yellow"
           fullWidth
-          disabled={isOnMission}
+          disabled={isOnMission || dofAutoScouts}
           onPress={() => setMissionOverlayVisible(true)}
         />
 

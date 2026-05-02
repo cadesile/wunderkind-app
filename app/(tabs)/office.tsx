@@ -433,6 +433,45 @@ function SectionCard({ label, children }: { label: string; children: React.React
   );
 }
 
+// Reusable pixel-art toggle row (used for Manager auto-manage and DOF settings).
+function StaffToggle({
+  label, description, value, onToggle,
+}: {
+  label: string;
+  description: string;
+  value: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => { hapticTap(); onToggle(); }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 10,
+        backgroundColor: value ? WK.tealDark : 'rgba(0,0,0,0.2)',
+        borderWidth: 2,
+        borderColor: value ? WK.yellow : WK.border,
+      }}
+    >
+      <View style={{ flex: 1, marginRight: 8 }}>
+        <PixelText size={7} color={value ? WK.yellow : WK.dim}>{label}</PixelText>
+        <BodyText size={10} dim style={{ marginTop: 2 }}>{description}</BodyText>
+      </View>
+      <View style={{
+        width: 36, height: 20,
+        backgroundColor: value ? WK.yellow : WK.tealMid,
+        borderWidth: 2, borderColor: WK.border,
+        padding: 2,
+        alignItems: value ? 'flex-end' : 'flex-start',
+      }}>
+        <View style={{ width: 12, height: '100%', backgroundColor: value ? WK.border : WK.dim }} />
+      </View>
+    </Pressable>
+  );
+}
+
 // Roles capped at 1 per club — shown as individual cards in the CLUB pane.
 const SINGLETON_ROLES: { role: StaffRole; label: string }[] = [
   { role: 'manager',              label: 'MANAGER' },
@@ -523,38 +562,56 @@ function KeyStaffSection({
 
             {/* Auto-Manage Toggle (only for MANAGER role) */}
             {role === 'manager' && (
-              <Pressable
-                onPress={() => {
-                  hapticTap();
-                  updateCoach(hired.id, { autoManageEvents: !hired.autoManageEvents });
-                }}
-                style={{
-                  marginTop: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: 10,
-                  backgroundColor: hired.autoManageEvents ? WK.tealDark : 'rgba(0,0,0,0.2)',
-                  borderWidth: 2,
-                  borderColor: hired.autoManageEvents ? WK.yellow : WK.border,
-                }}
-              >
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <PixelText size={7} color={hired.autoManageEvents ? WK.yellow : WK.dim}>AUTO-MANAGE PLAYER EVENTS</PixelText>
-                  <BodyText size={10} dim style={{ marginTop: 2 }}>
-                    Handles player & guardian requests based on personality.
-                  </BodyText>
-                </View>
-                <View style={{
-                   width: 36, height: 20, 
-                   backgroundColor: hired.autoManageEvents ? WK.yellow : WK.tealMid,
-                   borderWidth: 2, borderColor: WK.border,
-                   padding: 2,
-                   alignItems: hired.autoManageEvents ? 'flex-end' : 'flex-start'
-                }}>
-                   <View style={{ width: 12, height: '100%', backgroundColor: hired.autoManageEvents ? WK.border : WK.dim }} />
-                </View>
-              </Pressable>
+              <View style={{ marginTop: 12 }}>
+                <StaffToggle
+                  label="AUTO-MANAGE PLAYER EVENTS"
+                  description="Handles player & guardian requests based on personality."
+                  value={!!hired.autoManageEvents}
+                  onToggle={() => updateCoach(hired.id, { autoManageEvents: !hired.autoManageEvents })}
+                />
+              </View>
+            )}
+
+            {/* Facility Manager Toggle */}
+            {role === 'facility_manager' && (
+              <View style={{ marginTop: 12 }}>
+                <StaffToggle
+                  label="AUTO-REPAIR FACILITIES"
+                  description="Repairs degraded facilities each week if balance allows."
+                  value={!!hired.facilityManagerAutoRepair}
+                  onToggle={() => updateCoach(hired.id, { facilityManagerAutoRepair: !hired.facilityManagerAutoRepair })}
+                />
+              </View>
+            )}
+
+            {/* DOF Toggles */}
+            {role === 'director_of_football' && (
+              <View style={{ marginTop: 12, gap: 6 }}>
+                <StaffToggle
+                  label="AUTO-RENEW CONTRACTS"
+                  description="Extends contracts for players willing to stay (loyalty ≥ 10)."
+                  value={!!hired.dofAutoRenewContracts}
+                  onToggle={() => updateCoach(hired.id, { dofAutoRenewContracts: !hired.dofAutoRenewContracts })}
+                />
+                <StaffToggle
+                  label="AUTO-ASSIGN SCOUTS"
+                  description="Assigns available scouts to unscreened market players."
+                  value={!!hired.dofAutoAssignScouts}
+                  onToggle={() => updateCoach(hired.id, { dofAutoAssignScouts: !hired.dofAutoAssignScouts })}
+                />
+                <StaffToggle
+                  label="AUTO-SIGN PLAYERS"
+                  description="Signs revealed players when the manager's assessment is positive."
+                  value={!!hired.dofAutoSignPlayers}
+                  onToggle={() => updateCoach(hired.id, { dofAutoSignPlayers: !hired.dofAutoSignPlayers })}
+                />
+                <StaffToggle
+                  label="AUTO-SELL PLAYERS"
+                  description="Accepts or rejects transfer bids based on the manager's opinion."
+                  value={!!hired.dofAutoSellPlayers}
+                  onToggle={() => updateCoach(hired.id, { dofAutoSellPlayers: !hired.dofAutoSellPlayers })}
+                />
+              </View>
             )}
           </View>
         );

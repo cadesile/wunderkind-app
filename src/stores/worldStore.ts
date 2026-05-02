@@ -52,10 +52,10 @@ interface WorldState {
   mutateClubRoster: (clubId: string, updatedPlayers: WorldPlayer[]) => Promise<void>;
   /**
    * Replace all league + club data from a conclude-season API response.
-   * Assigns client-side formation and appearance, persists per-league clubs to AsyncStorage.
-   * Pass newAmpLeagueId when the AMP has been promoted/relegated; null = stay in current league.
+   * AMP league placement is derived from the isAmp flag on the clubs array.
+   * Persists per-league clubs to AsyncStorage.
    */
-  applySeasonUpdate: (responseLeagues: SeasonUpdateLeague[], newAmpLeagueId: string | null) => Promise<void>;
+  applySeasonUpdate: (responseLeagues: SeasonUpdateLeague[]) => Promise<void>;
 }
 
 export const useWorldStore = create<WorldState>()(
@@ -183,15 +183,25 @@ export const useWorldStore = create<WorldState>()(
 
           useLeagueStore.getState().setFromSync(syntheticLeague);
 
-          // Credit Season 1 TV deal immediately — covers the whole season upfront
-          if (tvDeal > 0) {
+          // Credit Season 1 TV deal and league sponsor pot immediately — covers the whole season upfront
+          {
             const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
-            useFinanceStore.getState().addTransaction({
-              amount:      penceToPounds(tvDeal),
-              category:    'tv_deal',
-              description: 'Season 1 TV deal',
-              weekNumber,
-            });
+            if (tvDeal > 0) {
+              useFinanceStore.getState().addTransaction({
+                amount:      penceToPounds(tvDeal),
+                category:    'tv_deal',
+                description: 'Season 1 TV deal',
+                weekNumber,
+              });
+            }
+            if (sponsorPot > 0) {
+              useFinanceStore.getState().addTransaction({
+                amount:      penceToPounds(sponsorPot),
+                category:    'league_sponsor',
+                description: 'Season 1 league sponsor',
+                weekNumber,
+              });
+            }
           }
 
           useFixtureStore.getState().generateFixturesFromWorldLeague(bottomLeague, 1, ampClubId);
@@ -249,11 +259,16 @@ export const useWorldStore = create<WorldState>()(
           .filter((c): c is WorldClub => c !== undefined);
       },
 
-      applySeasonUpdate: async (responseLeagues, newAmpLeagueId) => {
-        const updatedAmpLeagueId = newAmpLeagueId ?? get().ampLeagueId;
+      applySeasonUpdate: async (responseLeagues) => {
+        // Derive the AMP's new league from the isAmp flag — authoritative from server
+        const ampLeagueEntry = responseLeagues.find((l) => l.clubs.some((c) => c.isAmp));
+        const updatedAmpLeagueId = ampLeagueEntry?.id ?? get().ampLeagueId;
 
         // Rebuild WorldLeague metadata.
         // NPC club rosters are NOT replaced — only clubIds, league metadata, and club.tier update.
+        // AMP is excluded from clubIds (it is the player's own club, not an NPC).
+        // Each club appears in exactly one league in the backend response — its correct new assignment.
+        // relegated/promoted flags describe the club's status; they do not affect league membership.
         const leagues: WorldLeague[] = responseLeagues.map((l) => ({
           id:             l.id,
           tier:           l.tier,
@@ -261,40 +276,41 @@ export const useWorldStore = create<WorldState>()(
           country:        l.country,
           promotionSpots: l.promotionSpots,
           reputationTier: l.reputationTier,
-          clubIds:        l.clubs.map((c) => c.id),
+          clubIds:        l.clubs.filter((c) => !c.isAmp).map((c) => c.clubId),
         }));
 
-        // Patch WorldClub.tier for any NPC club that moved leagues.
-        // Persist each affected league's club map to AsyncStorage so the update survives restart.
+        // Update every NPC club's tier to match their new league assignment.
+        // Tier is now derived from the parent league (l.tier), not the club entry.
         const currentClubs = get().clubs;
         const updatedClubs: Record<string, WorldClub> = { ...currentClubs };
-        const dirtyLeagueIds = new Set<string>();
 
         for (const l of responseLeagues) {
           for (const slim of l.clubs) {
-            const existing = updatedClubs[slim.id];
-            if (existing && existing.tier !== slim.tier) {
-              updatedClubs[slim.id] = { ...existing, tier: slim.tier };
-              dirtyLeagueIds.add(l.id);
+            if (slim.isAmp) continue; // AMP not in worldClubs
+            const existing = updatedClubs[slim.clubId];
+            if (existing) {
+              updatedClubs[slim.clubId] = { ...existing, tier: l.tier };
             }
           }
         }
 
-        for (const leagueId of dirtyLeagueIds) {
-          const leagueClubIds = responseLeagues.find((l) => l.id === leagueId)?.clubs.map((c) => c.id) ?? [];
+        // Persist ALL leagues to AsyncStorage — directly follow the backend's assignment.
+        // No dirty-tracking: every league gets its authoritative club map written.
+        for (const l of responseLeagues) {
+          const npcClubIds = l.clubs.filter((c) => !c.isAmp).map((c) => c.clubId);
           const leagueClubMap: Record<string, WorldClub> = {};
-          for (const id of leagueClubIds) {
+          for (const id of npcClubIds) {
             if (updatedClubs[id]) leagueClubMap[id] = updatedClubs[id];
           }
           await AsyncStorage.setItem(
-            `${CLUBS_KEY_PREFIX}${leagueId}`,
+            `${CLUBS_KEY_PREFIX}${l.id}`,
             JSON.stringify(leagueClubMap),
           );
         }
 
         set({
           leagues,
-          clubs: dirtyLeagueIds.size > 0 ? updatedClubs : currentClubs,
+          clubs: updatedClubs,
           ampLeagueId: updatedAmpLeagueId,
         });
       },
