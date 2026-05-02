@@ -98,6 +98,23 @@ class SimulationService {
             const awayName = ampIsAway ? userClub.name : (worldClubs[fixture.awayClubId]?.name ?? 'Opponent');
             const ampGoals = ampIsHome ? result.homeScore : result.awayScore;
             const oppGoals = ampIsHome ? result.awayScore : result.homeScore;
+
+            // ── Record appearances for AMP XI players ─────────────────────────
+            const { recordAppearance } = useSquadStore.getState();
+            const matchResult: 'win' | 'loss' | 'draw' =
+              ampGoals > oppGoals ? 'win' : ampGoals < oppGoals ? 'loss' : 'draw';
+            const scoreline = `${ampGoals}-${oppGoals}`;
+            const opponentId = ampIsHome ? fixture.awayClubId : fixture.homeClubId;
+            const season = `Season ${Math.ceil((userClub.weekNumber ?? 1) / 38)}`;
+            const ampXI = ampIsHome ? result.homePlayers : result.awayPlayers;
+            const ampSquadIds = new Set(userSquad.map((p) => p.id));
+            ampXI.forEach((xip) => {
+              if (!ampSquadIds.has(xip.id)) return;
+              const rating = Math.max(1, Math.min(10,
+                Math.round(4 + (xip.overallRating / 100) * 4 + (Math.random() * 3 - 1.5))
+              ));
+              recordAppearance(xip.id, season, userClub.id, { opponentId, result: matchResult, scoreline, rating });
+            });
             const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
             const venue = ampIsHome ? 'Home' : 'Away';
 

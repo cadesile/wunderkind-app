@@ -13,6 +13,8 @@ export interface MatchResult {
   homeScore: number;
   awayScore: number;
   events: any[]; // Placeholder for future complexity (goalscorers, cards, etc.)
+  homePlayers: Player[];
+  awayPlayers: Player[];
 }
 
 export class ResultsEngine {
@@ -27,8 +29,6 @@ export class ResultsEngine {
     away: SimTeam,
     tacticalMatrix: Record<string, Record<string, number>>
   ): MatchResult {
-    console.log('home', home);
-    console.log('away', away);
     const homeDominance = this.calculateDominance(home, away, tacticalMatrix);
     const awayDominance = this.calculateDominance(away, home, tacticalMatrix);
 
@@ -44,9 +44,11 @@ export class ResultsEngine {
     const awayExp = expectedTotalGoals * (1 - homeRatio);
 
     return {
-      homeScore: this.poissonRandom(homeExp),
-      awayScore: this.poissonRandom(awayExp),
-      events: [],
+      homeScore:   this.poissonRandom(homeExp),
+      awayScore:   this.poissonRandom(awayExp),
+      events:      [],
+      homePlayers: home.xi,
+      awayPlayers: away.xi,
     };
   }
 

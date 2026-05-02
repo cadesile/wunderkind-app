@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Player, PersonalityMatrix, PlayerAttributes, AttributeName, Position, TraitName, DevelopmentSnapshot } from '@/types/player';
+import { Player, PersonalityMatrix, PlayerAttributes, AttributeName, Position, TraitName, DevelopmentSnapshot, MatchAppearance } from '@/types/player';
 import { zustandStorage } from '@/utils/storage';
 import { releasePlayer as releasePlayerApi } from '@/api/endpoints/squad';
 import { useInboxStore } from '@/stores/inboxStore';
@@ -60,6 +60,12 @@ interface SquadState {
    * Called by GameLoop every 4 weeks.
    */
   recordDevelopmentSnapshots: (weekNumber: number) => void;
+  /**
+   * Records a single match appearance against a player.
+   * @param season  Display key e.g. "Season 1"
+   * @param clubId  The AMP club id (so the player's appearances are bucketed per club)
+   */
+  recordAppearance: (playerId: string, season: string, clubId: string, appearance: MatchAppearance) => void;
   /**
    * Release a player back to the market pool. Removes from local squad immediately
    * (fat-client model) and fires a best-effort backend call to set club = null.
@@ -216,6 +222,26 @@ export const useSquadStore = create<SquadState>()(
               attributes: { ...p.attributes },
             };
             return { ...p, developmentLog: [...(p.developmentLog ?? []), snapshot] };
+          }),
+        })),
+
+      recordAppearance: (playerId, season, clubId, appearance) =>
+        set((state) => ({
+          players: state.players.map((p) => {
+            if (p.id !== playerId) return p;
+            const prev = p.appearances ?? {};
+            const seasonBucket = prev[season] ?? {};
+            const clubBucket = seasonBucket[clubId] ?? [];
+            return {
+              ...p,
+              appearances: {
+                ...prev,
+                [season]: {
+                  ...seasonBucket,
+                  [clubId]: [...clubBucket, appearance],
+                },
+              },
+            };
           }),
         })),
 

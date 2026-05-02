@@ -90,6 +90,20 @@ export interface DevelopmentSnapshot {
   attributes: PlayerAttributes;
 }
 
+// ─── Match Appearances ────────────────────────────────────────────────────────
+
+export interface MatchAppearance {
+  opponentId: string;
+  result: 'win' | 'loss' | 'draw';
+  /** Display scoreline, e.g. "2-1" (always from AMP's perspective: AMP goals first) */
+  scoreline: string;
+  /** Player rating 1–10 */
+  rating: number;
+}
+
+/** appearances[season][clubId] → ordered list of match appearances */
+export type PlayerAppearances = Record<string, Record<string, MatchAppearance[]>>;
+
 // ─── Player ───────────────────────────────────────────────────────────────────
 
 export interface Player {
@@ -151,4 +165,6 @@ export interface Player {
   };
   /** Monthly (every-4-weeks) development snapshots — populated by GameLoop */
   developmentLog?: DevelopmentSnapshot[];
+  /** Match appearance history — keyed season → clubId → appearances[] */
+  appearances?: PlayerAppearances;
 }
