@@ -627,6 +627,7 @@ const CAT_BADGE_CONFIG: Record<FinancialCategory, { label: string; color: string
   investor_buyout:      { label: 'BYO', color: WK.red },
   guardian_payment:     { label: 'GRD', color: WK.yellow },
   matchday_income:      { label: 'MCH', color: WK.green },
+  staff_signing:        { label: 'STF', color: WK.orange },
 };
 
 function LedgerPane() {

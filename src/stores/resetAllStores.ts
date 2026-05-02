@@ -9,6 +9,7 @@ import { useGuardianStore } from './guardianStore';
 import { useFixtureStore } from './fixtureStore';
 import { useWorldStore } from './worldStore';
 import { useLeagueStore } from './leagueStore';
+import { useLeagueHistoryStore } from './leagueHistoryStore';
 
 /** Prefix used by worldStore for per-league club maps. */
 const WORLD_CLUBS_KEY_PREFIX = 'worldStore_clubs_';
@@ -70,6 +71,7 @@ export function resetInMemoryStores(): void {
 
   useGuardianStore.getState().clearAll();
   useEventChainStore.getState().clearAll();
+  useLeagueHistoryStore.setState({ history: {} });
 }
 
 /**
