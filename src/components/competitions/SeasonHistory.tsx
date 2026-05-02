@@ -13,7 +13,7 @@ export function SeasonHistory() {
   // Flatten all tier records and sort newest season first
   const allRecords: LeagueSeasonRecord[] = Object.values(history)
     .flat()
-    .sort((a, b) => b.season - a.season || b.tier - a.tier); // lower tier number = higher prestige → show first within same season
+    .sort((a, b) => b.season - a.season || a.tier - b.tier); // lower tier number = higher prestige → show first within same season
 
   if (allRecords.length === 0) {
     return (
