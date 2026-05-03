@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
 import type { WorldClub, WorldLeague, WorldPackResponse, WorldPlayer, SeasonUpdateLeague } from '@/types/world';
 import type { MatchAppearance } from '@/types/player';
+import type { TrophyRecord } from '@/types/club';
 import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
@@ -62,6 +63,7 @@ interface WorldState {
    * Persists per-league clubs to AsyncStorage.
    */
   applySeasonUpdate: (responseLeagues: SeasonUpdateLeague[]) => Promise<void>;
+  addTrophyToClub: (clubId: string, trophy: TrophyRecord) => Promise<void>;
 }
 
 export const useWorldStore = create<WorldState>()(
@@ -327,6 +329,31 @@ export const useWorldStore = create<WorldState>()(
         if (!club) return;
 
         const updatedClub = { ...club, players: updatedPlayers };
+
+        // Update in-memory map
+        set((s) => ({ clubs: { ...s.clubs, [clubId]: updatedClub } }));
+
+        // Find which league this club belongs to and re-persist that league's clubs
+        const leagueId = leagues.find((l) => l.clubIds.includes(clubId))?.id;
+        if (!leagueId) return;
+
+        const allLeagueClubs = get().getLeagueClubs(leagueId);
+        const leagueClubMap: Record<string, WorldClub> = {};
+        for (const c of allLeagueClubs) {
+          leagueClubMap[c.id] = c.id === clubId ? updatedClub : c;
+        }
+        await AsyncStorage.setItem(
+          `${CLUBS_KEY_PREFIX}${leagueId}`,
+          JSON.stringify(leagueClubMap),
+        );
+      },
+
+      addTrophyToClub: async (clubId, trophy) => {
+        const { clubs, leagues } = get();
+        const club = clubs[clubId];
+        if (!club) return;
+
+        const updatedClub = { ...club, trophies: [...(club.trophies ?? []), trophy] };
 
         // Update in-memory map
         set((s) => ({ clubs: { ...s.clubs, [clubId]: updatedClub } }));
