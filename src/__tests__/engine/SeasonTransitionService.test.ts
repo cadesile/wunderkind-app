@@ -397,6 +397,9 @@ const baseSnapshot: SeasonTransitionSnapshot = {
   goalsAgainst:     5,
   points:           20,
   displayStandings: mockStandings,
+  retirementMinAge: 32,
+  retirementMaxAge: 38,
+  retirementChance: 0.3,
 };
 
 // --- distributeSeasonFinances ---
@@ -582,7 +585,7 @@ describe('awardSeasonTrophies', () => {
 
   it('awards AMP trophy when finalPosition === 1', () => {
     const snapshot = { ...baseSnapshot, finalPosition: 1 };
-    awardSeasonTrophies(snapshot as any, [], []);
+    awardSeasonTrophies(snapshot, [], []);
     expect(mockAddTrophy).toHaveBeenCalledTimes(1);
     expect(mockAddTrophy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'league_title' })
@@ -591,7 +594,7 @@ describe('awardSeasonTrophies', () => {
 
   it('does NOT award AMP trophy when finalPosition !== 1', () => {
     const snapshot = { ...baseSnapshot, finalPosition: 2 };
-    awardSeasonTrophies(snapshot as any, [], []);
+    awardSeasonTrophies(snapshot, [], []);
     expect(mockAddTrophy).not.toHaveBeenCalled();
   });
 
@@ -605,7 +608,7 @@ describe('awardSeasonTrophies', () => {
     };
     const responseLeague = { id: 'league-1', name: 'Northern League', tier: 3 };
     const snapshot = { ...baseSnapshot, finalPosition: 5 };
-    awardSeasonTrophies(snapshot as any, [pyramidLeague as any], [responseLeague as any]);
+    awardSeasonTrophies(snapshot, [pyramidLeague as any], [responseLeague as any]);
     expect(mockAddTrophyToClub).toHaveBeenCalledTimes(1);
     expect(mockAddTrophyToClub).toHaveBeenCalledWith(
       'npc-1',
@@ -621,7 +624,7 @@ describe('awardSeasonTrophies', () => {
       ],
     };
     const snapshot = { ...baseSnapshot, finalPosition: 1 };
-    awardSeasonTrophies(snapshot as any, [pyramidLeague as any], []);
+    awardSeasonTrophies(snapshot, [pyramidLeague as any], []);
     expect(mockAddTrophyToClub).not.toHaveBeenCalled();
   });
 });

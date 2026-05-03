@@ -15,7 +15,6 @@ const MOCK_CLUB: WorldClub = {
   id: 'club-1',
   name: 'FC Test',
   tier: 3,
-  leagueId: 'league-1',
   reputation: 50,
   primaryColor: '#ff0000',
   secondaryColor: '#ffffff',

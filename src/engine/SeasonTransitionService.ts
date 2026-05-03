@@ -92,18 +92,31 @@ export function buildLeagueStandings(
 ): PyramidStanding[] {
   const ampClubId   = useClubStore.getState().club.id;
   const allFixtures = useFixtureStore.getState().fixtures;
+  const worldClubs  = useWorldStore.getState().clubs;
 
-  const pts: Record<string, number> = {};
-  const gd:  Record<string, number> = {};
-  const gf:  Record<string, number> = {};
-  for (const id of clubIds) { pts[id] = 0; gd[id] = 0; gf[id] = 0; }
+  const pts:    Record<string, number> = {};
+  const gd:     Record<string, number> = {};
+  const gf:     Record<string, number> = {};
+  const wins:   Record<string, number> = {};
+  const draws:  Record<string, number> = {};
+  const losses: Record<string, number> = {};
+  for (const id of clubIds) {
+    pts[id] = 0; gd[id] = 0; gf[id] = 0;
+    wins[id] = 0; draws[id] = 0; losses[id] = 0;
+  }
 
   for (const f of allFixtures) {
     if (f.leagueId !== leagueId || f.season !== season || !f.result) continue;
     const { homeGoals, awayGoals } = f.result;
     if (!(f.homeClubId in pts) || !(f.awayClubId in pts)) continue;
-    pts[f.homeClubId] += homeGoals > awayGoals ? 3 : homeGoals === awayGoals ? 1 : 0;
-    pts[f.awayClubId] += awayGoals > homeGoals ? 3 : homeGoals === awayGoals ? 1 : 0;
+    if (homeGoals > awayGoals) {
+      pts[f.homeClubId] += 3; wins[f.homeClubId]++;  losses[f.awayClubId]++;
+    } else if (homeGoals === awayGoals) {
+      pts[f.homeClubId] += 1; pts[f.awayClubId] += 1;
+      draws[f.homeClubId]++; draws[f.awayClubId]++;
+    } else {
+      pts[f.awayClubId] += 3; wins[f.awayClubId]++;  losses[f.homeClubId]++;
+    }
     gd[f.homeClubId]  += homeGoals - awayGoals;
     gd[f.awayClubId]  += awayGoals - homeGoals;
     gf[f.homeClubId]  += homeGoals;
@@ -121,6 +134,12 @@ export function buildLeagueStandings(
     // Relegate the bottom `relegationSpots` clubs. Guard total > relegationSpots to
     // avoid relegating all clubs in a very small league.
     relegated: relegationSpots > 0 && total > relegationSpots && (i + 1) > (total - relegationSpots),
+    clubName:       worldClubs[clubId]?.name ?? '',
+    wins:           wins[clubId] ?? 0,
+    draws:          draws[clubId] ?? 0,
+    losses:         losses[clubId] ?? 0,
+    points:         pts[clubId] ?? 0,
+    goalDifference: gd[clubId] ?? 0,
   }));
 }
 
@@ -424,9 +443,9 @@ export function awardSeasonTrophies(
   }
 
   for (const league of pyramidLeagues) {
-    const winner = league.standings[0];
-    if (!winner) continue;
-    if (winner.isAmp) continue;
+    const winnerStanding = league.standings[0];
+    if (!winnerStanding) continue;
+    if (winnerStanding.isAmp) continue;
 
     const responseLeague = responseLeagues.find((l) => l.id === league.leagueId);
     const leagueName = responseLeague?.name ?? league.leagueId;
@@ -438,24 +457,24 @@ export function awardSeasonTrophies(
       leagueName,
       season:        snapshot.currentSeason,
       weekCompleted: snapshot.weekNumber,
-      wins:          0,
-      draws:         0,
-      losses:        0,
-      points:        0,
+      wins:          winnerStanding.wins,
+      draws:         winnerStanding.draws,
+      losses:        winnerStanding.losses,
+      points:        winnerStanding.points,
       goalsFor:      0,
       goalsAgainst:  0,
       standings:     league.standings.map((s, idx): TrophyStandingEntry => ({
         clubId:         s.clubId,
-        clubName:       (s as any).clubName ?? '',
+        clubName:       s.clubName,
         position:       idx + 1,
-        wins:           (s as any).wins ?? 0,
-        draws:          (s as any).draws ?? 0,
-        losses:         (s as any).losses ?? 0,
-        points:         (s as any).points ?? 0,
-        goalDifference: (s as any).goalDifference ?? 0,
+        wins:           s.wins,
+        draws:          s.draws,
+        losses:         s.losses,
+        points:         s.points,
+        goalDifference: s.goalDifference,
       })),
     };
-    useWorldStore.getState().addTrophyToClub(winner.clubId, npcTrophy);
+    useWorldStore.getState().addTrophyToClub(winnerStanding.clubId, npcTrophy);
   }
 }
 

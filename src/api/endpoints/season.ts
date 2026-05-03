@@ -6,6 +6,13 @@ export interface PyramidStanding {
   isAmp: boolean;
   promoted: boolean;
   relegated: boolean;
+  // Season stats — populated by buildLeagueStandings for use in trophy records
+  clubName:       string;
+  wins:           number;
+  draws:          number;
+  losses:         number;
+  points:         number;
+  goalDifference: number;
 }
 
 export interface PyramidLeague {
