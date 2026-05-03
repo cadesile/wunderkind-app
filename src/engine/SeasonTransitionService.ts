@@ -10,6 +10,7 @@ import { concludeSeason } from '@/api/endpoints/season';
 import type { PyramidStanding, PyramidLeague } from '@/api/endpoints/season';
 import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
 import type { SeasonUpdateLeague, WorldLeague } from '@/types/world';
+import type { TrophyRecord, TrophyStandingEntry } from '@/types/club';
 import type { GameConfig } from '@/types/gameConfig';
 import { uuidv7 } from '@/utils/uuidv7';
 import { penceToPounds } from '@/utils/currency';
@@ -383,6 +384,81 @@ export function retireAMPPlayers(
   }
 }
 
+// ─── Trophy awarding ──────────────────────────────────────────────────────────
+
+/**
+ * Award league title trophies at season end.
+ * - Awards a TrophyRecord to the AMP club via clubStore when finalPosition === 1.
+ * - Awards a TrophyRecord to each non-AMP NPC league winner via worldStore.
+ */
+export function awardSeasonTrophies(
+  snapshot: SeasonTransitionSnapshot,
+  pyramidLeagues: PyramidLeague[],
+  responseLeagues: SeasonUpdateLeague[],
+): void {
+  if (snapshot.finalPosition === 1) {
+    const ampTrophy: TrophyRecord = {
+      type:          'league_title',
+      tier:          snapshot.currentLeague.tier,
+      leagueName:    snapshot.currentLeague.name,
+      season:        snapshot.currentSeason,
+      weekCompleted: snapshot.weekNumber,
+      wins:          snapshot.wins,
+      draws:         snapshot.draws,
+      losses:        snapshot.losses,
+      points:        snapshot.points,
+      goalsFor:      snapshot.goalsFor,
+      goalsAgainst:  snapshot.goalsAgainst,
+      standings:     snapshot.displayStandings.map((s, idx): TrophyStandingEntry => ({
+        clubId:         s.id,
+        clubName:       s.name,
+        position:       idx + 1,
+        wins:           s.wins ?? 0,
+        draws:          s.draws ?? 0,
+        losses:         s.losses ?? 0,
+        points:         s.pts,
+        goalDifference: s.gd ?? 0,
+      })),
+    };
+    useClubStore.getState().addTrophy(ampTrophy);
+  }
+
+  for (const league of pyramidLeagues) {
+    const winner = league.standings[0];
+    if (!winner) continue;
+    if (winner.isAmp) continue;
+
+    const responseLeague = responseLeagues.find((l) => l.id === league.leagueId);
+    const leagueName = responseLeague?.name ?? league.leagueId;
+    const leagueTier = responseLeague?.tier ?? 0;
+
+    const npcTrophy: TrophyRecord = {
+      type:          'league_title',
+      tier:          leagueTier,
+      leagueName,
+      season:        snapshot.currentSeason,
+      weekCompleted: snapshot.weekNumber,
+      wins:          0,
+      draws:         0,
+      losses:        0,
+      points:        0,
+      goalsFor:      0,
+      goalsAgainst:  0,
+      standings:     league.standings.map((s, idx): TrophyStandingEntry => ({
+        clubId:         s.clubId,
+        clubName:       (s as any).clubName ?? '',
+        position:       idx + 1,
+        wins:           (s as any).wins ?? 0,
+        draws:          (s as any).draws ?? 0,
+        losses:         (s as any).losses ?? 0,
+        points:         (s as any).points ?? 0,
+        goalDifference: (s as any).goalDifference ?? 0,
+      })),
+    };
+    useWorldStore.getState().addTrophyToClub(winner.clubId, npcTrophy);
+  }
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
 /**
@@ -432,4 +508,6 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
   };
   await retireNPCPlayers(retirementConfig, snapshot.weekNumber);
   retireAMPPlayers(retirementConfig, snapshot.weekNumber);
+
+  awardSeasonTrophies(snapshot, pyramidLeagues, responseLeagues);
 }

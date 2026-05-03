@@ -24,6 +24,8 @@ const mockFixtures = [
 
 const mockClearSeason = jest.fn();
 const mockLoadFromServerSchedule = jest.fn();
+const mockAddTrophy = jest.fn();
+const mockAddTrophyToClub = jest.fn();
 
 jest.mock('@/stores/fixtureStore', () => ({
   useFixtureStore: {
@@ -36,7 +38,7 @@ jest.mock('@/stores/fixtureStore', () => ({
 }));
 
 jest.mock('@/stores/clubStore', () => ({
-  useClubStore: { getState: () => ({ club: { id: 'amp-not-in-this-league' } }) },
+  useClubStore: { getState: () => ({ club: { id: 'amp-not-in-this-league' }, addTrophy: mockAddTrophy }) },
 }));
 
 // Used by applySeasonResponse tests (Task 3)
@@ -52,6 +54,7 @@ jest.mock('@/stores/worldStore', () => ({
       },
       leagues: [],
       applySeasonUpdate: mockApplySeasonUpdate,
+      addTrophyToClub: mockAddTrophyToClub,
     }),
   },
 }));
@@ -348,6 +351,7 @@ import {
   distributeSeasonFinances,
   recordSeasonHistory,
   performSeasonTransition,
+  awardSeasonTrophies,
 } from '@/engine/SeasonTransitionService';
 import type { SeasonTransitionSnapshot, SeasonStanding } from '@/engine/SeasonTransitionService';
 
@@ -514,12 +518,13 @@ describe('performSeasonTransition', () => {
     concludeSeasonMock.mockResolvedValue({ seasonRecordId: 'rec1', newLeague: null, leagues: twoLeagueResponse });
     addSeasonRecordMock = jest.requireMock('@/stores/leagueHistoryStore').useLeagueHistoryStore.getState().addSeasonRecord as jest.Mock;
     const { useClubStore } = jest.requireMock('@/stores/clubStore');
-    useClubStore.getState = () => ({ club: { id: 'amp1', weekNumber: 38 } });
+    useClubStore.getState = () => ({ club: { id: 'amp1', weekNumber: 38 }, addTrophy: mockAddTrophy });
     const { useWorldStore } = jest.requireMock('@/stores/worldStore');
     useWorldStore.getState = () => ({
       clubs: {},
       leagues: mockWorldLeagues,
       applySeasonUpdate: mockApplySeasonUpdate,
+      addTrophyToClub: mockAddTrophyToClub,
     });
   });
 
@@ -556,5 +561,67 @@ describe('performSeasonTransition', () => {
   it('throws when server returns empty leagues array', async () => {
     concludeSeasonMock.mockResolvedValue({ seasonRecordId: 'r1', newLeague: null, leagues: [] });
     await expect(performSeasonTransition(baseSnapshot)).rejects.toThrow('empty leagues array');
+  });
+});
+
+// --- awardSeasonTrophies ---
+
+describe('awardSeasonTrophies', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const { useClubStore } = jest.requireMock('@/stores/clubStore');
+    useClubStore.getState = () => ({ club: { id: 'amp1', weekNumber: 38 }, addTrophy: mockAddTrophy });
+    const { useWorldStore } = jest.requireMock('@/stores/worldStore');
+    useWorldStore.getState = () => ({
+      clubs: {},
+      leagues: [],
+      applySeasonUpdate: mockApplySeasonUpdate,
+      addTrophyToClub: mockAddTrophyToClub,
+    });
+  });
+
+  it('awards AMP trophy when finalPosition === 1', () => {
+    const snapshot = { ...baseSnapshot, finalPosition: 1 };
+    awardSeasonTrophies(snapshot as any, [], []);
+    expect(mockAddTrophy).toHaveBeenCalledTimes(1);
+    expect(mockAddTrophy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'league_title' })
+    );
+  });
+
+  it('does NOT award AMP trophy when finalPosition !== 1', () => {
+    const snapshot = { ...baseSnapshot, finalPosition: 2 };
+    awardSeasonTrophies(snapshot as any, [], []);
+    expect(mockAddTrophy).not.toHaveBeenCalled();
+  });
+
+  it('awards NPC trophy for league winner', () => {
+    const pyramidLeague = {
+      leagueId: 'league-1',
+      standings: [
+        { clubId: 'npc-1', isAmp: false, promoted: false, relegated: false },
+        { clubId: 'npc-2', isAmp: false, promoted: false, relegated: false },
+      ],
+    };
+    const responseLeague = { id: 'league-1', name: 'Northern League', tier: 3 };
+    const snapshot = { ...baseSnapshot, finalPosition: 5 };
+    awardSeasonTrophies(snapshot as any, [pyramidLeague as any], [responseLeague as any]);
+    expect(mockAddTrophyToClub).toHaveBeenCalledTimes(1);
+    expect(mockAddTrophyToClub).toHaveBeenCalledWith(
+      'npc-1',
+      expect.objectContaining({ type: 'league_title' })
+    );
+  });
+
+  it('skips NPC trophy if AMP is the league winner', () => {
+    const pyramidLeague = {
+      leagueId: 'league-1',
+      standings: [
+        { clubId: 'amp1', isAmp: true, promoted: true, relegated: false },
+      ],
+    };
+    const snapshot = { ...baseSnapshot, finalPosition: 1 };
+    awardSeasonTrophies(snapshot as any, [pyramidLeague as any], []);
+    expect(mockAddTrophyToClub).not.toHaveBeenCalled();
   });
 });
