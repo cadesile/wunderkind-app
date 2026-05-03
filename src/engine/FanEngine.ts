@@ -14,8 +14,10 @@ export class FanEngine {
     events.forEach(event => {
       const weeksAgo = currentWeek - event.weekNumber;
       if (weeksAgo < 0) return; // Future event? Ignore.
-      
-      const decay = Math.max(0, 1 - (weeksAgo * 0.1));
+
+      const decay = event.isPermanent
+        ? 1
+        : Math.max(0, 1 - (weeksAgo * 0.1));
       score += event.impact * decay;
     });
 
@@ -28,14 +30,16 @@ export class FanEngine {
   static calculateTargetScore(currentWeek: number, target: import('@/types/fans').FanImpactTarget): number {
     const events = useFanStore.getState().events;
     let score = 50; // Baseline
-    
+
     events.forEach(event => {
       if (!event.targets.includes(target)) return;
-      
+
       const weeksAgo = currentWeek - event.weekNumber;
       if (weeksAgo < 0) return;
-      
-      const decay = Math.max(0, 1 - (weeksAgo * 0.1));
+
+      const decay = event.isPermanent
+        ? 1
+        : Math.max(0, 1 - (weeksAgo * 0.1));
       score += event.impact * decay;
     });
 

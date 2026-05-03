@@ -105,3 +105,64 @@ describe('fanStore.addEvent — cap protects permanent events', () => {
     expect(permanent[0].type).toBe('trophy_won');
   });
 });
+
+import { FanEngine } from '@/engine/FanEngine';
+
+describe('FanEngine.calculateScore — permanent events', () => {
+  beforeEach(() => {
+    useFanStore.setState({ events: [], fanFavoriteId: null });
+  });
+
+  it('permanent events contribute full impact even after 10+ weeks', () => {
+    useFanStore.setState({
+      events: [
+        {
+          id: '1',
+          type: 'trophy_won',
+          description: 'title',
+          impact: 30,
+          weekNumber: 1,
+          targets: [],
+          isPermanent: true,
+        },
+      ],
+      fanFavoriteId: null,
+    });
+    // At week 100, a non-permanent event would have decayed to 0 (weeksAgo = 99)
+    const score = FanEngine.calculateScore(100);
+    // baseline 50 + full impact 30 = 80
+    expect(score).toBe(80);
+  });
+
+  it('non-permanent events still decay normally', () => {
+    useFanStore.setState({
+      events: [
+        {
+          id: '1',
+          type: 'match_win',
+          description: 'win',
+          impact: 10,
+          weekNumber: 1,
+          targets: [],
+        },
+      ],
+      fanFavoriteId: null,
+    });
+    // At week 12, weeksAgo = 11, decay = max(0, 1 - 1.1) = 0 → no contribution
+    const score = FanEngine.calculateScore(12);
+    expect(score).toBe(50); // baseline only
+  });
+
+  it('stacks multiple permanent events (clamped to 100)', () => {
+    useFanStore.setState({
+      events: [
+        { id: '1', type: 'trophy_won',  description: 't1', impact: 30, weekNumber: 1,  targets: [], isPermanent: true },
+        { id: '2', type: 'trophy_won',  description: 't2', impact: 30, weekNumber: 52, targets: [], isPermanent: true },
+      ],
+      fanFavoriteId: null,
+    });
+    const score = FanEngine.calculateScore(200);
+    // 50 + 30 + 30 = 110 → clamped to 100
+    expect(score).toBe(100);
+  });
+});
