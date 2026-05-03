@@ -12,8 +12,8 @@ export interface FacilityTemplate {
   slug: string;
   label: string;
   description: string;
-  /** TRAINING | MEDICAL | SCOUTING */
-  category: 'TRAINING' | 'MEDICAL' | 'SCOUTING';
+  /** TRAINING | MEDICAL | SCOUTING | STADIUM */
+  category: 'TRAINING' | 'MEDICAL' | 'SCOUTING' | 'STADIUM';
   /** Upgrade cost base in pence. App formula: (currentLevel + 1) × baseCost */
   baseCost: number;
   /** Weekly upkeep in pence at level 1. App formula: base × 1.5^level */
