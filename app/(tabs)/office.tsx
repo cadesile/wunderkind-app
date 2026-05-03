@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Modal, TextInput, ScrollView, Pressable } from 'react-native';
+import { View, Modal, TextInput, ScrollView, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { Trophy, ChevronRight } from 'lucide-react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,6 +26,8 @@ import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import type { Player } from '@/types/player';
 import { WK, pixelShadow } from '@/constants/theme';
 import { PixelFootballBadge } from '@/components/ui/ClubBadge/PixelFootballBadge';
+import { StadiumView } from '@/components/stadium/StadiumView';
+import type { StadiumFacility } from '@/components/stadium/StadiumView';
 import type { BaseShape } from '@/components/ui/ClubBadge/types';
 import { penceToPounds, formatPounds } from '@/utils/currency';
 import { hapticTap } from '@/utils/haptics';
@@ -831,11 +834,14 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
+const STAND_SLUGS = ['north_stand', 'south_stand', 'east_stand', 'west_stand'] as const;
+
 export default function OfficeScreen() {
   const [activeTab, setActiveTab] = useState<OfficeTab>('CLUB');
   const club = useClubStore((s) => s.club);
   const { templates, levels, conditions } = useFacilityStore();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
 
   const balance = penceToPounds(
     typeof club.balance === 'number' && !isNaN(club.balance)
@@ -844,6 +850,19 @@ export default function OfficeScreen() {
   );
 
   const stadiumTemplates = templates.filter((t) => t.category === 'STADIUM');
+
+  // Build StadiumFacility list for the four stands
+  const stadiumFacilities: StadiumFacility[] = STAND_SLUGS.map((slug) => {
+    const tpl = templates.find((t) => t.slug === slug);
+    return {
+      slug,
+      level:    levels[slug] ?? 0,
+      maxLevel: tpl?.maxLevel ?? 5,
+    };
+  });
+
+  // Stadium view fills the scrollview width (minus horizontal padding × 2)
+  const stadiumViewSize = screenWidth - 20;
 
   function navigateToHire(role: string) {
     router.navigate({ pathname: '/(tabs)/facilities', params: { tab: 'HIRE', role } });
@@ -886,6 +905,37 @@ export default function OfficeScreen() {
               templates={templates}
               levels={levels}
             />
+
+            <StadiumView
+              facilities={stadiumFacilities}
+              stadiumName={club.stadiumName ?? 'UNNAMED STADIUM'}
+              primaryColour={club.primaryColor}
+              size={stadiumViewSize}
+            />
+
+            <TouchableOpacity
+              onPress={() => router.push('/museum')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: WK.tealCard,
+                borderWidth: 3,
+                borderColor: WK.border,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                marginHorizontal: 10,
+                marginBottom: 8,
+                ...pixelShadow,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Trophy size={12} color={WK.yellow} />
+                <PixelText size={8} color={WK.yellow}>VIEW MUSEUM</PixelText>
+              </View>
+              <ChevronRight size={14} color={WK.dim} />
+            </TouchableOpacity>
+
             {stadiumTemplates.map((template) => (
               <FacilityCard
                 key={template.slug}
