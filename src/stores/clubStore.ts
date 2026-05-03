@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Club, ReputationTier, ManagerPersonality, ManagerProfile, SponsorContract } from '@/types/club';
+import { Club, ReputationTier, ManagerPersonality, ManagerProfile, SponsorContract, TrophyRecord } from '@/types/club';
 import { zustandStorage } from '@/utils/storage';
 import type { ClubStatusResponse, SyncAcceptedResponse } from '@/types/api';
 
@@ -60,6 +60,7 @@ interface ClubState {
   setPlayingStyle: (s: Club['playingStyle']) => void;
   setClubColors: (primary: string, secondary: string) => void;
   setBadgeShape: (shape: NonNullable<Club['badgeShape']>) => void;
+  addTrophy: (record: TrophyRecord) => void;
 }
 
 export const DEFAULT_CLUB: Club = {
@@ -88,6 +89,7 @@ export const DEFAULT_CLUB: Club = {
   primaryColor: '#00897B',
   secondaryColor: '#FFC107',
   badgeShape: 'shield',
+  trophies: [],
 };
 
 export const useClubStore = create<ClubState>()(
@@ -253,6 +255,8 @@ export const useClubStore = create<ClubState>()(
         set((state) => ({ club: { ...state.club, primaryColor: primary, secondaryColor: secondary } })),
       setBadgeShape: (shape) =>
         set((state) => ({ club: { ...state.club, badgeShape: shape } })),
+      addTrophy: (record) =>
+        set((s) => ({ club: { ...s.club, trophies: [...s.club.trophies, record] } })),
     }),
     { name: 'club-store', storage: zustandStorage }
   )
