@@ -257,6 +257,63 @@ export interface SyncLedgerEntry {
   description: string;
 }
 
+/** Incoming signing — complements SyncTransfer (outgoing sales) */
+export interface SyncSigning {
+  playerId:      string;
+  playerName:    string;
+  position:      'GK' | 'DEF' | 'MID' | 'FWD';
+  age:           number;
+  overallRating: number;
+  /** Transfer fee paid in pence. 0 for free agents. */
+  fee:           number;
+  /** Source NPC club name. null = free agent or generated prospect. */
+  fromClub:      string | null;
+}
+
+/** Full result detail for one AMP fixture, sent while synced === false */
+export interface SyncMatchResult {
+  fixtureId:        string;
+  leagueId:         string;
+  season:           number;
+  round:            number;
+  opponentClubId:   string;
+  opponentClubName: string;
+  homeGoals:        number;
+  awayGoals:        number;
+  /** true if the AMP club was the home side */
+  isHome:           boolean;
+  playedAt:         string;  // ISO 8601
+}
+
+/** Season-to-date stats for one player */
+export interface SyncPlayerStat {
+  playerId:      string;
+  appearances:   number;
+  goals:         number;
+  assists:       number;
+  /** Mean of all per-match rating values (1–10) for this season */
+  averageRating: number;
+}
+
+/** Season running totals for the AMP club */
+export interface SyncSeasonRecord {
+  wins:         number;
+  draws:        number;
+  losses:       number;
+  goalsFor:     number;
+  goalsAgainst: number;
+  points:       number;
+}
+
+/** Server-detected milestone, surfaced as an inbox notification on the client */
+export interface SyncAchievement {
+  /** Machine-readable type — used for client-side deduplication alongside weekNumber */
+  type:        string;
+  /** Human-readable message, displayed directly in the inbox */
+  description: string;
+  weekNumber:  number;
+}
+
 export interface SyncRequest {
   weekNumber: number;
   clientTimestamp: string;        // ISO 8601
@@ -275,7 +332,7 @@ export interface SyncRequest {
   /** Absolute reputation value (0–100) — authoritative anchor for backend reconciliation */
   reputation: number;
 
-  // ── Club snapshot ───────────────────────────────────────────────────────
+  // ── Club snapshot ───────────────────────────────────────────────────────────
   hallOfFamePoints: number;
   /** Number of active (non-transferred/released) players */
   squadSize: number;
@@ -283,10 +340,25 @@ export interface SyncRequest {
   staffCount: number;
   /** Current facility levels (0 = not built, 1–10 = operational) */
   facilityLevels: Record<string, number>;
+  /** Mean overallRating of all active players at time of sync */
+  squadAvgOvr: number;
 
   // ── Activity ───────────────────────────────────────────────────────────────
   transfers: SyncTransfer[];
   ledger: SyncLedgerEntry[];
+  /** Players signed into the squad this week */
+  signings: SyncSigning[];
+
+  // ── Season performance ─────────────────────────────────────────────────────
+  /** Last ≤5 results newest first. Derived from fixtureStore. */
+  form: ('W' | 'D' | 'L')[];
+  /** Current league position (1 = top). null if not yet placed. */
+  leaguePosition: number | null;
+  seasonRecord: SyncSeasonRecord;
+  /** Full result detail for every unsynced AMP fixture */
+  matchResults: SyncMatchResult[];
+  /** Season-to-date stats for every player with ≥1 appearance */
+  playerStats: SyncPlayerStat[];
 }
 
 export interface SyncAcceptedResponse {
@@ -307,6 +379,18 @@ export interface SyncAcceptedResponse {
   };
   /** League the club is currently assigned to. null = not yet assigned or no match found. */
   league: LeagueSnapshot | null;
+  /**
+   * Fixture IDs the backend successfully recorded from matchResults.
+   * Client calls fixtureStore.markSynced(syncedFixtureIds) on receipt.
+   * Absent = client leaves all fixture sync flags unchanged.
+   */
+  syncedFixtureIds?: string[];
+  /**
+   * Server-detected milestones fired this week.
+   * Client surfaces each as a system inbox message, deduplicated by type + weekNumber.
+   * Absent or empty = no achievements this week.
+   */
+  achievements?: SyncAchievement[];
 }
 
 export interface SyncRejectedResponse {

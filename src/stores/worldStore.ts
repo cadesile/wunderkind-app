@@ -18,6 +18,17 @@ const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 
 const VALID_REPUTATION_TIERS = ['local', 'regional', 'national', 'elite'] as const;
 
+/**
+ * Maximum reputation (0–100) for an NPC club based on their world-tier league.
+ * Mirrors the LEAGUE_TIER_REP_CAP thresholds used for the AMP club.
+ */
+function reputationCapForWorldTier(worldTier: number): number {
+  if (worldTier <= 2) return 100;
+  if (worldTier <= 4) return 74;
+  if (worldTier <= 6) return 39;
+  return 14;
+}
+
 const FORMATIONS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '5-3-2', '4-5-1'] as const;
 
 /**
@@ -297,7 +308,14 @@ export const useWorldStore = create<WorldState>()(
             if (slim.isAmp) continue; // AMP not in worldClubs
             const existing = updatedClubs[slim.clubId];
             if (existing) {
-              updatedClubs[slim.clubId] = { ...existing, tier: l.tier };
+              // Update tier to match new league. Also clamp reputation so a relegated
+              // club's reputation cannot exceed the new (lower) league's cap.
+              const repCap = reputationCapForWorldTier(l.tier);
+              updatedClubs[slim.clubId] = {
+                ...existing,
+                tier:       l.tier,
+                reputation: Math.min(existing.reputation, repCap),
+              };
             }
           }
         }

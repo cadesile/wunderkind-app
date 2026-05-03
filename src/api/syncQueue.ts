@@ -120,6 +120,30 @@ class SyncQueue {
       if (res.accepted) {
         // Server accepted — reconcile authoritative aggregates locally
         useClubStore.getState().applyServerSync(res.club);
+
+        // Mark fixtures the server confirmed as synced
+        if (res.syncedFixtureIds && res.syncedFixtureIds.length > 0) {
+          useFixtureStore.getState().markSynced(res.syncedFixtureIds);
+        }
+
+        // Surface server-detected achievements as inbox messages
+        if (res.achievements && res.achievements.length > 0) {
+          const { addMessage, messages } = useInboxStore.getState();
+          for (const ach of res.achievements) {
+            const dedupeId = `achievement-${ach.type}-wk${ach.weekNumber}`;
+            if (!messages.some((m) => m.id === dedupeId)) {
+              addMessage({
+                id:      dedupeId,
+                type:    'system',
+                week:    ach.weekNumber,
+                subject: 'Achievement Unlocked',
+                body:    ach.description,
+                isRead:  false,
+                metadata: { systemType: 'achievement', achievementType: ach.type },
+              });
+            }
+          }
+        }
         // Piggyback: update engine config if the server sent a newer version
         if (res.gameConfig) {
           useGameConfigStore.getState().setConfig(res.gameConfig);

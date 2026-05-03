@@ -107,7 +107,14 @@ export const useClubStore = create<ClubState>()(
           const { useLeagueStore } = require('@/stores/leagueStore');
           const leagueCap: number | null = useLeagueStore.getState().league?.reputationCap ?? null;
           const ceiling = leagueCap !== null ? Math.min(100, leagueCap) : 100;
-          const next = Math.max(0, Math.min(ceiling, state.club.reputation + delta));
+          const current = state.club.reputation;
+          // When above the league cap (e.g., after relegation): suppress gains so the club
+          // cannot grow further; allow losses to decay the reputation gradually toward the cap.
+          const next = (current > ceiling && delta > 0)
+            ? current
+            : (current > ceiling && delta < 0)
+              ? Math.max(0, Math.max(ceiling, current + delta))
+              : Math.max(0, Math.min(ceiling, current + delta));
           return {
             club: {
               ...state.club,

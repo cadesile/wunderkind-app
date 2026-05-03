@@ -772,6 +772,16 @@ export function processWeeklyTick(): WeeklyTick {
   const reputationDelta = passiveRepDelta - tierDrain - inactivityDecay;
   setReputation(reputationDelta);
 
+  // League cap deterioration — if the club's reputation exceeds the current league's cap
+  // (e.g., a strong club that was relegated to a lower tier), apply a weekly -2 decay until
+  // reputation reaches the cap. Gains are already suppressed by setReputation above.
+  {
+    const leagueCap = useLeagueStore.getState().league?.reputationCap ?? null;
+    if (leagueCap !== null && useClubStore.getState().club.reputation > leagueCap) {
+      setReputation(-2);
+    }
+  }
+
   // ── 8b. Advance week + facility decay ────────────────────────────────────────
   // Decay runs after benefits have been applied, so this week's condition is used in full
   useFacilityStore.getState().decayCondition();

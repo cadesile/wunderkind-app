@@ -22,7 +22,9 @@ import { useFacilityStore } from '@/stores/facilityStore';
 import { useAltercationStore } from '@/stores/altercationStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
-import type { SyncTransfer, SyncLedgerEntry } from '@/types/api';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { computeStandings } from '@/utils/standingsCalculator';
+import type { SyncTransfer, SyncLedgerEntry, SyncMatchResult, SyncPlayerStat, SyncSigning } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { WeeklyTickOverlay } from '@/components/WeeklyTickOverlay';
 import { SeasonEndOverlay } from '@/components/SeasonEndOverlay';
@@ -276,6 +278,119 @@ export default function TabLayout() {
           description,
         }));
 
+      // ── Build season performance fields ─────────────────────────────────────
+      const { fixtures: allFixtures, getUnsyncedResults } = useFixtureStore.getState();
+      const { league: currentLeague, clubs: leagueClubs } = useLeagueStore.getState();
+      const ampClubId = club.id;
+      const currentSeason = currentLeague?.season ?? 1;
+
+      // AMP completed fixtures this season, newest first
+      const ampSeasonFixtures = allFixtures
+        .filter((f) =>
+          f.leagueId === currentLeague?.id &&
+          f.season === currentSeason &&
+          (f.homeClubId === ampClubId || f.awayClubId === ampClubId) &&
+          f.result !== null,
+        )
+        .sort((a, b) => b.round - a.round);
+
+      // Form — last ≤5 results, newest first
+      const form: ('W' | 'D' | 'L')[] = ampSeasonFixtures.slice(0, 5).map((f) => {
+        const isHome = f.homeClubId === ampClubId;
+        const scored    = isHome ? f.result!.homeGoals : f.result!.awayGoals;
+        const conceded  = isHome ? f.result!.awayGoals : f.result!.homeGoals;
+        return scored > conceded ? 'W' : scored === conceded ? 'D' : 'L';
+      });
+
+      // Season record totals
+      const seasonRecord = ampSeasonFixtures.reduce(
+        (acc, f) => {
+          const isHome   = f.homeClubId === ampClubId;
+          const scored   = isHome ? f.result!.homeGoals : f.result!.awayGoals;
+          const conceded = isHome ? f.result!.awayGoals : f.result!.homeGoals;
+          if (scored > conceded)      { acc.wins++;  acc.points += 3; }
+          else if (scored === conceded) { acc.draws++; acc.points += 1; }
+          else                          { acc.losses++; }
+          acc.goalsFor      += scored;
+          acc.goalsAgainst  += conceded;
+          return acc;
+        },
+        { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 },
+      );
+
+      // League position
+      let leaguePosition: number | null = null;
+      if (currentLeague) {
+        const seasonFixtures = allFixtures.filter(
+          (f) => f.leagueId === currentLeague.id && f.season === currentSeason,
+        );
+        const standings = computeStandings(seasonFixtures, leagueClubs, ampClubId);
+        const pos = standings.findIndex((r) => r.clubId === ampClubId);
+        leaguePosition = pos >= 0 ? pos + 1 : null;
+      }
+
+      // Unsynced fixture results — build opponent name lookup from league + world clubs
+      const clubNameMap: Record<string, string> = {};
+      for (const c of leagueClubs) clubNameMap[c.id] = c.name;
+      for (const [id, c] of Object.entries(useWorldStore.getState().clubs)) {
+        if (!clubNameMap[id]) clubNameMap[id] = c.name;
+      }
+
+      const matchResults: SyncMatchResult[] = getUnsyncedResults().map((f) => {
+        const isHome       = f.homeClubId === ampClubId;
+        const opponentId   = isHome ? f.awayClubId : f.homeClubId;
+        return {
+          fixtureId:        f.id,
+          leagueId:         f.leagueId,
+          season:           f.season,
+          round:            f.round,
+          opponentClubId:   opponentId,
+          opponentClubName: clubNameMap[opponentId] ?? opponentId,
+          homeGoals:        f.result!.homeGoals,
+          awayGoals:        f.result!.awayGoals,
+          isHome,
+          playedAt:         f.result!.playedAt,
+        };
+      });
+
+      // Player season stats — only players with ≥1 appearance
+      const { players: squadPlayers } = useSquadStore.getState();
+      const playerStats: SyncPlayerStat[] = squadPlayers.flatMap((p) => {
+        const seasonApps = p.appearances?.[String(currentSeason)]?.[ampClubId] ?? [];
+        if (seasonApps.length === 0) return [];
+        const goals   = seasonApps.reduce((s, a) => s + a.goals,   0);
+        const assists = seasonApps.reduce((s, a) => s + a.assists, 0);
+        const avgRating = Math.round(
+          (seasonApps.reduce((s, a) => s + a.rating, 0) / seasonApps.length) * 10,
+        ) / 10;
+        return [{ playerId: p.id, appearances: seasonApps.length, goals, assists, averageRating: avgRating }];
+      });
+
+      // Signings — DOF auto-signings fired as inbox messages this week.
+      // Manual market signings are not tracked here; they will be reconciled
+      // via a future full squad sync endpoint.
+      const signings: SyncSigning[] = useInboxStore.getState().messages
+        .filter(
+          (m) =>
+            m.type === 'system' &&
+            m.week === result.week &&
+            m.metadata?.systemType === 'dof_signing',
+        )
+        .map((m) => ({
+          playerId:      m.entityId ?? '',
+          playerName:    String(m.metadata?.playerName   ?? ''),
+          position:      String(m.metadata?.playerPosition ?? ''),
+          age:           Number(m.metadata?.playerAge      ?? 0),
+          overallRating: Number(m.metadata?.perceivedAbility ?? 0),
+          fee:           Number(m.metadata?.transferFee     ?? 0),
+          fromClub:      m.metadata?.npcClubName ? String(m.metadata.npcClubName) : null,
+        }));
+
+      // Squad average OVR
+      const squadAvgOvr = activePlayers.length > 0
+        ? Math.round(activePlayers.reduce((s, p) => s + (p.overallRating ?? 0), 0) / activePlayers.length)
+        : 0;
+
       syncQueue.enqueue({
         weekNumber:          result.week,
         clientTimestamp:     result.processedAt,
@@ -294,9 +409,17 @@ export default function TabLayout() {
         squadSize:           activePlayers.length,
         staffCount:          coaches.length + scouts.length,
         facilityLevels:      levels,
+        squadAvgOvr,
 
         transfers:           weekTransfers,
         ledger:              weekLedger,
+        signings,
+
+        form,
+        leaguePosition,
+        seasonRecord,
+        matchResults,
+        playerStats,
       });
 
       // Background game-config refresh — every 4 game weeks, fire-and-forget
