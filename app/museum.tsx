@@ -10,7 +10,7 @@ import type { TrophyRecord, TrophyStandingEntry } from '@/types/club';
 
 export default function MuseumScreen() {
   const router = useRouter();
-  const trophies = useClubStore((s) => s.club.trophies);
+  const trophies = useClubStore((s) => s.club.trophies ?? []);
   const ampClubId = useClubStore((s) => s.club.id);
 
   const orderedTrophies = [...trophies].reverse();

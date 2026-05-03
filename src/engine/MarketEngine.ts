@@ -179,6 +179,8 @@ function worldPlayerOverall(wp: WorldPlayer): number {
 export async function processNPCTransfers(
   weekNumber: number,
   worldClubs: Record<string, WorldClub>,
+  squadSizeMin = 11,
+  squadSizeMax = 25,
 ): Promise<NpcTransferDigest> {
   const digest: NpcTransferDigest = { weekNumber, transfers: [] };
 
@@ -190,6 +192,9 @@ export async function processNPCTransfers(
   const mutatedIds = new Set<string>();
 
   for (const buyerClub of Object.values(mutableClubs)) {
+    // Never sign if already at or above global squad cap
+    if (buyerClub.players.length >= squadSizeMax) continue;
+
     const targets   = getFormationTargets(buyerClub.formation);
     const buyerTier = worldTierToAppTier(buyerClub.tier);
 
@@ -200,6 +205,8 @@ export async function processNPCTransfers(
       const potentialSellers = Object.values(mutableClubs).filter((c) => {
         if (c.id === buyerClub.id) return false;
         if (Math.abs(worldTierToAppTier(c.tier) - buyerTier) > 1) return false;
+        // Never sell below global squad floor
+        if (c.players.length <= squadSizeMin) return false;
         const sellerTargets = getFormationTargets(c.formation);
         const sellerCount   = c.players.filter((p) => normalizeWorldPosition(p.position) === pos).length;
         return sellerCount > sellerTargets[pos].max;

@@ -314,7 +314,8 @@ export default function TabLayout() {
       if (result.week % 2 === 0) {
         const { clubs } = useWorldStore.getState();
         try {
-          const digest = await processNPCTransfers(result.week, clubs);
+          const { squadSizeMin, squadSizeMax } = useGameConfigStore.getState().config;
+          const digest = await processNPCTransfers(result.week, clubs, squadSizeMin, squadSizeMax);
           if (digest.transfers.length > 0) {
             useInboxStore.getState().addMessage({
               id:      uuidv7(),

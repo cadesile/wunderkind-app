@@ -1,4 +1,10 @@
 export interface GameConfig {
+  // ── Squad Configuration ───────────────────────────────────────────────────
+  /** Minimum players required in active squad. Default: 11 */
+  squadSizeMin: number;
+  /** Maximum players allowed in active squad. Default: 25 */
+  squadSizeMax: number;
+
   // ── Clique ────────────────────────────────────────────────────────────────
   /** Minimum pairwise relationship value for clique eligibility. Default: 20 */
   cliqueRelationshipThreshold: number;
@@ -189,6 +195,9 @@ export interface GameConfig {
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
+  squadSizeMin: 11,
+  squadSizeMax: 25,
+
   cliqueRelationshipThreshold: 20,
   cliqueSquadCapPercent: 30,
   cliqueMinTenureWeeks: 3,

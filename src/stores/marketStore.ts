@@ -204,6 +204,10 @@ export const useMarketStore = create<MarketState>()(
         const player = get().players.find((p) => p.id === playerId);
         if (!player) return;
 
+        // Enforce global squad size cap — block signing if already full
+        const { squadSizeMax } = useGameConfigStore.getState().config;
+        if (useSquadStore.getState().players.length >= squadSizeMax) return;
+
         // Generate scouting report if player was revealed
         let scoutingReport: import('@/types/player').ScoutingReport | undefined;
         if (player.scoutingStatus === 'revealed' && player.perceivedAbility != null) {

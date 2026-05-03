@@ -434,6 +434,10 @@ export function processWeeklyTick(): WeeklyTick {
         const biddingPlayer = playersCurrentTick.find((p) => p.id === bid.playerId);
         if (!biddingPlayer) continue;
 
+        // Never sell below the minimum squad floor
+        const activeSquadSize = useSquadStore.getState().players.filter((p) => p.isActive !== false).length;
+        if (activeSquadSize <= config.squadSizeMin) continue;
+
         const opinion = manager
           ? ManagerBrain.assessTransferOffer(
               manager,
@@ -1020,7 +1024,9 @@ export function processWeeklyTick(): WeeklyTick {
       // ── 14b. Auto-assign scouts ─────────────────────────────────────────────
       // Assign scouts with spare capacity to unscreened market players.
       // Each scout gets filled up to scoutMaxAssignments; fires at most once per week.
-      if (dof.dofAutoAssignScouts) {
+      // Scouts are paused when the squad is already at the global size cap.
+      const squadAtMax = useSquadStore.getState().players.length >= config.squadSizeMax;
+      if (dof.dofAutoAssignScouts && !squadAtMax) {
         const { scouts } = useScoutStore.getState();
         const { players: marketPlayers } = useMarketStore.getState();
         const { scoutMaxAssignments } = config;
@@ -1049,6 +1055,9 @@ export function processWeeklyTick(): WeeklyTick {
 
         const revealed = marketPlayers.filter((mp) => mp.scoutingStatus === 'revealed');
         for (const mp of revealed) {
+          // Re-read squad size each iteration — previous iterations may have signed players
+          if (useSquadStore.getState().players.length >= config.squadSizeMax) break;
+
           const weeklyWage = mp.currentAbility * 100; // pence/wk — mirrors marketStore.signPlayer
           const { recommendation, reasoning } = ManagerBrain.assessScoutedPlayer(
             activeManager,
