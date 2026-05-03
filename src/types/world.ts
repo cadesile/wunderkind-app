@@ -1,5 +1,6 @@
 import { Appearance, PersonalityMatrix, PlayerAppearances } from './player';
 import type { StaffRole } from './coach';
+import type { TrophyRecord } from './club';
 
 /** Player as delivered in the world pack — full attributes + personality */
 export interface WorldPlayer {
@@ -59,6 +60,7 @@ export interface WorldClub {
   staff: WorldStaff[];
   /** Randomly assigned formation, e.g. '4-4-2', '4-3-3'. Assigned at world init. */
   formation: string;
+  trophies?: TrophyRecord[];
 }
 
 /** Lightweight league metadata stored in worldStore (no club rosters) */

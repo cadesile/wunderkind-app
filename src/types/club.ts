@@ -71,6 +71,32 @@ export interface SponsorContract {
   endWeek: number;
 }
 
+export interface TrophyStandingEntry {
+  clubId:         string;
+  clubName:       string;
+  position:       number;
+  wins:           number;
+  draws:          number;
+  losses:         number;
+  points:         number;
+  goalDifference: number;
+}
+
+export interface TrophyRecord {
+  type:          'league_title';
+  tier:          number;
+  leagueName:    string;
+  season:        number;
+  weekCompleted: number;
+  wins:          number;
+  draws:         number;
+  losses:        number;
+  points:        number;
+  goalsFor:      number;
+  goalsAgainst:  number;
+  standings:     TrophyStandingEntry[];
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -115,4 +141,5 @@ export interface Club {
   secondaryColor: string;
   /** Club badge/crest shape selected by the AMP. Defaults to 'shield'. */
   badgeShape?: 'shield' | 'circle' | 'crest';
+  trophies: TrophyRecord[];
 }
