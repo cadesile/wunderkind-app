@@ -17,13 +17,23 @@ export const useFanStore = create<FanState>()(
     (set) => ({
       events: [],
       fanFavoriteId: null,
-      addEvent: (event) => set((state) => ({
-        events: [{ ...event, id: uuidv7() }, ...state.events].slice(0, 50)
-      })),
+      addEvent: (event) =>
+        set((state) => {
+          const newEvent = { ...event, id: uuidv7() };
+          const all = [newEvent, ...state.events];
+          const permanent    = all.filter((e) => e.isPermanent);
+          const nonPermanent = all
+            .filter((e) => !e.isPermanent)
+            .slice(0, Math.max(0, 50 - permanent.length));
+          return { events: [...permanent, ...nonPermanent] };
+        }),
       setFanFavoriteId: (id) => set({ fanFavoriteId: id }),
-      pruneEvents: (currentWeek) => set((state) => ({
-        events: state.events.filter(e => currentWeek - e.weekNumber < 10)
-      })),
+      pruneEvents: (currentWeek) =>
+        set((state) => ({
+          events: state.events.filter(
+            (e) => e.isPermanent || (currentWeek - e.weekNumber) < 52,
+          ),
+        })),
     }),
     { name: 'fan-store', storage: zustandStorage }
   )
