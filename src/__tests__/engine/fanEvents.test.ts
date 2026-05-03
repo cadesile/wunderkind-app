@@ -28,6 +28,8 @@ describe('FanEvent type', () => {
 
   it('accepts trophy_won, promoted, relegated event types', () => {
     const types: FanEvent['type'][] = ['trophy_won', 'promoted', 'relegated'];
-    expect(types).toHaveLength(3);
+    expect(types[0]).toBe('trophy_won');
+    expect(types[1]).toBe('promoted');
+    expect(types[2]).toBe('relegated');
   });
 });
