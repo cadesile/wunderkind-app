@@ -37,7 +37,7 @@ describe('FanEvent type', () => {
 
 describe('fanStore.pruneEvents', () => {
   beforeEach(() => {
-    useFanStore.setState({ events: [] });
+    useFanStore.setState({ events: [], fanFavoriteId: null });
   });
 
   it('keeps non-permanent events within 52 weeks', () => {
@@ -73,7 +73,7 @@ describe('fanStore.pruneEvents', () => {
 
 describe('fanStore.addEvent — cap protects permanent events', () => {
   beforeEach(() => {
-    useFanStore.setState({ events: [] });
+    useFanStore.setState({ events: [], fanFavoriteId: null });
   });
 
   it('keeps all permanent events when non-permanent fills the cap', () => {

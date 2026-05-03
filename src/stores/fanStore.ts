@@ -22,14 +22,16 @@ export const useFanStore = create<FanState>()(
           const newEvent = { ...event, id: uuidv7() };
           const all = [newEvent, ...state.events];
           const permanent    = all.filter((e) => e.isPermanent);
-          const nonPermanent = all
-            .filter((e) => !e.isPermanent)
-            .slice(0, Math.max(0, 50 - permanent.length));
-          return { events: [...permanent, ...nonPermanent] };
+          const nonPermanent = all.filter((e) => !e.isPermanent).slice(0, Math.max(0, 50 - permanent.length));
+          // Reconstruct in original insertion order (newest first)
+          return {
+            events: all.filter((e) => e.isPermanent || nonPermanent.includes(e)),
+          };
         }),
       setFanFavoriteId: (id) => set({ fanFavoriteId: id }),
       pruneEvents: (currentWeek) =>
         set((state) => ({
+          // Keep permanent milestones forever; prune regular events older than 1 season (52 weeks)
           events: state.events.filter(
             (e) => e.isPermanent || (currentWeek - e.weekNumber) < 52,
           ),
