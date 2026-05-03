@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, FlatList, ScrollView, Modal, Pressable } from 'react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { SlidersHorizontal } from 'lucide-react-native';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
@@ -580,6 +581,14 @@ export default function FacilitiesScreen() {
   const [activeTab, setActiveTab] = useState<FacilitiesTab>('TRAINING');
   const [selectedRole, setSelectedRole] = useState<string>('ALL');
 
+  const params = useLocalSearchParams<{ tab?: string; role?: string }>();
+  useEffect(() => {
+    if (params.tab === 'HIRE') {
+      setActiveTab('HIRE');
+      setSelectedRole(params.role ?? 'ALL');
+    }
+  }, [params.tab, params.role]);
+
   const balance = penceToPounds(
     typeof club.balance === 'number' && !isNaN(club.balance)
       ? club.balance
@@ -599,7 +608,9 @@ export default function FacilitiesScreen() {
         tabs={[...ALL_TABS]}
         active={activeTab}
         onChange={(t) => {
-          if (t !== 'HIRE') setSelectedRole('ALL');
+          if (t === 'HIRE') {
+            setSelectedRole('ALL');
+          }
           setActiveTab(t as FacilitiesTab);
         }}
       />

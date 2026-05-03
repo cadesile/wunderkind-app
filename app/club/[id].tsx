@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView, Pressable, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -10,7 +10,6 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { PixelFootballBadge, getNpcBadgeShape } from '@/components/ui/ClubBadge/PixelFootballBadge';
 import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
-import { MoraleBar } from '@/components/ui/MoraleBar';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer } from '@/types/world';
 
@@ -256,52 +255,45 @@ export default function ClubDetailScreen() {
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 10,
+            paddingHorizontal: 8,
             paddingVertical: 8,
             borderBottomWidth: 2,
             borderBottomColor: WK.border,
             backgroundColor: WK.tealDark,
           }}>
-            <PixelText size={6} color={WK.dim} style={{ width: 38 }}>POS</PixelText>
+            <PixelText size={6} color={WK.dim} style={{ width: 36, flexShrink: 0 }}>POS</PixelText>
             <PixelText size={6} color={WK.dim} style={{ flex: 1 }}>
               PLAYER ({players.length})
             </PixelText>
-            <PixelText size={6} color={WK.dim} style={{ width: 22, textAlign: 'center' }}>NAT</PixelText>
-            <PixelText size={6} color={WK.dim} style={{ width: 28, textAlign: 'right' }}>AGE</PixelText>
-            <PixelText size={6} color={WK.dim} style={{ width: 36, textAlign: 'right' }}>MOR</PixelText>
-            <PixelText size={6} color={WK.dim} style={{ width: 32, textAlign: 'right' }}>OVR</PixelText>
-            <View style={{ width: 14 }} />
+            <PixelText size={6} color={WK.dim} style={{ width: 20, textAlign: 'center', flexShrink: 0 }}>NAT</PixelText>
+            <PixelText size={6} color={WK.dim} style={{ width: 28, textAlign: 'right', flexShrink: 0 }}>AGE</PixelText>
+            <PixelText size={6} color={WK.dim} style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>OVR</PixelText>
+            <View style={{ width: 14, flexShrink: 0 }} />
           </View>
 
           {players.map((p, i) => {
             const ovr = calcOvr(p);
             const pos = POS_DISPLAY[p.position] ?? p.position;
             const age = computePlayerAge(p.dateOfBirth, gameDate);
-            // Derive pseudo-morale from personality traits (1–20 → 0–100)
-            const morale = Math.round(
-              (p.personality.determination + p.personality.professionalism +
-               p.personality.adaptability + p.personality.pressure +
-               p.personality.temperament + p.personality.consistency) / 6 / 20 * 100,
-            );
-            const moraleColor = morale >= 60 ? '#4CAF50' : morale >= 40 ? WK.yellow : WK.red;
 
             return (
-              <Pressable
+              <TouchableOpacity
                 key={p.id}
+                activeOpacity={0.6}
                 onPress={() => router.push(`/player/${p.id}`)}
-                style={({ pressed }) => ({
+                style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingHorizontal: 10,
+                  paddingHorizontal: 8,
                   paddingVertical: 9,
                   borderBottomWidth: i < players.length - 1 ? 1 : 0,
                   borderBottomColor: WK.border,
-                  opacity: pressed ? 0.6 : 1,
-                })}
+                }}
               >
                 {/* POS */}
                 <View style={{
-                  width: 38,
+                  width: 36,
+                  flexShrink: 0,
                   backgroundColor: WK.tealDark,
                   borderWidth: 1,
                   borderColor: WK.border,
@@ -321,27 +313,22 @@ export default function ClubDetailScreen() {
                 </BodyText>
 
                 {/* Nationality flag */}
-                <View style={{ width: 22, alignItems: 'center' }}>
+                <View style={{ width: 20, flexShrink: 0, alignItems: 'center' }}>
                   <FlagText nationality={p.nationality} size={14} />
                 </View>
 
                 {/* Age */}
-                <VT323Text size={16} color={WK.dim} style={{ width: 28, textAlign: 'right' }}>
+                <VT323Text size={16} color={WK.dim} style={{ width: 28, flexShrink: 0, textAlign: 'right' }}>
                   {age}
                 </VT323Text>
 
-                {/* Morale — mini bar */}
-                <View style={{ width: 36, paddingLeft: 6 }}>
-                  <MoraleBar morale={morale} width={30} />
-                </View>
-
                 {/* OVR */}
-                <VT323Text size={18} color={WK.yellow} style={{ width: 32, textAlign: 'right' }}>
+                <VT323Text size={18} color={WK.yellow} style={{ width: 32, flexShrink: 0, textAlign: 'right' }}>
                   {ovr}
                 </VT323Text>
 
-                <ChevronRight size={12} color={WK.dim} style={{ marginLeft: 2 }} />
-              </Pressable>
+                <ChevronRight size={12} color={WK.dim} style={{ marginLeft: 2, flexShrink: 0 }} />
+              </TouchableOpacity>
             );
           })}
         </View>

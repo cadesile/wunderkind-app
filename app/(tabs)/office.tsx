@@ -845,8 +845,8 @@ export default function OfficeScreen() {
 
   const stadiumTemplates = templates.filter((t) => t.category === 'STADIUM');
 
-  function navigateToHire(_role: string) {
-    router.navigate('/(tabs)/facilities');
+  function navigateToHire(role: string) {
+    router.navigate({ pathname: '/(tabs)/facilities', params: { tab: 'HIRE', role } });
   }
 
   return (
