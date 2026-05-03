@@ -924,7 +924,6 @@ export default function OfficeScreen() {
                 borderColor: WK.border,
                 paddingHorizontal: 14,
                 paddingVertical: 12,
-                marginHorizontal: 10,
                 marginBottom: 8,
                 ...pixelShadow,
               }}
