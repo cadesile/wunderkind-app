@@ -2,6 +2,8 @@ import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { calculateWeeklyFinances } from '@/engine/finance';
 import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { Player } from '@/types/player';
@@ -101,6 +103,9 @@ export default function useClubMetrics(): ClubMetrics {
   const levels            = useFacilityStore((s) => s.levels);
   const facilityTemplates = useFacilityStore((s) => s.templates);
   const conditions        = useFacilityStore((s) => s.conditions);
+  const fixtures          = useFixtureStore((s) => s.fixtures);
+  const currentMatchday   = useFixtureStore((s) => s.currentMatchday);
+  const nonMatchPct       = useGameConfigStore((s) => s.config.nonMatchFacilityIncomePercent ?? 0);
 
   const { reputation } = club;
 
@@ -164,9 +169,14 @@ export default function useClubMetrics(): ClubMetrics {
     0,
     facilityTemplates,
   ).net + sponsorIncomePence;
-  // Facility (matchday) income is calculated outside calculateWeeklyFinances —
-  // it must be added here to produce an accurate next-tick prediction.
-  const facilityIncomePence = calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation);
+  // Facility (matchday) income — reduced on weeks without a home match.
+  const hasHomeMatch = fixtures.some(
+    (f) => f.round === currentMatchday && f.homeClubId === club.id,
+  );
+  const facilityMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
+  const facilityIncomePence = Math.round(
+    calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation) * facilityMultiplier,
+  );
   const weeklyNetCashflow = baseNet + facilityIncomePence;
 
   // ── Reputation Tier Progress ───────────────────────────────────────────────

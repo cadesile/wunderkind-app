@@ -44,8 +44,10 @@ export const useGameConfigStore = create<GameConfigState>()(
         const { lastFetchedAt, lastFetchedAtWeek } = get();
         // Never fetched — always fetch
         if (!lastFetchedAt) return true;
-        // Week-based check: re-fetch every REFETCH_INTERVAL_WEEKS game weeks
-        if (currentWeek !== undefined && lastFetchedAtWeek !== null) {
+        if (currentWeek !== undefined) {
+          // lastFetchedAtWeek is null when the startup fetch ran without a week
+          // (i.e. the background refresh has never been seeded yet) — force one
+          if (lastFetchedAtWeek === null) return true;
           return currentWeek - lastFetchedAtWeek >= REFETCH_INTERVAL_WEEKS;
         }
         // Has cached data and no week context → no re-fetch needed

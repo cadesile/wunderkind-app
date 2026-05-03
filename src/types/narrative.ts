@@ -149,6 +149,7 @@ export interface NarrativeMessage {
   choices?: EventChoice[];
   affectedEntities: string[];
   statImpacts?: StatImpact[];
+  week?: number;
   createdAt: string;
   readAt?: string;
   respondedAt?: string;

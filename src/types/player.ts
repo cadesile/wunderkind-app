@@ -99,6 +99,8 @@ export interface MatchAppearance {
   scoreline: string;
   /** Player rating 1–10 */
   rating: number;
+  goals: number;
+  assists: number;
 }
 
 /** appearances[season][clubId] → ordered list of match appearances */

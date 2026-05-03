@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Player } from '@/types/player';
 import { Clique, CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { MoraleBar } from '@/components/ui/MoraleBar';
 
 function getInjuryStatusStyle(player: Player): {
   borderColor: string;
@@ -145,6 +146,7 @@ function PlayerCard({ player }: { player: Player }) {
 
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${player.overallRating}`} color="yellow" />
+          <MoraleBar morale={player.morale ?? 70} width={48} />
           <View style={{
             backgroundColor: statusStyle.badgeColor,
             borderWidth: 2,
@@ -339,9 +341,7 @@ function DressingRoomPane({ onRenamePress }: { onRenamePress: (clique: Clique) =
                 <BodyText size={13} dim>AVG MORALE</BodyText>
                 <PixelText size={7} color={WK.yellow}>{health.squadMoraleAverage}</PixelText>
               </View>
-              <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-                <View style={{ height: '100%', width: `${health.squadMoraleAverage}%`, backgroundColor: WK.yellow }} />
-              </View>
+              <MoraleBar morale={health.squadMoraleAverage} width="100%" height={8} borderWidth={2} />
             </View>
           </>
         )}

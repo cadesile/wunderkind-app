@@ -10,6 +10,7 @@ import { useFixtureStore } from './fixtureStore';
 import { useWorldStore } from './worldStore';
 import { useLeagueStore } from './leagueStore';
 import { useLeagueHistoryStore } from './leagueHistoryStore';
+import { useManagerRecordStore } from './managerRecordStore';
 
 /** Prefix used by worldStore for per-league club maps. */
 const WORLD_CLUBS_KEY_PREFIX = 'worldStore_clubs_';
@@ -46,6 +47,7 @@ const ALL_STORE_KEYS = [
   'loss-condition-store',
   'guardian-store',
   'event-chain-store',
+  'manager-record-store',
 ];
 
 /**
@@ -72,6 +74,7 @@ export function resetInMemoryStores(): void {
   useGuardianStore.getState().clearAll();
   useEventChainStore.getState().clearAll();
   useLeagueHistoryStore.setState({ history: {} });
+  useManagerRecordStore.getState().clearAll();
 }
 
 /**

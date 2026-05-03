@@ -40,8 +40,8 @@ type NavTabDef = {
 
 const NAV_TABS_BASE: NavTabDef[] = [
   { name: 'office',       Icon: Briefcase },
-  { name: 'finances',     Icon: PoundSterling },
   { name: 'hub',          Icon: Users },
+  { name: 'finances',     Icon: PoundSterling },
   { name: 'facilities',   Icon: Building2 },
   { name: 'competitions', Icon: Trophy },
 ];

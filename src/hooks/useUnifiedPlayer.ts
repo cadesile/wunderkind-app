@@ -31,6 +31,7 @@ function mapWorldPlayerToPlayer(wp: WorldPlayer): Player {
     joinedWeek: 1,
     isActive: true,
     status: 'active',
+    appearances: wp.appearances,
     attributes: {
       pace: wp.pace,
       technical: wp.technical,

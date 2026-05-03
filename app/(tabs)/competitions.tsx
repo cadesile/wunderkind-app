@@ -10,6 +10,7 @@ import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useWorldStore } from '@/stores/worldStore';
+import { useSquadStore } from '@/stores/squadStore';
 import { getLeaderboard } from '@/api/endpoints/leaderboard';
 import { formatCurrencyCompact } from '@/utils/currency';
 import { LeagueTable } from '@/components/competitions/LeagueTable';
@@ -62,12 +63,14 @@ export default function CompetitionsScreen() {
   const ampClubId       = useClubStore((s) => s.club.id);
   const ampName         = useClubStore((s) => s.club.name);
   const ampStadiumName  = useClubStore((s) => s.club.stadiumName ?? null);
+  const weekNumber      = useClubStore((s) => s.club.weekNumber ?? 1);
   const league          = useLeagueStore((s) => s.league);
   const clubs           = useLeagueStore((s) => s.clubs);
   const fixtures        = useFixtureStore((s) => s.fixtures);
   const currentMatchday = useFixtureStore((s) => s.currentMatchday);
   const worldLeagues = useWorldStore((s) => s.leagues);
   const worldClubs   = useWorldStore((s) => s.clubs);
+  const ampSquad     = useSquadStore((s) => s.players);
 
   return (
     <View style={{ flex: 1, backgroundColor: WK.greenDark }}>
@@ -93,6 +96,8 @@ export default function CompetitionsScreen() {
             ampClubId={ampClubId}
             ampName={ampName}
             promotionSpots={league.promotionSpots}
+            worldClubs={worldClubs}
+            ampSquad={ampSquad}
           />
         )
       )}

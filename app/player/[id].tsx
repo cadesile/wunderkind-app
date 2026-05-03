@@ -24,6 +24,7 @@ import { AttributeName, TraitName, PlayerAppearances } from '@/types/player';
 import { Guardian } from '@/types/guardian';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 import { moraleLabel } from '@/utils/morale';
+import { MoraleBar } from '@/components/ui/MoraleBar';
 import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
 import { ScoutReportCard } from '@/components/ScoutReportCard';
 import { DevelopmentChart } from '@/components/ui/DevelopmentChart';
@@ -86,12 +87,16 @@ function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
   let totalGames = 0;
   let totalRating = 0;
   let totalWins = 0;
+  let totalGoals = 0;
+  let totalAssists = 0;
 
   seasons.forEach((season) => {
     Object.values(appearances[season]).forEach((clubApps) => {
       clubApps.forEach((app) => {
         totalGames++;
         totalRating += app.rating;
+        totalGoals += app.goals ?? 0;
+        totalAssists += app.assists ?? 0;
         if (app.result === 'win') totalWins++;
       });
     });
@@ -112,19 +117,21 @@ function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
         <PixelText size={8} color={WK.dim}>{seasons.length} SEASON{seasons.length !== 1 ? 'S' : ''}</PixelText>
       </View>
 
-      {/* Summary stats row */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 14, gap: 0 }}>
+      {/* Summary stats row — 5 stats */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 14 }}>
         {[
-          { label: 'GAMES', value: String(totalGames) },
+          { label: 'APPS', value: String(totalGames) },
           { label: 'AVG RTG', value: avgRating },
-          { label: 'WIN RATE', value: `${winRate}%` },
+          { label: 'WIN %', value: `${winRate}%` },
+          { label: 'GOALS', value: String(totalGoals) },
+          { label: 'ASSISTS', value: String(totalAssists) },
         ].map((stat, i) => (
           <View key={stat.label} style={{
             flex: 1, alignItems: 'center',
             borderLeftWidth: i > 0 ? 2 : 0, borderLeftColor: WK.border,
           }}>
-            <PixelText size={14} color={WK.yellow}>{stat.value}</PixelText>
-            <PixelText size={7} color={WK.dim} style={{ marginTop: 4 }}>{stat.label}</PixelText>
+            <PixelText size={13} color={WK.yellow}>{stat.value}</PixelText>
+            <PixelText size={6} color={WK.dim} style={{ marginTop: 4 }}>{stat.label}</PixelText>
           </View>
         ))}
       </View>
@@ -132,9 +139,11 @@ function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
       {/* Per-season breakdown */}
       {seasons.map((season) => {
         const clubEntries = Object.entries(appearances[season]);
-        const seasonGames = clubEntries.reduce((sum, [, apps]) => sum + apps.length, 0);
-        const seasonWins = clubEntries.reduce((sum, [, apps]) => sum + apps.filter(a => a.result === 'win').length, 0);
-        const seasonRating = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + a.rating, 0), 0);
+        const seasonGames   = clubEntries.reduce((sum, [, apps]) => sum + apps.length, 0);
+        const seasonWins    = clubEntries.reduce((sum, [, apps]) => sum + apps.filter(a => a.result === 'win').length, 0);
+        const seasonGoals   = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + (a.goals ?? 0), 0), 0);
+        const seasonAssists = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + (a.assists ?? 0), 0), 0);
+        const seasonRating  = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + a.rating, 0), 0);
         const seasonAvg = seasonGames > 0 ? (seasonRating / seasonGames).toFixed(1) : '—';
 
         return (
@@ -144,10 +153,12 @@ function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <PixelText size={8} color={WK.tealLight}>{season.toUpperCase()}</PixelText>
-            <View style={{ flexDirection: 'row', gap: 16 }}>
-              <PixelText size={8} color={WK.text}>{seasonGames} APP{seasonGames !== 1 ? 'S' : ''}</PixelText>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <PixelText size={8} color={WK.text}>{seasonGames}G</PixelText>
               <PixelText size={8} color={WK.text}>AVG {seasonAvg}</PixelText>
-              <PixelText size={8} color={WK.yellow}>{Math.round((seasonWins / Math.max(1, seasonGames)) * 100)}% W</PixelText>
+              <PixelText size={8} color={WK.green}>{seasonGoals} GL</PixelText>
+              <PixelText size={8} color={WK.tealLight}>{seasonAssists} AS</PixelText>
+              <PixelText size={8} color={WK.yellow}>{Math.round((seasonWins / Math.max(1, seasonGames)) * 100)}%W</PixelText>
             </View>
           </View>
         );
@@ -382,7 +393,7 @@ export default function PlayerDetailScreen() {
               <Badge label={player.position} color="dim" />
               <Badge label={`AGE ${displayAge}`} color="dim" />
               {player.morale !== undefined && (
-                <Badge label={moraleLabel(player.morale)} color={moraleColor(player.morale)} />
+                <MoraleBar morale={player.morale} width={48} />
               )}
             </View>
           </View>
@@ -687,9 +698,7 @@ export default function PlayerDetailScreen() {
                   {player.morale !== undefined && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <BodyText size={13} dim>MORALE</BodyText>
-                      <PixelText size={8} color={player.morale >= 60 ? WK.green : player.morale >= 40 ? WK.yellow : WK.red}>
-                        {moraleLabel(player.morale)}
-                      </PixelText>
+                      <MoraleBar morale={player.morale} width={80} />
                     </View>
                   )}
                   {(player.extensionCount ?? 0) > 0 && (

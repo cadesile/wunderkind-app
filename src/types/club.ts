@@ -113,4 +113,6 @@ export interface Club {
   primaryColor: string;
   /** Secondary kit colour as a 7-char hex string. */
   secondaryColor: string;
+  /** Club badge/crest shape selected by the AMP. Defaults to 'shield'. */
+  badgeShape?: 'shield' | 'circle' | 'crest';
 }

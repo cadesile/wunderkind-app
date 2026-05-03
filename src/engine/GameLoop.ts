@@ -326,8 +326,16 @@ export function processWeeklyTick(): WeeklyTick {
     addEarnings(sponsorIncomePence);
   }
 
-  // Facility income — calculated every advance, scaled by condition + reputation
-  const facilityIncomePence = calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation);
+  // Facility income — full on home-match weeks, reduced on non-matchday weeks
+  const { fixtures, currentMatchday } = useFixtureStore.getState();
+  const hasHomeMatch = fixtures.some(
+    (f) => f.round === currentMatchday && f.homeClubId === club.id,
+  );
+  const nonMatchPct = config.nonMatchFacilityIncomePercent ?? 0;
+  const facilityIncomeMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
+  const facilityIncomePence = Math.round(
+    calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation) * facilityIncomeMultiplier,
+  );
 
   // ── Ledger: record categorised transactions ────────────────────────────────
   // addTransaction is the source of truth — it drives addBalance automatically.
@@ -364,9 +372,10 @@ export function processWeeklyTick(): WeeklyTick {
   if (reputationIncome > 0) {
     addTransaction({ amount: reputationIncome,    category: 'earnings',        description: `Week ${nextWeek} reputation income`,     weekNumber: nextWeek });
   }
-  if (facilityIncomePounds > 0) {
-    addTransaction({ amount: facilityIncomePounds, category: 'matchday_income', description: `Week ${nextWeek} facility income`,       weekNumber: nextWeek });
-  }
+  const facilityDesc = hasHomeMatch
+    ? `Week ${nextWeek} facility income (matchday)`
+    : `Week ${nextWeek} facility income (${nonMatchPct}% non-matchday)`;
+  addTransaction({ amount: facilityIncomePounds, category: 'matchday_income', description: facilityDesc, weekNumber: nextWeek });
 
   clearOldTransactions();
 

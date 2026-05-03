@@ -1,4 +1,4 @@
-import { Appearance, PersonalityMatrix } from './player';
+import { Appearance, PersonalityMatrix, PlayerAppearances } from './player';
 import type { StaffRole } from './coach';
 
 /** Player as delivered in the world pack — full attributes + personality */
@@ -19,6 +19,8 @@ export interface WorldPlayer {
   personality: PersonalityMatrix;
   /** Deterministic visual appearance generated client-side during initialization */
   appearance?: Appearance;
+  /** Match appearance history keyed by season → clubId → appearances array */
+  appearances?: PlayerAppearances;
   /** ID of the NPC club this player belongs to, or null if unassigned. Updated by MarketEngine. */
   npcClubId: string | null;
 }

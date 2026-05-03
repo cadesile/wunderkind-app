@@ -11,10 +11,11 @@ import { useFixtureStore } from '@/stores/fixtureStore';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useAttendanceStore } from '@/stores/attendanceStore';
+import { useManagerRecordStore } from '@/stores/managerRecordStore';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
-import { Player, Position } from '../types/player';
+import { Player, Position, MatchAppearance } from '../types/player';
 import { Formation } from '../types/game';
 import { WorldPlayer, WorldClub } from '../types/world';
 import type { FacilityType } from '@/types/facility';
@@ -66,7 +67,9 @@ class SimulationService {
       (f) => f.round === currentMatchday && f.result === null
     );
 
+    const { useGameConfigStore } = require('@/stores/gameConfigStore');
     const tacticalMatrix = gameConfig?.tacticalMatrix ?? {};
+    const styleInfluence = (useGameConfigStore.getState().config?.playingStyleInfluence) ?? {};
 
     console.log('tacticalMatrix', tacticalMatrix);
 
@@ -74,6 +77,10 @@ class SimulationService {
     const batchSize = 10;
           console.log('batchSize',batchSize);
           console.log('currentFixtures',currentFixtures);
+
+    const npcAppearanceEntries: Array<{ playerId: string; clubId: string; season: string; appearance: MatchAppearance }> = [];
+    const npcSeason = `Season ${Math.ceil((userClub.weekNumber ?? 1) / 38)}`;
+
     for (let i = 0; i < currentFixtures.length; i += batchSize) {
       const chunk = currentFixtures.slice(i, i + batchSize);
       
@@ -83,13 +90,77 @@ class SimulationService {
         const awayTeam = this.getSimTeam(fixture.awayClubId, worldClubs, userClub, userSquad);
 
         if (homeTeam && awayTeam) {
-          const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix);
+          const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix, styleInfluence);
           console.log('home',homeTeam);
+          //TODO add result object to "recordResult"
           recordResult(fixture.id, {
             homeGoals: result.homeScore,
             awayGoals: result.awayScore,
             playedAt: new Date().toISOString(),
           });
+
+          // ── Record result against each club's manager ──────────────────────
+          {
+            const { recordResult: recordManagerResult } = useManagerRecordStore.getState();
+            const { coaches: ampCoaches } = require('@/stores/coachStore').useCoachStore.getState();
+            const homeOutcome: 'win' | 'draw' | 'loss' =
+              result.homeScore > result.awayScore ? 'win' :
+              result.homeScore < result.awayScore ? 'loss' : 'draw';
+            const awayOutcome: 'win' | 'draw' | 'loss' =
+              result.awayScore > result.homeScore ? 'win' :
+              result.awayScore < result.homeScore ? 'loss' : 'draw';
+
+            const getManagerIdAndName = (clubId: string): { id: string; name: string } | null => {
+              if (clubId === userClub.id) {
+                const mgr = (ampCoaches as import('@/types/coach').Coach[]).find((c) => c.role === 'manager');
+                return mgr ? { id: mgr.id, name: mgr.name } : null;
+              }
+              const npcMgr = worldClubs[clubId]?.staff.find((s) => s.role === 'manager');
+              if (!npcMgr) return null;
+              return { id: npcMgr.id, name: `${npcMgr.firstName} ${npcMgr.lastName}` };
+            };
+
+            const homeMgr = getManagerIdAndName(fixture.homeClubId);
+            const awayMgr = getManagerIdAndName(fixture.awayClubId);
+            if (homeMgr) recordManagerResult(homeMgr.id, homeMgr.name, homeOutcome);
+            if (awayMgr) recordManagerResult(awayMgr.id, awayMgr.name, awayOutcome);
+          }
+
+          // ── Record appearances for NPC players ────────────────────────────
+          const fixtureHomeIsNpc = fixture.homeClubId !== userClub.id;
+          const fixtureAwayIsNpc = fixture.awayClubId !== userClub.id;
+          const collectNpcPerf = (
+            perf: typeof result.homePerformance,
+            clubId: string,
+            teamScore: number,
+            opponentScore: number,
+            opponentId: string,
+          ) => {
+            const matchOutcome: 'win' | 'loss' | 'draw' =
+              teamScore > opponentScore ? 'win' : teamScore < opponentScore ? 'loss' : 'draw';
+            const scoreline = `${teamScore}-${opponentScore}`;
+            perf.players.forEach((pp) => {
+              npcAppearanceEntries.push({
+                playerId: pp.player.id,
+                clubId,
+                season: npcSeason,
+                appearance: {
+                  opponentId,
+                  result: matchOutcome,
+                  scoreline,
+                  rating: pp.rating,
+                  goals: pp.goal,
+                  assists: pp.assist,
+                },
+              });
+            });
+          };
+          if (fixtureHomeIsNpc) {
+            collectNpcPerf(result.homePerformance, fixture.homeClubId, result.homeScore, result.awayScore, fixture.awayClubId);
+          }
+          if (fixtureAwayIsNpc) {
+            collectNpcPerf(result.awayPerformance, fixture.awayClubId, result.awayScore, result.homeScore, fixture.homeClubId);
+          }
 
           const ampIsHome = fixture.homeClubId === userClub.id;
           const ampIsAway = fixture.awayClubId === userClub.id;
@@ -106,14 +177,18 @@ class SimulationService {
             const scoreline = `${ampGoals}-${oppGoals}`;
             const opponentId = ampIsHome ? fixture.awayClubId : fixture.homeClubId;
             const season = `Season ${Math.ceil((userClub.weekNumber ?? 1) / 38)}`;
-            const ampXI = ampIsHome ? result.homePlayers : result.awayPlayers;
+            const ampPerformance = ampIsHome ? result.homePerformance : result.awayPerformance;
             const ampSquadIds = new Set(userSquad.map((p) => p.id));
-            ampXI.forEach((xip) => {
-              if (!ampSquadIds.has(xip.id)) return;
-              const rating = Math.max(1, Math.min(10,
-                Math.round(4 + (xip.overallRating / 100) * 4 + (Math.random() * 3 - 1.5))
-              ));
-              recordAppearance(xip.id, season, userClub.id, { opponentId, result: matchResult, scoreline, rating });
+            ampPerformance.players.forEach((pp) => {
+              if (!ampSquadIds.has(pp.player.id)) return;
+              recordAppearance(pp.player.id, season, userClub.id, {
+                opponentId,
+                result: matchResult,
+                scoreline,
+                rating: pp.rating,
+                goals: pp.goal,
+                assists: pp.assist,
+              });
             });
             const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
             const venue = ampIsHome ? 'Home' : 'Away';
@@ -134,6 +209,20 @@ class SimulationService {
               targets: ['manager', 'players'],
             });
 
+            // Serialize performance data for the inbox detail card
+            const POS_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+            const serializePerf = (perf: typeof result.homePerformance) =>
+              [...perf.players]
+                .sort((a, b) => (POS_ORDER[a.player.position] ?? 9) - (POS_ORDER[b.player.position] ?? 9))
+                .map((pp) => ({
+                  id: pp.player.id,
+                  name: pp.player.name,
+                  position: pp.player.position,
+                  rating: pp.rating,
+                  goals: pp.goal,
+                  assists: pp.assist,
+                }));
+
             useInboxStore.getState().addMessage({
               id: uuidv7(),
               type: 'match_result',
@@ -141,6 +230,17 @@ class SimulationService {
               subject: `Result — ${venue} ${outcome}`,
               body: `${homeName} ${result.homeScore} – ${result.awayScore} ${awayName}\nMatchday ${fixture.round}`,
               isRead: false,
+              metadata: {
+                homeTeamName: homeName,
+                awayTeamName: awayName,
+                homeScore: result.homeScore,
+                awayScore: result.awayScore,
+                round: fixture.round,
+                homeAvgRating: result.homePerformance.averageRating,
+                awayAvgRating: result.awayPerformance.averageRating,
+                homePlayers: serializePerf(result.homePerformance),
+                awayPlayers: serializePerf(result.awayPerformance),
+              },
             });
 
             // ── Attendance log (home games only) ──────────────────────────────
@@ -192,6 +292,11 @@ class SimulationService {
 
       // Yield to UI thread
       await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    // Flush all NPC appearance records in one batched write
+    if (npcAppearanceEntries.length > 0) {
+      await useWorldStore.getState().recordNpcAppearances(npcAppearanceEntries);
     }
 
     endSimulation();
@@ -485,6 +590,7 @@ class SimulationService {
       choices: hasChoices ? template.impacts.choices : undefined,
       affectedEntities: Object.values(entityMap),
       statImpacts: statImpacts.length > 0 ? statImpacts : undefined,
+      week: club.weekNumber ?? 1,
       createdAt: new Date().toISOString(),
     };
   }

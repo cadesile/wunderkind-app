@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
 import type { WorldClub, WorldLeague, WorldPackResponse, WorldPlayer, SeasonUpdateLeague } from '@/types/world';
+import type { MatchAppearance } from '@/types/player';
 import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
@@ -50,6 +51,11 @@ interface WorldState {
    * Called by MarketEngine after NPC-to-NPC transfers.
    */
   mutateClubRoster: (clubId: string, updatedPlayers: WorldPlayer[]) => Promise<void>;
+  /**
+   * Record match appearances for NPC players in bulk.
+   * Groups updates by club and league to minimise AsyncStorage writes.
+   */
+  recordNpcAppearances: (entries: Array<{ playerId: string; clubId: string; season: string; appearance: MatchAppearance }>) => Promise<void>;
   /**
    * Replace all league + club data from a conclude-season API response.
    * AMP league placement is derived from the isAmp flag on the clubs array.
@@ -338,6 +344,56 @@ export const useWorldStore = create<WorldState>()(
           `${CLUBS_KEY_PREFIX}${leagueId}`,
           JSON.stringify(leagueClubMap),
         );
+      },
+
+      recordNpcAppearances: async (entries) => {
+        if (entries.length === 0) return;
+        const { clubs, leagues } = get();
+
+        // Build updated club map — apply all appearance entries in memory first
+        const updatedClubs: Record<string, WorldClub> = { ...clubs };
+        for (const { playerId, clubId, season, appearance } of entries) {
+          const club = updatedClubs[clubId];
+          if (!club) continue;
+          const updatedPlayers = club.players.map((p) => {
+            if (p.id !== playerId) return p;
+            const prev = p.appearances ?? {};
+            const seasonBucket = prev[season] ?? {};
+            const clubBucket = seasonBucket[clubId] ?? [];
+            return {
+              ...p,
+              appearances: {
+                ...prev,
+                [season]: { ...seasonBucket, [clubId]: [...clubBucket, appearance] },
+              },
+            };
+          });
+          updatedClubs[clubId] = { ...club, players: updatedPlayers };
+        }
+
+        // Update in-memory state once
+        set({ clubs: updatedClubs });
+
+        // Determine which leagues are affected and persist each once
+        const affectedClubIds = new Set(entries.map((e) => e.clubId));
+        const affectedLeagueIds = new Set<string>();
+        for (const clubId of affectedClubIds) {
+          const leagueId = leagues.find((l) => l.clubIds.includes(clubId))?.id;
+          if (leagueId) affectedLeagueIds.add(leagueId);
+        }
+
+        for (const leagueId of affectedLeagueIds) {
+          const league = leagues.find((l) => l.id === leagueId);
+          if (!league) continue;
+          const leagueClubMap: Record<string, WorldClub> = {};
+          for (const id of league.clubIds) {
+            if (updatedClubs[id]) leagueClubMap[id] = updatedClubs[id];
+          }
+          await AsyncStorage.setItem(
+            `${CLUBS_KEY_PREFIX}${leagueId}`,
+            JSON.stringify(leagueClubMap),
+          );
+        }
       },
     }),
     {

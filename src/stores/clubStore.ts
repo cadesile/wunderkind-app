@@ -59,6 +59,7 @@ interface ClubState {
   setFormation: (f: Club['formation']) => void;
   setPlayingStyle: (s: Club['playingStyle']) => void;
   setClubColors: (primary: string, secondary: string) => void;
+  setBadgeShape: (shape: NonNullable<Club['badgeShape']>) => void;
 }
 
 export const DEFAULT_CLUB: Club = {
@@ -86,6 +87,7 @@ export const DEFAULT_CLUB: Club = {
   playingStyle: 'DIRECT',
   primaryColor: '#00897B',
   secondaryColor: '#FFC107',
+  badgeShape: 'shield',
 };
 
 export const useClubStore = create<ClubState>()(
@@ -249,6 +251,8 @@ export const useClubStore = create<ClubState>()(
         set((state) => ({ club: { ...state.club, playingStyle: style } })),
       setClubColors: (primary, secondary) =>
         set((state) => ({ club: { ...state.club, primaryColor: primary, secondaryColor: secondary } })),
+      setBadgeShape: (shape) =>
+        set((state) => ({ club: { ...state.club, badgeShape: shape } })),
     }),
     { name: 'club-store', storage: zustandStorage }
   )

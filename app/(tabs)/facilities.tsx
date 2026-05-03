@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { View, ScrollView, Modal, Pressable } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, FlatList, ScrollView, Modal, Pressable } from 'react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SlidersHorizontal } from 'lucide-react-native';
 import { useFacilityStore, facilityUpgradeCost, calculateFacilityUpkeep } from '@/stores/facilityStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
 import { repairFacilityCost } from '@/types/facility';
@@ -9,15 +10,27 @@ import type { FacilityTemplate } from '@/types/facility';
 import { useClubStore } from '@/stores/clubStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFinanceStore } from '@/stores/financeStore';
-import { useAttendanceStore } from '@/stores/attendanceStore';
-import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
+import { useMarketStore } from '@/stores/marketStore';
+import { useScoutStore } from '@/stores/scoutStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { useArchetypeStore } from '@/stores/archetypeStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
+import { Avatar } from '@/components/ui/Avatar';
+import { Badge } from '@/components/ui/Badge';
+import { FlagText } from '@/components/ui/FlagText';
+import { PixelDialog } from '@/components/ui/PixelDialog';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { WK, pixelShadow } from '@/constants/theme';
 import { penceToPounds, formatPounds } from '@/utils/currency';
+import { hapticTap } from '@/utils/haptics';
 import { nationalityToCode } from '@/utils/nationality';
+import { TIER_ORDER } from '@/types/club';
+import type { ClubTier } from '@/types/club';
+import { MarketCoach, MarketScout } from '@/types/market';
+import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
+import type { Player } from '@/types/player';
 
 function isoToFlag(code: string): string {
   if (!code || code.length !== 2) return '';
@@ -32,14 +45,16 @@ function nationalityFlag(nationality: string): string {
 
 // ─── Category definition ──────────────────────────────────────────────────────
 
-type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'SCOUTING' | 'STADIUM';
+type FacilityCategory = 'TRAINING' | 'MEDICAL' | 'SCOUTING';
+type FacilitiesTab = FacilityCategory | 'HIRE';
 
 const CATEGORIES: { id: FacilityCategory; label: string }[] = [
-  { id: 'TRAINING',  label: 'TRAINING'  },
-  { id: 'MEDICAL',   label: 'MEDICAL'   },
-  { id: 'SCOUTING',  label: 'SCOUTING'  },
-  { id: 'STADIUM',  label: 'STADIUM'  },
+  { id: 'TRAINING', label: 'TRAINING' },
+  { id: 'MEDICAL',  label: 'MEDICAL'  },
+  { id: 'SCOUTING', label: 'SCOUTING' },
 ];
+
+const ALL_TABS = [...CATEGORIES.map((c) => c.label), 'HIRE'] as const;
 
 // ─── Benefit labels (client-side game logic) ──────────────────────────────────
 
@@ -95,7 +110,7 @@ function FacilityCard({
   function confirmUpgrade() {
     setUpgradeModalVisible(false);
     upgradeLevel(template.slug);
-    addBalance(-upgradeCost * 100); // pounds → pence
+    addBalance(-upgradeCost * 100);
     useFinanceStore.getState().addTransaction({
       amount:      -upgradeCost,
       category:    'facility_upgrade',
@@ -123,7 +138,6 @@ function FacilityCard({
       marginBottom: 10,
       ...pixelShadow,
     }}>
-      {/* Title row */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <BodyText size={15} upper style={{ flex: 1 }}>{template.label}</BodyText>
         <View style={{
@@ -136,17 +150,13 @@ function FacilityCard({
         </View>
       </View>
 
-      {/* Active benefit */}
       <BodyText size={13} color={WK.tealLight} style={{ marginBottom: 2 }}>
         ◆ {benefitLabel(template.slug, level)}
       </BodyText>
 
-      {/* Description */}
       <BodyText size={12} dim style={{ marginBottom: 10 }}>{template.description}</BodyText>
 
-      {/* Dual progress bars */}
       <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
-        {/* Level bar */}
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
             <BodyText size={11} dim>LEVEL</BodyText>
@@ -157,7 +167,6 @@ function FacilityCard({
           </View>
         </View>
 
-        {/* Condition bar — only when built */}
         {level > 0 && (
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -171,13 +180,11 @@ function FacilityCard({
         )}
       </View>
 
-      {/* Maintenance */}
       <BodyText size={12} dim style={{ marginBottom: 12 }}>
         MAINT: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/wk`}
         {!atMax ? `  ·  LV${level + 1}: £${(nextMaintenance / 100).toFixed(2)}/wk` : ''}
       </BodyText>
 
-      {/* Action buttons */}
       <View style={{ gap: 8 }}>
         {needsRepair && (
           <Button
@@ -204,27 +211,10 @@ function FacilityCard({
         )}
       </View>
 
-      {/* Upgrade confirmation modal */}
-      <Modal
-        visible={upgradeModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setUpgradeModalVisible(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => setUpgradeModalVisible(false)}
-        >
+      <Modal visible={upgradeModalVisible} transparent animationType="fade" onRequestClose={() => setUpgradeModalVisible(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setUpgradeModalVisible(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{
-              backgroundColor: WK.tealCard,
-              borderWidth: 4,
-              borderColor: WK.yellow,
-              padding: 20,
-              minWidth: 280,
-              maxWidth: 340,
-              ...pixelShadow,
-            }}>
+            <View style={{ backgroundColor: WK.tealCard, borderWidth: 4, borderColor: WK.yellow, padding: 20, minWidth: 280, maxWidth: 340, ...pixelShadow }}>
               <PixelText size={9} upper style={{ marginBottom: 12 }}>Upgrade {template.label}</PixelText>
               {!canAffordUpgrade ? (
                 <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
@@ -233,43 +223,22 @@ function FacilityCard({
               ) : (
                 <>
                   <BodyText size={13} dim style={{ marginBottom: 4 }}>LEVEL {level} → {level + 1}</BodyText>
-                  <BodyText size={13} color={WK.yellow} style={{ marginBottom: 20 }}>
-                    COST: £{upgradeCost.toLocaleString()}
-                  </BodyText>
+                  <BodyText size={13} color={WK.yellow} style={{ marginBottom: 20 }}>COST: £{upgradeCost.toLocaleString()}</BodyText>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Button label="CANCEL" variant="teal" onPress={() => setUpgradeModalVisible(false)} style={{ flex: 1 }} />
-                {canAffordUpgrade && (
-                  <Button label="UPGRADE" variant="yellow" onPress={confirmUpgrade} style={{ flex: 1 }} />
-                )}
+                {canAffordUpgrade && <Button label="UPGRADE" variant="yellow" onPress={confirmUpgrade} style={{ flex: 1 }} />}
               </View>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Repair confirmation modal */}
-      <Modal
-        visible={repairModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRepairModalVisible(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => setRepairModalVisible(false)}
-        >
+      <Modal visible={repairModalVisible} transparent animationType="fade" onRequestClose={() => setRepairModalVisible(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setRepairModalVisible(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{
-              backgroundColor: WK.tealCard,
-              borderWidth: 4,
-              borderColor: WK.orange,
-              padding: 20,
-              minWidth: 280,
-              maxWidth: 340,
-              ...pixelShadow,
-            }}>
+            <View style={{ backgroundColor: WK.tealCard, borderWidth: 4, borderColor: WK.orange, padding: 20, minWidth: 280, maxWidth: 340, ...pixelShadow }}>
               <PixelText size={9} upper style={{ marginBottom: 12 }}>Repair {template.label}</PixelText>
               {!canAffordRepair ? (
                 <BodyText size={13} color={WK.red} style={{ marginBottom: 20 }}>
@@ -277,19 +246,13 @@ function FacilityCard({
                 </BodyText>
               ) : (
                 <>
-                  <BodyText size={13} dim style={{ marginBottom: 4 }}>
-                    CONDITION {Math.round(condition)}% → 100%
-                  </BodyText>
-                  <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
-                    COST: £{repairCost.toLocaleString()}
-                  </BodyText>
+                  <BodyText size={13} dim style={{ marginBottom: 4 }}>CONDITION {Math.round(condition)}% → 100%</BodyText>
+                  <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>COST: £{repairCost.toLocaleString()}</BodyText>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Button label="CANCEL" variant="teal" onPress={() => setRepairModalVisible(false)} style={{ flex: 1 }} />
-                {canAffordRepair && (
-                  <Button label="REPAIR" variant="orange" onPress={confirmRepair} style={{ flex: 1 }} />
-                )}
+                {canAffordRepair && <Button label="REPAIR" variant="orange" onPress={confirmRepair} style={{ flex: 1 }} />}
               </View>
             </View>
           </Pressable>
@@ -299,155 +262,309 @@ function FacilityCard({
   );
 }
 
-// ─── Attendance log ───────────────────────────────────────────────────────────
+// ─── Hire Pane ────────────────────────────────────────────────────────────────
 
-function AttendanceLog() {
-  const records = useAttendanceStore((s) => s.records);
+type HireItem =
+  | { kind: 'coach'; data: MarketCoach }
+  | { kind: 'scout'; data: MarketScout };
 
-  if (records.length === 0) {
-    return (
-      <View style={{
-        backgroundColor: WK.tealCard,
-        borderWidth: 3,
-        borderColor: WK.border,
-        padding: 14,
-        marginBottom: 14,
-        alignItems: 'center',
-        ...pixelShadow,
-      }}>
-        <PixelText size={8} dim>NO HOME GAMES YET</PixelText>
-        <BodyText size={12} dim style={{ marginTop: 6, textAlign: 'center' }}>
-          Attendance figures will appear here after your first home match.
-        </BodyText>
-      </View>
-    );
+function formatStaffRole(role: string): string {
+  return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getRoleCap(
+  role: string,
+  config: ReturnType<typeof useGameConfigStore.getState>['config'],
+): number {
+  switch (role) {
+    case 'manager':              return config.maxManagersPerClub;
+    case 'director_of_football': return config.maxDirectorsOfFootballPerClub;
+    case 'facility_manager':     return config.maxFacilityManagersPerClub;
+    case 'chairman':             return config.maxChairmensPerClub;
+    case 'scout':                return config.maxScoutsPerClub;
+    default:                     return config.maxCoachesPerClub;
+  }
+}
+
+type CapBlock = { name: string; role: string; nationality?: string; influence?: number; appearance?: any; morale?: number; age?: number; personality?: any };
+
+function HirePane({
+  selectedRole,
+  setSelectedRole,
+}: {
+  selectedRole: string;
+  setSelectedRole: (role: string) => void;
+}) {
+  const coaches      = useMarketStore((s) => s.coaches);
+  const marketScouts = useMarketStore((s) => s.marketScouts);
+  const hireCoach    = useMarketStore((s) => s.hireCoach);
+  const hireScout    = useMarketStore((s) => s.hireScout);
+  const refreshPool  = useMarketStore((s) => s.refreshMarketPool);
+  const isLoading    = useMarketStore((s) => s.isLoading);
+
+  const { club } = useClubStore();
+  const hiredCoaches = useCoachStore((s) => s.coaches);
+  const hiredScouts  = useScoutStore((s) => s.scouts);
+  const config       = useGameConfigStore((s) => s.config);
+  const staffRoles   = config.staffRoles;
+  const archetypes   = useArchetypeStore((s) => s.archetypes);
+
+  const weekNumber  = club.weekNumber ?? 1;
+  const clubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
+
+  const [showRoleFilter, setShowRoleFilter] = useState(false);
+  const [signError, setSignError]           = useState<string | null>(null);
+  const [tierPopup, setTierPopup]           = useState<string | null>(null);
+  const [capPopup, setCapPopup]             = useState<CapBlock | null>(null);
+
+  function getCapBlock(role: string): CapBlock | null {
+    const cap = getRoleCap(role, config);
+    const coachesOfRole = hiredCoaches.filter((c) => c.role === role);
+    const scoutsOfRole  = role === 'scout' ? hiredScouts : [];
+    const total = coachesOfRole.length + scoutsOfRole.length;
+    if (total < cap) return null;
+    if (coachesOfRole.length > 0) {
+      const c = coachesOfRole[0];
+      return { name: c.name, role: c.role, nationality: c.nationality, influence: c.influence, appearance: c.appearance, morale: c.morale, age: c.age, personality: c.personality };
+    }
+    const s = scoutsOfRole[0];
+    return { name: s.name, role: s.role, nationality: s.nationality };
+  }
+
+  const roleOptions = useMemo(() => {
+    const roles = ['ALL', ...staffRoles];
+    if (!roles.includes('scout')) roles.push('scout');
+    return roles;
+  }, [staffRoles]);
+
+  const allItems: HireItem[] = [
+    ...coaches.map((c) => ({ kind: 'coach' as const, data: c })),
+    ...marketScouts.map((s) => ({ kind: 'scout' as const, data: s })),
+  ];
+
+  const filtered =
+    selectedRole === 'ALL'
+      ? allItems
+      : allItems.filter((item) => item.data.role === selectedRole);
+
+  const visibleItems = filtered.map((item) => {
+    const itemTierKey = (item.data.tier ?? 'local') as ClubTier;
+    const tierRestricted = TIER_ORDER[itemTierKey] > TIER_ORDER[clubTierKey];
+    const signingFeePounds = Math.round((item.data.salary * 4) / 100);
+    const canAfford = (club.balance ?? 0) >= signingFeePounds;
+    return { ...item, tierRestricted, canAfford, signingFeePounds };
+  });
+
+  function signCoach(mc: MarketCoach) {
+    const block = getCapBlock(mc.role);
+    if (block) { setCapPopup(block); return; }
+    const fee = Math.round((mc.salary * 4) / 100);
+    if ((club.balance ?? 0) < fee) {
+      setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
+      return;
+    }
+    useFinanceStore.getState().addTransaction({
+      amount:      -fee,
+      category:    'staff_signing',
+      description: `Signed ${mc.firstName} ${mc.lastName}`,
+      weekNumber,
+    });
+    hireCoach(mc.id, weekNumber);
+  }
+
+  function signScout(ms: MarketScout) {
+    const block = getCapBlock(ms.role);
+    if (block) { setCapPopup(block); return; }
+    const fee = Math.round((ms.salary * 4) / 100);
+    if ((club.balance ?? 0) < fee) {
+      setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
+      return;
+    }
+    useFinanceStore.getState().addTransaction({
+      amount:      -fee,
+      category:    'staff_signing',
+      description: `Signed ${ms.firstName} ${ms.lastName}`,
+      weekNumber,
+    });
+    hireScout(ms.id, weekNumber);
   }
 
   return (
-    <View style={{ marginBottom: 14 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-        <PixelText size={8} color={WK.yellow}>ATTENDANCE LOG</PixelText>
-        <BodyText size={11} dim>({records.length} games)</BodyText>
+    <View style={{ flex: 1 }}>
+      <View style={{
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingHorizontal: 12, paddingVertical: 8,
+        borderBottomWidth: 2, borderBottomColor: WK.border,
+      }}>
+        <BodyText size={11} dim>{filtered.length} AVAILABLE</BodyText>
+        <Pressable
+          onPress={() => { hapticTap(); setShowRoleFilter(true); }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+        >
+          <SlidersHorizontal size={14} color={selectedRole !== 'ALL' ? WK.yellow : WK.dim} />
+          <PixelText size={7} color={selectedRole !== 'ALL' ? WK.yellow : WK.dim}>
+            {selectedRole === 'ALL' ? 'FILTER' : formatStaffRole(selectedRole).toUpperCase()}
+          </PixelText>
+        </Pressable>
       </View>
 
-      {records.map((r) => {
-        const outcomeColor =
-          r.homeGoals > r.awayGoals ? WK.green :
-          r.homeGoals < r.awayGoals ? WK.red : WK.yellow;
-        const fillPct = r.stadiumCapacity > 0
-          ? Math.round((r.attendance / r.stadiumCapacity) * 100)
-          : r.attendancePct;
+      <FlatList
+        data={visibleItems}
+        keyExtractor={(item) => `${item.kind}-${item.data.id}`}
+        contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
+        onRefresh={refreshPool}
+        refreshing={isLoading}
+        renderItem={({ item }) => {
+          const { tierRestricted, canAfford, signingFeePounds } = item;
+          const isDisabled = tierRestricted || !canAfford;
 
-        return (
-          <View
-            key={r.id}
-            style={{
-              backgroundColor: WK.tealCard,
-              borderWidth: 2,
-              borderColor: WK.border,
-              padding: 10,
-              marginBottom: 6,
-              ...pixelShadow,
-            }}
-          >
-            {/* Match line */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <BodyText size={12} style={{ flex: 1 }} numberOfLines={1}>
-                {r.homeClubName} vs {r.awayClubName}
-              </BodyText>
-              <View style={{
-                borderWidth: 2,
-                borderColor: outcomeColor,
-                paddingHorizontal: 6,
-                paddingVertical: 2,
-              }}>
-                <PixelText size={9} color={outcomeColor}>
-                  {r.homeGoals}–{r.awayGoals}
-                </PixelText>
-              </View>
-            </View>
-
-            {/* Attendance fill bar */}
-            <View style={{ marginBottom: 4 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-                <BodyText size={11} dim>ATTENDANCE</BodyText>
-                <BodyText size={11} color={WK.tealLight}>
-                  {r.attendance > 0 ? r.attendance.toLocaleString() : '—'}
-                  {r.stadiumCapacity > 0 ? ` / ${r.stadiumCapacity.toLocaleString()}` : ''}
-                </BodyText>
-              </View>
-              <View style={{ height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
-                <View style={{ height: '100%', width: `${fillPct}%`, backgroundColor: WK.tealLight }} />
-              </View>
-            </View>
-
-            {/* Meta row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <BodyText size={10} dim>WK {r.week} · {r.reputationTier.toUpperCase()} · {r.attendancePct}% FILL</BodyText>
-              {r.fanEffects.length > 0 && (
-                <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {r.fanEffects.map((fe, i) => (
-                    <View key={i} style={{
-                      backgroundColor: fe.bonus >= 0 ? WK.green + '33' : WK.red + '33',
-                      borderWidth: 1,
-                      borderColor: fe.bonus >= 0 ? WK.green : WK.red,
-                      paddingHorizontal: 4,
-                      paddingVertical: 1,
-                    }}>
-                      <BodyText size={10} color={fe.bonus >= 0 ? WK.green : WK.red}>
-                        {fe.bonus >= 0 ? '+' : ''}{fe.bonus}%
-                      </BodyText>
+          if (item.kind === 'coach') {
+            const mc = item.data;
+            return (
+              <Pressable
+                onPress={() => {
+                  if (tierRestricted) { setTierPopup('Tier Restriction: Upgrade your club to hire this staff member.'); return; }
+                  signCoach(mc);
+                }}
+                style={[{
+                  backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+                  padding: 12, marginBottom: 10, ...pixelShadow,
+                  opacity: isDisabled ? 0.55 : 1,
+                }]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Avatar appearance={undefined} role="COACH" size={44} />
+                  <View style={{ flex: 1 }}>
+                    <BodyText size={14} upper numberOfLines={1}>{mc.firstName} {mc.lastName}</BodyText>
+                    <PixelText size={8} color={WK.tealLight}>{formatStaffRole(mc.role).toUpperCase()}</PixelText>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                      <FlagText nationality={mc.nationality} size={11} />
+                      <BodyText size={11} dim>· £{Math.round(mc.salary / 100).toLocaleString()}/wk</BodyText>
                     </View>
-                  ))}
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Badge label={`INF ${mc.influence}`} color="yellow" />
+                    <BodyText size={10} dim>Fee: £{signingFeePounds.toLocaleString()}</BodyText>
+                  </View>
                 </View>
-              )}
+              </Pressable>
+            );
+          }
+
+          const ms = item.data;
+          const rangeLabel: Record<string, string> = { local: 'LOCAL', national: 'NATIONAL', international: 'INTL' };
+          const rangeColor: Record<string, string> = { local: WK.dim, national: WK.yellow, international: WK.red };
+          const range = ms.scoutingRange ?? 'local';
+          return (
+            <Pressable
+              onPress={() => {
+                if (tierRestricted) { setTierPopup('Tier Restriction: Upgrade your club to hire this scout.'); return; }
+                signScout(ms);
+              }}
+              style={[{
+                backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+                padding: 12, marginBottom: 10, ...pixelShadow,
+                opacity: isDisabled ? 0.55 : 1,
+              }]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Avatar appearance={undefined} role="SCOUT" size={44} />
+                <View style={{ flex: 1 }}>
+                  <BodyText size={14} upper numberOfLines={1}>{ms.firstName} {ms.lastName}</BodyText>
+                  <PixelText size={8} color={rangeColor[range]}>{rangeLabel[range]} SCOUT</PixelText>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                    <FlagText nationality={ms.nationality} size={11} />
+                    <BodyText size={11} dim>· £{Math.round(ms.salary / 100).toLocaleString()}/wk</BodyText>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Badge label={`${ms.successRate}%`} color="green" />
+                  <BodyText size={10} dim>Fee: £{signingFeePounds.toLocaleString()}</BodyText>
+                </View>
+              </View>
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <BodyText size={12} dim style={{ textAlign: 'center', marginTop: 32 }}>NO STAFF AVAILABLE</BodyText>
+        }
+      />
+
+      <Modal visible={showRoleFilter} transparent animationType="fade" onRequestClose={() => setShowRoleFilter(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }} onPress={() => setShowRoleFilter(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: WK.tealCard, borderTopWidth: 3, borderTopColor: WK.border, padding: 16, paddingBottom: 32 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                <PixelText size={9} upper>HIRE BY ROLE</PixelText>
+                <Pressable onPress={() => setShowRoleFilter(false)}>
+                  <PixelText size={9} color={WK.dim}>✕</PixelText>
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {roleOptions.map((role) => (
+                  <Pressable
+                    key={role}
+                    onPress={() => { hapticTap(); setSelectedRole(role); setShowRoleFilter(false); }}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 8,
+                      backgroundColor: selectedRole === role ? WK.yellow : WK.tealMid,
+                      borderWidth: 2,
+                      borderColor: selectedRole === role ? WK.yellow : WK.border,
+                    }}
+                  >
+                    <PixelText size={7} color={selectedRole === role ? WK.border : WK.text}>
+                      {role === 'ALL' ? 'ALL' : formatStaffRole(role).toUpperCase()}
+                    </PixelText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
-// ─── Stadium overview card ────────────────────────────────────────────────────
+      {signError && (
+        <PixelDialog visible title="SIGN FAILED" message={signError} onConfirm={() => setSignError(null)} onClose={() => setSignError(null)} />
+      )}
+      {tierPopup && (
+        <PixelDialog visible title="TIER RESTRICTION" message={tierPopup} onConfirm={() => setTierPopup(null)} onClose={() => setTierPopup(null)} />
+      )}
 
-function StadiumOverviewCard({
-  stadiumName,
-  templates,
-  levels,
-}: {
-  stadiumName: string | null;
-  templates: FacilityTemplate[];
-  levels: Record<string, number>;
-}) {
-  const capacity = calculateStadiumCapacity(templates, levels);
-
-  return (
-    <View style={{
-      backgroundColor: WK.tealCard,
-      borderWidth: 3,
-      borderColor: WK.yellow,
-      padding: 14,
-      marginBottom: 14,
-      ...pixelShadow,
-    }}>
-      {/* Stadium name */}
-      <PixelText size={9} color={WK.yellow} upper style={{ marginBottom: 8 }}>
-        STADIUM NAME: {stadiumName ?? 'UNNAMED STADIUM'}
-      </PixelText>
-
-      {/* Capacity row */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <BodyText size={12} dim>EST. CAPACITY</BodyText>
-        <PixelText size={14} variant="vt323" color={capacity > 0 ? WK.green : WK.dim}>
-          {capacity > 0 ? capacity.toLocaleString() : '—'}
-        </PixelText>
-      </View>
-
-      {capacity === 0 && (
-        <BodyText size={12} dim style={{ marginTop: 8 }}>
-          Build and upgrade facilities to increase stadium capacity.
-        </BodyText>
+      {capPopup && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setCapPopup(null)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 24 }} onPress={() => setCapPopup(null)}>
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 20, ...pixelShadow }}>
+                <PixelText size={9} upper style={{ marginBottom: 4 }}>ROLE OCCUPIED</PixelText>
+                <BodyText size={12} dim style={{ marginBottom: 16 }}>
+                  This role is already filled. Release the current hire before signing a replacement.
+                </BodyText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.border, padding: 12 }}>
+                  <Avatar appearance={capPopup.appearance} role="COACH" size={48} morale={capPopup.morale} age={capPopup.age} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <BodyText size={13} upper numberOfLines={1}>{capPopup.name}</BodyText>
+                    <PixelText size={7} color={WK.tealLight}>{formatStaffRole(capPopup.role).toUpperCase()}</PixelText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                      {capPopup.nationality ? <FlagText nationality={capPopup.nationality} size={11} /> : null}
+                      {capPopup.influence !== undefined && <Badge label={`INF ${capPopup.influence}`} color="yellow" />}
+                      {capPopup.personality && (() => {
+                        const arch = getArchetypeForPlayer({ personality: capPopup.personality } as unknown as Player, archetypes);
+                        return arch ? (
+                          <View style={{ paddingHorizontal: 5, paddingVertical: 2, borderWidth: 2, borderColor: WK.border, backgroundColor: WK.tealDark }}>
+                            <PixelText size={6} color={WK.yellow}>{arch.name.toUpperCase()}</PixelText>
+                          </View>
+                        ) : null;
+                      })()}
+                    </View>
+                  </View>
+                </View>
+                <Pressable onPress={() => setCapPopup(null)} style={{ marginTop: 16, paddingVertical: 10, alignItems: 'center', backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.border }}>
+                  <PixelText size={8}>DISMISS</PixelText>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       )}
     </View>
   );
@@ -460,7 +577,8 @@ export default function FacilitiesScreen() {
   const club = useClubStore((s) => s.club);
   const coaches = useCoachStore((s) => s.coaches);
   const facilityManager = coaches.find((c) => c.role === 'facility_manager') ?? null;
-  const [activeCategory, setActiveCategory] = useState<FacilityCategory>('TRAINING');
+  const [activeTab, setActiveTab] = useState<FacilitiesTab>('TRAINING');
+  const [selectedRole, setSelectedRole] = useState<string>('ALL');
 
   const balance = penceToPounds(
     typeof club.balance === 'number' && !isNaN(club.balance)
@@ -468,17 +586,22 @@ export default function FacilitiesScreen() {
       : club.totalCareerEarnings * 100,
   );
 
-  const visibleTemplates = templates.filter((t) => t.category === activeCategory);
-  const stadiumName = club.stadiumName ?? null;
+  const isCategory = (t: FacilitiesTab): t is FacilityCategory => t !== 'HIRE';
+  const visibleTemplates = isCategory(activeTab)
+    ? templates.filter((t) => t.category === activeTab)
+    : [];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
       <PitchBackground />
 
       <PixelTopTabBar
-        tabs={CATEGORIES.map((c) => c.label)}
-        active={activeCategory}
-        onChange={(t) => setActiveCategory(t as FacilityCategory)}
+        tabs={[...ALL_TABS]}
+        active={activeTab}
+        onChange={(t) => {
+          if (t !== 'HIRE') setSelectedRole('ALL');
+          setActiveTab(t as FacilitiesTab);
+        }}
       />
 
       {/* Header */}
@@ -505,45 +628,38 @@ export default function FacilitiesScreen() {
         <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
-        {activeCategory === 'STADIUM' && (
-          <>
-            <StadiumOverviewCard
-              stadiumName={stadiumName}
-              templates={templates}
-              levels={levels}
+      {activeTab === 'HIRE' ? (
+        <HirePane selectedRole={selectedRole} setSelectedRole={setSelectedRole} />
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
+          {visibleTemplates.map((template) => (
+            <FacilityCard
+              key={template.slug}
+              template={template}
+              level={levels[template.slug] ?? 0}
+              condition={conditions[template.slug] ?? 100}
+              balance={balance}
             />
-            <AttendanceLog />
-          </>
-        )}
-        {visibleTemplates.map((template) => (
-          <FacilityCard
-            key={template.slug}
-            template={template}
-            level={levels[template.slug] ?? 0}
-            condition={conditions[template.slug] ?? 100}
-            balance={balance}
-          />
-        ))}
+          ))}
 
-        {/* Total weekly upkeep summary */}
-        <View style={{
-          backgroundColor: WK.tealCard,
-          borderWidth: 3,
-          borderColor: WK.yellow,
-          padding: 12,
-          marginTop: 4,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          ...pixelShadow,
-        }}>
-          <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
-          <PixelText size={12} color={WK.orange}>
-            £{(calculateTotalUpkeep(templates, levels) / 100).toFixed(2)}
-          </PixelText>
-        </View>
-      </ScrollView>
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: WK.yellow,
+            padding: 12,
+            marginTop: 4,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            ...pixelShadow,
+          }}>
+            <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
+            <PixelText size={12} color={WK.orange}>
+              £{(calculateTotalUpkeep(templates, levels) / 100).toFixed(2)}
+            </PixelText>
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

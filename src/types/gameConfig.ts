@@ -120,6 +120,22 @@ export interface GameConfig {
    */
   retirementChance: number;
 
+  // ── Facility income ───────────────────────────────────────────────────────
+  /**
+   * Percentage of full facility income earned on weeks without a home match.
+   * 0 = no income on non-matchdays (default), 100 = full income regardless of fixtures.
+   * Smallint 0–100, configured in admin.
+   */
+  nonMatchFacilityIncomePercent: number;
+
+  // ── Match simulation ─────────────────────────────────────────────────────
+  /**
+   * Maps each playing style to the player attributes that receive a bonus during match simulation.
+   * e.g. { POSSESSION: ["technical", "vision"], COUNTER: ["pace", "stamina"] }
+   * Configured in the admin panel. Empty object = no style-based attribute bonuses.
+   */
+  playingStyleInfluence: Record<string, string[]>;
+
   // ── Developer / Debug ────────────────────────────────────────────────
   /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
   debugLoggingEnabled: boolean;
@@ -220,6 +236,10 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   retirementMinAge: 30,
   retirementMaxAge: 38,
   retirementChance: 0.35,
+
+  nonMatchFacilityIncomePercent: 0,
+
+  playingStyleInfluence: {},
 
   debugLoggingEnabled: false,
 

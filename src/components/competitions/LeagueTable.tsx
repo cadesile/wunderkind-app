@@ -1,9 +1,12 @@
 import { useMemo } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
-import { WK } from '@/constants/theme';
+import { WK, pixelShadow } from '@/constants/theme';
 import { computeStandings } from '@/utils/standingsCalculator';
 import type { Fixture } from '@/stores/fixtureStore';
+import type { WorldClub } from '@/types/world';
+import type { Player } from '@/types/player';
+
 const PROMOTION_GREEN = '#4CAF50';
 
 export interface LeagueTableProps {
@@ -13,16 +16,135 @@ export interface LeagueTableProps {
   ampName?: string;
   promotionSpots?: number | null;
   onClubPress?: (clubId: string) => void;
+  worldClubs?: Record<string, WorldClub>;
+  ampSquad?: Player[];
 }
 
-export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots, onClubPress }: LeagueTableProps) {
-  const rows = useMemo(() => computeStandings(fixtures, clubs, ampClubId), [fixtures, clubs, ampClubId]);
+// ─── Stat entry used for scorers/assisters ────────────────────────────────────
+interface StatEntry {
+  id: string;
+  name: string;
+  clubName: string;
+  position: string;
+  goals: number;
+  assists: number;
+}
 
+// ─── Form result entry ────────────────────────────────────────────────────────
+interface FormEntry {
+  clubId: string;
+  name: string;
+  isAmp: boolean;
+  pts: number;
+  form: Array<'W' | 'D' | 'L'>;
+}
+
+const FORM_COLOR: Record<'W' | 'D' | 'L', string> = {
+  W: '#4CAF50',
+  D: WK.yellow,
+  L: WK.red,
+};
+
+export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots, onClubPress, worldClubs, ampSquad }: LeagueTableProps) {
   const clubNameMap = useMemo(() => {
     const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
     if (ampClubId && ampName) map.set(ampClubId, ampName);
     return map;
   }, [clubs, ampClubId, ampName]);
+
+  // Derive the active season from the fixture data itself — more reliable than weekNumber / 38
+  const currentSeasonNumber = useMemo(() => {
+    if (fixtures.length === 0) return 1;
+    return Math.max(...fixtures.map((f) => f.season));
+  }, [fixtures]);
+
+  // Only consider fixtures from the active season (handles multi-season fixture stores)
+  const currentFixtures = useMemo(() =>
+    fixtures.filter((f) => f.season === currentSeasonNumber),
+    [fixtures, currentSeasonNumber],
+  );
+
+  const rows = useMemo(() => computeStandings(currentFixtures, clubs, ampClubId), [currentFixtures, clubs, ampClubId]);
+
+  // Season key used to look up appearances — must match what SimulationService stores
+  const season = `Season ${currentSeasonNumber}`;
+
+  // ── Collect player stats from appearances ───────────────────────────────────
+  const playerStats = useMemo((): StatEntry[] => {
+    const entries: StatEntry[] = [];
+    clubs.forEach(({ id: clubId }) => {
+      if (clubId === ampClubId) return;
+      const wc = worldClubs?.[clubId];
+      if (!wc) return;
+      const clubName = clubNameMap.get(clubId) ?? clubId;
+      wc.players.forEach((p) => {
+        const clubApps = p.appearances?.[season]?.[clubId] ?? [];
+        const goals = clubApps.reduce((s, a) => s + (a.goals ?? 0), 0);
+        const assists = clubApps.reduce((s, a) => s + (a.assists ?? 0), 0);
+        if (goals > 0 || assists > 0) {
+          entries.push({
+            id: p.id,
+            name: `${p.firstName} ${p.lastName}`,
+            clubName,
+            position: p.position === 'ATT' ? 'FWD' : p.position,
+            goals,
+            assists,
+          });
+        }
+      });
+    });
+    if (ampClubId && ampSquad) {
+      const ampClubName = clubNameMap.get(ampClubId) ?? 'Your Club';
+      ampSquad.forEach((p) => {
+        const clubApps = p.appearances?.[season]?.[ampClubId] ?? [];
+        const goals = clubApps.reduce((s, a) => s + (a.goals ?? 0), 0);
+        const assists = clubApps.reduce((s, a) => s + (a.assists ?? 0), 0);
+        if (goals > 0 || assists > 0) {
+          entries.push({ id: p.id, name: p.name, clubName: ampClubName, position: p.position, goals, assists });
+        }
+      });
+    }
+    return entries;
+  }, [clubs, worldClubs, ampSquad, ampClubId, season, clubNameMap]);
+
+  const topScorers = useMemo(() =>
+    [...playerStats].sort((a, b) => b.goals - a.goals).filter((p) => p.goals > 0).slice(0, 4),
+    [playerStats],
+  );
+
+  const topAssisters = useMemo(() =>
+    [...playerStats].sort((a, b) => b.assists - a.assists).filter((p) => p.assists > 0).slice(0, 4),
+    [playerStats],
+  );
+
+  // ── Form table (last 5 matches per club) ────────────────────────────────────
+  const formTable = useMemo((): FormEntry[] => {
+    return clubs
+      .map(({ id: clubId }) => {
+        const isAmp = clubId === ampClubId;
+        const name = clubNameMap.get(clubId) ?? clubId;
+        const clubFixtures = currentFixtures
+          .filter((f) => f.result !== null && (f.homeClubId === clubId || f.awayClubId === clubId))
+          .sort((a, b) => b.round - a.round)
+          .slice(0, 5);
+        let pts = 0;
+        const form: Array<'W' | 'D' | 'L'> = [];
+        for (const f of clubFixtures) {
+          const isHome = f.homeClubId === clubId;
+          const gf = isHome ? (f.result!.homeGoals) : (f.result!.awayGoals);
+          const ga = isHome ? (f.result!.awayGoals) : (f.result!.homeGoals);
+          const outcome: 'W' | 'D' | 'L' = gf > ga ? 'W' : gf < ga ? 'L' : 'D';
+          if (outcome === 'W') pts += 3;
+          else if (outcome === 'D') pts += 1;
+          form.unshift(outcome);
+        }
+        return { clubId, name, isAmp, pts, form };
+      })
+      .filter((r) => r.form.length > 0)
+      .sort((a, b) => b.pts - a.pts);
+  }, [currentFixtures, clubs, ampClubId, clubNameMap]);
+
+  const mostOnForm = formTable[0] ?? null;
 
   return (
     <View style={{ flex: 1 }}>
@@ -45,7 +167,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
         <PixelText size={7} color={WK.dim} style={{ width: 32, textAlign: 'right' }}>PTS</PixelText>
       </View>
 
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         {rows.map((row, index) => {
           const pos = index + 1;
           const isAmp = !!ampClubId && row.clubId === ampClubId;
@@ -104,6 +226,173 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
             </Pressable>
           );
         })}
+
+        {/* ── On-Form Card ─────────────────────────────────────────────── */}
+        {mostOnForm && (
+          <View style={{ marginTop: 16, marginHorizontal: 10 }}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: WK.border,
+              ...pixelShadow,
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderBottomWidth: 2,
+                borderBottomColor: WK.border,
+                backgroundColor: WK.tealDark,
+              }}>
+                <PixelText size={8} color={WK.yellow} style={{ flex: 1 }}>ON FORM</PixelText>
+                <PixelText size={7} color={WK.dim}>LAST {mostOnForm.form.length} MATCHES</PixelText>
+              </View>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 12,
+                gap: 10,
+              }}>
+                <BodyText
+                  size={13}
+                  style={{ flex: 1, color: mostOnForm.isAmp ? WK.yellow : WK.text }}
+                  numberOfLines={1}
+                >
+                  {mostOnForm.name}{mostOnForm.isAmp ? ' ★' : ''}
+                </BodyText>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {mostOnForm.form.map((r, i) => (
+                    <View key={i} style={{
+                      width: 20, height: 20,
+                      backgroundColor: FORM_COLOR[r],
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: 1, borderColor: WK.border,
+                    }}>
+                      <PixelText size={7} color={WK.text}>{r}</PixelText>
+                    </View>
+                  ))}
+                </View>
+                <VT323Text size={18} color={WK.yellow} style={{ minWidth: 32, textAlign: 'right' }}>
+                  {mostOnForm.pts} PTS
+                </VT323Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── Top Scorers Card ─────────────────────────────────────────── */}
+        {topScorers.length > 0 && (
+          <View style={{ marginTop: 12, marginHorizontal: 10 }}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: WK.border,
+              ...pixelShadow,
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderBottomWidth: 2,
+                borderBottomColor: WK.border,
+                backgroundColor: WK.tealDark,
+              }}>
+                <PixelText size={8} color={WK.yellow} style={{ flex: 1 }}>GOLDEN BOOT</PixelText>
+                <PixelText size={7} color={WK.dim}>GOALS</PixelText>
+              </View>
+              {topScorers.map((p, i) => (
+                <View key={p.id} style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  borderBottomWidth: i < topScorers.length - 1 ? 2 : 0,
+                  borderBottomColor: WK.border,
+                  gap: 8,
+                }}>
+                  <VT323Text size={18} color={i === 0 ? WK.yellow : WK.dim} style={{ width: 20 }}>
+                    {i + 1}
+                  </VT323Text>
+                  <View style={{
+                    paddingHorizontal: 5, paddingVertical: 2,
+                    borderWidth: 1, borderColor: WK.border,
+                    backgroundColor: WK.tealDark,
+                  }}>
+                    <PixelText size={7} color={WK.dim}>{p.position}</PixelText>
+                  </View>
+                  <BodyText size={13} style={{ flex: 1, color: WK.text }} numberOfLines={1}>
+                    {p.name}
+                  </BodyText>
+                  <BodyText size={11} dim numberOfLines={1} style={{ maxWidth: 80 }}>
+                    {p.clubName}
+                  </BodyText>
+                  <VT323Text size={20} color={FORM_COLOR.W} style={{ minWidth: 28, textAlign: 'right' }}>
+                    {p.goals}
+                  </VT323Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Top Assisters Card ───────────────────────────────────────── */}
+        {topAssisters.length > 0 && (
+          <View style={{ marginTop: 12, marginHorizontal: 10 }}>
+            <View style={{
+              backgroundColor: WK.tealCard,
+              borderWidth: 3,
+              borderColor: WK.border,
+              ...pixelShadow,
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderBottomWidth: 2,
+                borderBottomColor: WK.border,
+                backgroundColor: WK.tealDark,
+              }}>
+                <PixelText size={8} color={WK.yellow} style={{ flex: 1 }}>TOP ASSISTS</PixelText>
+                <PixelText size={7} color={WK.dim}>ASSISTS</PixelText>
+              </View>
+              {topAssisters.map((p, i) => (
+                <View key={p.id} style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  borderBottomWidth: i < topAssisters.length - 1 ? 2 : 0,
+                  borderBottomColor: WK.border,
+                  gap: 8,
+                }}>
+                  <VT323Text size={18} color={i === 0 ? WK.yellow : WK.dim} style={{ width: 20 }}>
+                    {i + 1}
+                  </VT323Text>
+                  <View style={{
+                    paddingHorizontal: 5, paddingVertical: 2,
+                    borderWidth: 1, borderColor: WK.border,
+                    backgroundColor: WK.tealDark,
+                  }}>
+                    <PixelText size={7} color={WK.dim}>{p.position}</PixelText>
+                  </View>
+                  <BodyText size={13} style={{ flex: 1, color: WK.text }} numberOfLines={1}>
+                    {p.name}
+                  </BodyText>
+                  <BodyText size={11} dim numberOfLines={1} style={{ maxWidth: 80 }}>
+                    {p.clubName}
+                  </BodyText>
+                  <VT323Text size={20} color={WK.tealLight} style={{ minWidth: 28, textAlign: 'right' }}>
+                    {p.assists}
+                  </VT323Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );

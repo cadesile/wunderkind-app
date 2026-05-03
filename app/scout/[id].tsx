@@ -16,6 +16,7 @@ import { useCoachStore } from '@/stores/coachStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { moraleLabel } from '@/utils/morale';
+import { MoraleBar } from '@/components/ui/MoraleBar';
 import { formatCurrencyWhole, penceToPounds } from '@/utils/currency';
 import { AssignMissionOverlay } from '@/components/AssignMissionOverlay';
 
@@ -139,9 +140,7 @@ export default function ScoutDetailScreen() {
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
               <PixelText size={14} variant="vt323" dim>MORALE</PixelText>
-              <PixelText size={18} variant="vt323" color={morale >= 60 ? WK.green : morale >= 40 ? WK.yellow : WK.red}>
-                {moraleLabel(morale)}
-              </PixelText>
+              <MoraleBar morale={morale} width={80} />
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
               <PixelText size={14} variant="vt323" dim>STATUS</PixelText>

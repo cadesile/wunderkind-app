@@ -88,7 +88,8 @@ function AppNavigator() {
   }, []);
 
   useEffect(() => {
-    void fetchAndCacheGameConfig().then((ok) => {
+    const weekNumber = useClubStore.getState().club.weekNumber ?? undefined;
+    void fetchAndCacheGameConfig(weekNumber).then((ok) => {
       if (ok) {
         setConfigReady(true);
       } else {

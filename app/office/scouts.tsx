@@ -12,6 +12,7 @@ import { useScoutStore } from '@/stores/scoutStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { Scout } from '@/types/market';
 import { moraleLabel } from '@/utils/morale';
+import { MoraleBar } from '@/components/ui/MoraleBar';
 import { Badge } from '@/components/ui/Badge';
 
 function moraleColor(morale: number): string {
@@ -71,7 +72,7 @@ function ScoutCard({ scout, onPress }: { scout: Scout; onPress: () => void }) {
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <PixelText size={6} color={moraleColor(morale)}>{moraleLabel(morale)}</PixelText>
+          <MoraleBar morale={morale} width={48} />
         </View>
       </View>
 

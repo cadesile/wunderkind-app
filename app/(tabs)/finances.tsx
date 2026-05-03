@@ -19,6 +19,8 @@ import { Loan } from '@/types/market';
 import { type FinancialCategory, type FinancialTransaction } from '@/types/finance';
 import { calculateWeeklyFinances } from '@/engine/finance';
 import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
+import { useFixtureStore } from '@/stores/fixtureStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { penceToPounds, formatCurrencyCompact, formatPounds } from '@/utils/currency';
 import useClubMetrics from '@/hooks/useClubMetrics';
 
@@ -53,6 +55,9 @@ function BalancePane() {
   const facilityLevels = useFacilityStore((s) => s.levels);
   const facilityConditions = useFacilityStore((s) => s.conditions);
   const facilityTemplates = useFacilityStore((s) => s.templates);
+  const fixtures = useFixtureStore((s) => s.fixtures);
+  const currentMatchday = useFixtureStore((s) => s.currentMatchday);
+  const nonMatchPct = useGameConfigStore((s) => s.config.nonMatchFacilityIncomePercent ?? 0);
 
   // balance is stored in pence — convert to whole pounds for display
   const balance = penceToPounds(
@@ -87,9 +92,17 @@ function BalancePane() {
       .filter((b) => b.label.includes('maintenance'))
       .reduce((sum, b) => sum + b.amount, 0) / 100,
   );
-  const facilityIncome = Math.round(
-    calculateMatchdayIncome(facilityTemplates, facilityLevels, facilityConditions, club.reputation) / 100,
+  const hasHomeMatch = fixtures.some(
+    (f) => f.round === currentMatchday && f.homeClubId === club.id,
   );
+  const facilityMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
+  const facilityIncome = Math.round(
+    calculateMatchdayIncome(facilityTemplates, facilityLevels, facilityConditions, club.reputation)
+    * facilityMultiplier / 100,
+  );
+  const facilityIncomeLabel = hasHomeMatch
+    ? 'FACILITY INCOME'
+    : `FACILITY INCOME (${nonMatchPct}% NON-MATCHDAY)`;
   // displayNet computed entirely in pounds (record.net mixes pence/pounds units)
   const displayNet = sponsorIncome + reputationIncome + facilityIncome - playerWages - coachSalaries - facilityMaint - weeklyRepayment;
   const netColor = displayNet >= 0 ? WK.green : WK.red;
@@ -131,7 +144,7 @@ function BalancePane() {
           accent={WK.green}
         />
         <FinanceRow
-          label="FACILITY INCOME"
+          label={facilityIncomeLabel}
           value={`+£${facilityIncome.toLocaleString()}`}
           accent={facilityIncome > 0 ? WK.green : WK.dim}
         />

@@ -1003,6 +1003,9 @@ function NarrativeMessageRow({
             )}
           </View>
           <PixelText variant="body" size={13} dim numberOfLines={2}>{message.body}</PixelText>
+          {message.week != null && (
+            <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>WK {message.week}</PixelText>
+          )}
         </View>
       </View>
     </Pressable>
@@ -1098,6 +1101,145 @@ function InboxMessageDetail({
         </View>
         <PixelText size={11} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
         <PixelText size={14} variant="body" style={{ color: WK.dim }}>{message.body}</PixelText>
+
+        {/* ── Match result — full performance breakdown ───────────────────────── */}
+        {message.type === 'match_result' && message.metadata?.homePlayers && (() => {
+          const m = message.metadata as Record<string, unknown>;
+          const homeTeam   = m.homeTeamName as string;
+          const awayTeam   = m.awayTeamName as string;
+          const homeScore  = m.homeScore as number;
+          const awayScore  = m.awayScore as number;
+          const homeAvg    = m.homeAvgRating as number;
+          const awayAvg    = m.awayAvgRating as number;
+          type PlayerRow = { id: string; name: string; position: string; rating: number; goals: number; assists: number };
+          const homePlayers = m.homePlayers as PlayerRow[];
+          const awayPlayers = m.awayPlayers as PlayerRow[];
+
+          const ampIsHome = homeTeam === club.name;
+          const ampGoals  = ampIsHome ? homeScore : awayScore;
+          const oppGoals  = ampIsHome ? awayScore : homeScore;
+          const outcomeColor = ampGoals > oppGoals ? WK.green : ampGoals < oppGoals ? WK.red : WK.orange;
+
+          function RatingPip({ rating }: { rating: number }) {
+            const color = rating >= 8 ? WK.yellow : rating >= 6 ? WK.green : rating >= 4 ? WK.tealLight : WK.dim;
+            return <PixelText size={18} variant="vt323" color={color}>{rating.toFixed(1)}</PixelText>;
+          }
+
+          function TeamTable({ teamName, players, avgRating, isAmp }: {
+            teamName: string; players: PlayerRow[]; avgRating: number; isAmp: boolean;
+          }) {
+            const scorers  = players.filter(p => p.goals > 0).map(p => `${p.name}${p.goals > 1 ? ` (${p.goals})` : ''}`).join(', ');
+            const assisters = players.filter(p => p.assists > 0).map(p => `${p.name}${p.assists > 1 ? ` (${p.assists})` : ''}`).join(', ');
+            return (
+              <View style={{ marginTop: 14 }}>
+                {/* Team header */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  paddingHorizontal: 10, paddingVertical: 8,
+                  backgroundColor: isAmp ? WK.tealMid : WK.tealDark,
+                  borderWidth: 2, borderColor: isAmp ? WK.tealLight : WK.border,
+                }}>
+                  <PixelText size={9} color={isAmp ? WK.yellow : WK.text}>{teamName.toUpperCase()}</PixelText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <PixelText size={8} color={WK.dim}>AVG</PixelText>
+                    <RatingPip rating={avgRating} />
+                  </View>
+                </View>
+
+                {/* Goal scorers / assists summary */}
+                {(scorers || assisters) && (
+                  <View style={{
+                    paddingHorizontal: 10, paddingVertical: 6,
+                    backgroundColor: WK.tealDark,
+                    borderWidth: 2, borderTopWidth: 0, borderColor: WK.border,
+                  }}>
+                    {scorers ? (
+                      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: assisters ? 4 : 0 }}>
+                        <PixelText size={8} color={WK.yellow}>GLS</PixelText>
+                        <PixelText size={8} color={WK.text} style={{ flex: 1 }}>{scorers}</PixelText>
+                      </View>
+                    ) : null}
+                    {assisters ? (
+                      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                        <PixelText size={8} color={WK.tealLight}>AST</PixelText>
+                        <PixelText size={8} color={WK.dim} style={{ flex: 1 }}>{assisters}</PixelText>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+
+                {/* Column header */}
+                <View style={{
+                  flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 5,
+                  backgroundColor: WK.border,
+                }}>
+                  {(['POS', 'NAME', 'RTG', 'G', 'A'] as const).map((col, i) => (
+                    <PixelText key={col} size={7} color={WK.dim} style={{
+                      flex: col === 'NAME' ? 3 : 1,
+                      textAlign: i === 0 ? 'left' : 'center',
+                    }}>{col}</PixelText>
+                  ))}
+                </View>
+
+                {/* Player rows */}
+                {players.map((p, idx) => (
+                  <View key={p.id} style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    paddingHorizontal: 10, paddingVertical: 6,
+                    backgroundColor: idx % 2 === 0 ? WK.tealCard : WK.tealDark,
+                    borderWidth: 1, borderTopWidth: 0, borderColor: WK.border,
+                  }}>
+                    <PixelText size={8} color={WK.dim} style={{ flex: 1 }}>{p.position}</PixelText>
+                    <PixelText size={8} color={WK.text} style={{ flex: 3 }} numberOfLines={1}>{p.name}</PixelText>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <RatingPip rating={p.rating} />
+                    </View>
+                    <PixelText size={8} color={p.goals > 0 ? WK.yellow : WK.dim} style={{ flex: 1, textAlign: 'center' }}>
+                      {p.goals > 0 ? String(p.goals) : '—'}
+                    </PixelText>
+                    <PixelText size={8} color={p.assists > 0 ? WK.tealLight : WK.dim} style={{ flex: 1, textAlign: 'center' }}>
+                      {p.assists > 0 ? String(p.assists) : '—'}
+                    </PixelText>
+                  </View>
+                ))}
+              </View>
+            );
+          }
+
+          return (
+            <View style={{ marginTop: 16, borderWidth: 3, borderColor: outcomeColor, ...pixelShadow }}>
+              {/* Score banner */}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                paddingVertical: 14, paddingHorizontal: 16, gap: 16,
+                backgroundColor: WK.tealDark,
+              }}>
+                <PixelText size={10} color={WK.text} style={{ flex: 1, textAlign: 'right' }} numberOfLines={1}>
+                  {homeTeam.toUpperCase()}
+                </PixelText>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  backgroundColor: WK.border, paddingHorizontal: 14, paddingVertical: 8,
+                  borderWidth: 2, borderColor: outcomeColor,
+                }}>
+                  <PixelText size={22} variant="vt323" color={outcomeColor}>{homeScore}</PixelText>
+                  <PixelText size={18} variant="vt323" color={WK.dim}>–</PixelText>
+                  <PixelText size={22} variant="vt323" color={outcomeColor}>{awayScore}</PixelText>
+                </View>
+                <PixelText size={10} color={WK.text} style={{ flex: 1 }} numberOfLines={1}>
+                  {awayTeam.toUpperCase()}
+                </PixelText>
+              </View>
+
+              <View style={{ padding: 10 }}>
+                <TeamTable teamName={homeTeam} players={homePlayers} avgRating={homeAvg}
+                  isAmp={homeTeam === club.name} />
+                <TeamTable teamName={awayTeam} players={awayPlayers} avgRating={awayAvg}
+                  isAmp={awayTeam === club.name} />
+              </View>
+            </View>
+          );
+        })()}
 
         {/* ── DOF signing report ──────────────────────────────────────────────── */}
         {message.metadata?.systemType === 'dof_signing' && (() => {
