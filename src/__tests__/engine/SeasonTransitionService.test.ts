@@ -26,6 +26,7 @@ const mockClearSeason = jest.fn();
 const mockLoadFromServerSchedule = jest.fn();
 const mockAddTrophy = jest.fn();
 const mockAddTrophyToClub = jest.fn();
+const mockAddFanEvent = jest.fn();
 
 jest.mock('@/stores/fixtureStore', () => ({
   useFixtureStore: {
@@ -65,6 +66,14 @@ jest.mock('@/stores/leagueStore', () => ({
 
 jest.mock('@/stores/inboxStore', () => ({
   useInboxStore: { getState: () => ({ addMessage: mockAddMessage }) },
+}));
+
+jest.mock('@/stores/fanStore', () => ({
+  useFanStore: {
+    getState: () => ({
+      addEvent: mockAddFanEvent,
+    }),
+  },
 }));
 
 describe('buildLeagueStandings', () => {
@@ -352,6 +361,7 @@ import {
   recordSeasonHistory,
   performSeasonTransition,
   awardSeasonTrophies,
+  awardSeasonFanEvents,
 } from '@/engine/SeasonTransitionService';
 import type { SeasonTransitionSnapshot, SeasonStanding } from '@/engine/SeasonTransitionService';
 
@@ -626,5 +636,86 @@ describe('awardSeasonTrophies', () => {
     const snapshot = { ...baseSnapshot, finalPosition: 1 };
     awardSeasonTrophies(snapshot, [pyramidLeague as any], []);
     expect(mockAddTrophyToClub).not.toHaveBeenCalled();
+  });
+});
+
+describe('awardSeasonFanEvents', () => {
+  const fanBaseSnapshot: SeasonTransitionSnapshot = {
+    currentLeague: {
+      id: 'league-1', name: 'Northern League', tier: 3, promotionSpots: 2,
+      reputationTier: 'local', country: 'ENG', season: 1, reputationCap: null,
+      tvDeal: null, sponsorPot: 0, prizeMoney: null, leaguePositionPot: null,
+      leaguePositionDecreasePercent: 0, clubs: [],
+    },
+    currentSeason: 1,
+    finalPosition: 5,
+    promoted: false,
+    relegated: false,
+    weekNumber: 38,
+    gamesPlayed: 38,
+    wins: 15,
+    draws: 10,
+    losses: 13,
+    goalsFor: 50,
+    goalsAgainst: 45,
+    points: 55,
+    displayStandings: [],
+    retirementMinAge: 32,
+    retirementMaxAge: 38,
+    retirementChance: 0.3,
+  };
+
+  beforeEach(() => {
+    mockAddFanEvent.mockClear();
+  });
+
+  it('fires trophy_won event (impact 30, permanent) when finalPosition === 1', () => {
+    awardSeasonFanEvents({ ...fanBaseSnapshot, finalPosition: 1, promoted: true });
+    expect(mockAddFanEvent).toHaveBeenCalledTimes(1);
+    expect(mockAddFanEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'trophy_won',
+        impact: 30,
+        isPermanent: true,
+        targets: ['manager', 'owner', 'players'],
+      }),
+    );
+  });
+
+  it('does NOT fire promoted event when finalPosition === 1 (title subsumes promotion)', () => {
+    awardSeasonFanEvents({ ...fanBaseSnapshot, finalPosition: 1, promoted: true });
+    const calls = mockAddFanEvent.mock.calls.map((c: any) => c[0].type);
+    expect(calls).not.toContain('promoted');
+  });
+
+  it('fires promoted event (impact 20, permanent) when promoted and not champion', () => {
+    awardSeasonFanEvents({ ...fanBaseSnapshot, finalPosition: 2, promoted: true });
+    expect(mockAddFanEvent).toHaveBeenCalledTimes(1);
+    expect(mockAddFanEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'promoted',
+        impact: 20,
+        isPermanent: true,
+        targets: ['manager', 'owner', 'players'],
+      }),
+    );
+  });
+
+  it('fires relegated event (impact -20, permanent) when relegated', () => {
+    awardSeasonFanEvents({ ...fanBaseSnapshot, finalPosition: 14, relegated: true });
+    expect(mockAddFanEvent).toHaveBeenCalledTimes(1);
+    expect(mockAddFanEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'relegated',
+        impact: -20,
+        isPermanent: true,
+        targets: ['manager', 'owner', 'players'],
+      }),
+    );
+  });
+
+  it('fires no events for a mid-table finish', () => {
+    awardSeasonFanEvents({ ...fanBaseSnapshot, finalPosition: 7 });
+    expect(mockAddFanEvent).not.toHaveBeenCalled();
   });
 });

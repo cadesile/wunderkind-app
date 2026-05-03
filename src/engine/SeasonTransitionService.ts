@@ -14,6 +14,8 @@ import type { TrophyRecord, TrophyStandingEntry } from '@/types/club';
 import type { GameConfig } from '@/types/gameConfig';
 import { uuidv7 } from '@/utils/uuidv7';
 import { penceToPounds } from '@/utils/currency';
+import { useFanStore } from '@/stores/fanStore';
+import type { FanImpactTarget } from '@/types/fans';
 import { shouldRetire } from './retirementEngine';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 
@@ -478,6 +480,51 @@ export function awardSeasonTrophies(
   }
 }
 
+// ─── Fan event awarding ───────────────────────────────────────────────────────
+
+/**
+ * Fire permanent fan events for season-end outcomes (title, promotion, relegation).
+ * Title win subsumes promotion — only one event is fired when finalPosition === 1.
+ */
+export function awardSeasonFanEvents(snapshot: SeasonTransitionSnapshot): void {
+  const { addEvent } = useFanStore.getState();
+  const ALL_TARGETS: FanImpactTarget[] = ['manager', 'owner', 'players'];
+
+  if (snapshot.finalPosition === 1) {
+    addEvent({
+      type:        'trophy_won',
+      description: `League title — ${snapshot.currentLeague.name} Season ${snapshot.currentSeason}`,
+      impact:      30,
+      weekNumber:  snapshot.weekNumber,
+      targets:     ALL_TARGETS,
+      isPermanent: true,
+    });
+    return; // title win subsumes promotion
+  }
+
+  if (snapshot.promoted) {
+    addEvent({
+      type:        'promoted',
+      description: `Promoted from ${snapshot.currentLeague.name} Season ${snapshot.currentSeason}`,
+      impact:      20,
+      weekNumber:  snapshot.weekNumber,
+      targets:     ALL_TARGETS,
+      isPermanent: true,
+    });
+  }
+
+  if (snapshot.relegated) {
+    addEvent({
+      type:        'relegated',
+      description: `Relegated from ${snapshot.currentLeague.name} Season ${snapshot.currentSeason}`,
+      impact:      -20,
+      weekNumber:  snapshot.weekNumber,
+      targets:     ALL_TARGETS,
+      isPermanent: true,
+    });
+  }
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
 /**
@@ -529,4 +576,5 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
   retireAMPPlayers(retirementConfig, snapshot.weekNumber);
 
   awardSeasonTrophies(snapshot, pyramidLeagues, responseLeagues);
+  awardSeasonFanEvents(snapshot);
 }
