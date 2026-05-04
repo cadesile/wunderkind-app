@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { FAB_CLEARANCE } from './_layout';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
@@ -59,6 +60,11 @@ type CompTab = typeof COMP_TABS[number];
 
 export default function CompetitionsScreen() {
   const [activeTab, setActiveTab] = useState<CompTab>('LEAGUE');
+  const router = useRouter();
+
+  function handleClubPress(clubId: string) {
+    router.push(`/club/${clubId}`);
+  }
 
   const ampClubId       = useClubStore((s) => s.club.id);
   const ampName         = useClubStore((s) => s.club.name);
@@ -98,6 +104,7 @@ export default function CompetitionsScreen() {
             promotionSpots={league.promotionSpots}
             worldClubs={worldClubs}
             ampSquad={ampSquad}
+            onClubPress={handleClubPress}
           />
         )
       )}
@@ -110,6 +117,7 @@ export default function CompetitionsScreen() {
           ampName={ampName}
           ampStadiumName={ampStadiumName}
           currentMatchday={currentMatchday}
+          onClubPress={handleClubPress}
         />
       )}
 

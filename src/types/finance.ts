@@ -47,7 +47,14 @@ export interface TransferRecord {
   id: string;
   playerId: string;
   playerName: string;
+  /** 'out' = player left AMP; 'in' = player joined AMP */
+  direction: 'in' | 'out';
+  /** Player position e.g. 'GK' | 'DEF' | 'MID' | 'ATT' */
+  position?: string;
+  /** Club the player came from (signings) or went to (sales) */
   destinationClub: string;
+  /** Source club for incoming signings. null = free agent / generated. */
+  fromClub?: string | null;
   /** Gross transfer fee in pence */
   grossFee: number;
   /** Agent commission in pence */
@@ -55,5 +62,5 @@ export interface TransferRecord {
   /** Net proceeds (after agent commission) in pence */
   netProceeds: number;
   week: number;
-  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted';
+  type: 'sale' | 'loan' | 'free_release' | 'agent_assisted' | 'signing';
 }

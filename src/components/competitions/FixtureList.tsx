@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import { View, SectionList } from 'react-native';
+import { View, SectionList, Pressable } from 'react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
 import type { Fixture } from '@/stores/fixtureStore';
@@ -12,6 +12,7 @@ export interface FixtureListProps {
   ampName: string;
   ampStadiumName: string | null;
   currentMatchday: number;
+  onClubPress?: (clubId: string) => void;
 }
 
 interface FixtureSection {
@@ -19,7 +20,7 @@ interface FixtureSection {
   data: Fixture[];
 }
 
-export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumName, currentMatchday }: FixtureListProps) {
+export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumName, currentMatchday, onClubPress }: FixtureListProps) {
   const listRef = useRef<SectionList<Fixture, FixtureSection>>(null);
 
   const clubNameMap = useMemo(() => {
@@ -132,9 +133,17 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumNam
           }}>
             {/* Main fixture row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <BodyText size={13} style={{ flex: 1, textAlign: 'right', color: WK.text }} numberOfLines={1}>
-                {homeName}
-              </BodyText>
+              {onClubPress && item.homeClubId !== ampClubId ? (
+                <Pressable style={{ flex: 1 }} onPress={() => onClubPress(item.homeClubId)} hitSlop={4}>
+                  <BodyText size={13} style={{ textAlign: 'right', color: WK.yellow, textDecorationLine: 'underline' }} numberOfLines={1}>
+                    {homeName}
+                  </BodyText>
+                </Pressable>
+              ) : (
+                <BodyText size={13} style={{ flex: 1, textAlign: 'right', color: WK.text }} numberOfLines={1}>
+                  {homeName}
+                </BodyText>
+              )}
 
               <View style={{
                 paddingHorizontal: 8,
@@ -154,9 +163,17 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumNam
                 )}
               </View>
 
-              <BodyText size={13} style={{ flex: 1, color: WK.text }} numberOfLines={1}>
-                {awayName}
-              </BodyText>
+              {onClubPress && item.awayClubId !== ampClubId ? (
+                <Pressable style={{ flex: 1 }} onPress={() => onClubPress(item.awayClubId)} hitSlop={4}>
+                  <BodyText size={13} style={{ color: WK.yellow, textDecorationLine: 'underline' }} numberOfLines={1}>
+                    {awayName}
+                  </BodyText>
+                </Pressable>
+              ) : (
+                <BodyText size={13} style={{ flex: 1, color: WK.text }} numberOfLines={1}>
+                  {awayName}
+                </BodyText>
+              )}
             </View>
 
             {/* Venue row */}

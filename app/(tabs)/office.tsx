@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Modal, TextInput, ScrollView, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
-import { Trophy, ChevronRight } from 'lucide-react-native';
+import { Trophy, ChevronRight, ArrowLeftRight } from 'lucide-react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -633,6 +633,7 @@ function KeyStaffSection({
 }
 
 function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => void }) {
+  const router = useRouter();
   const {
     club, managerProfile,
     setName, setStadiumName, setFormation, setPlayingStyle, setClubColors, setBadgeShape,
@@ -705,6 +706,27 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
       </SectionCard>
 
       <KeyStaffSection coaches={coaches} onNavigateToHire={onNavigateToHire} />
+
+      <TouchableOpacity
+        onPress={() => router.push('/transfers')}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          ...pixelShadow,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ArrowLeftRight size={12} color={WK.tealLight} />
+          <PixelText size={8} color={WK.tealLight}>TRANSFER HISTORY</PixelText>
+        </View>
+        <ChevronRight size={14} color={WK.dim} />
+      </TouchableOpacity>
 
       <SectionCard label="TACTICS">
         <PixelText size={7} dim style={{ marginBottom: 8 }}>FORMATION</PixelText>

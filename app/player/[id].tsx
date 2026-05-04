@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useWorldStore } from '@/stores/worldStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useInteractionStore } from '@/stores/interactionStore';
@@ -79,31 +80,39 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
-  const seasons = Object.keys(appearances).sort();
-  if (seasons.length === 0) return null;
-
-  // Aggregate across all seasons and clubs
+function AppearancesCard({
+  appearances,
+  currentClubId,
+  currentClubName,
+  onViewHistory,
+}: {
+  appearances: PlayerAppearances;
+  currentClubId: string;
+  currentClubName: string;
+  onViewHistory: () => void;
+}) {
+  // Aggregate only for the current club across all seasons
   let totalGames = 0;
   let totalRating = 0;
   let totalWins = 0;
   let totalGoals = 0;
   let totalAssists = 0;
 
-  seasons.forEach((season) => {
-    Object.values(appearances[season]).forEach((clubApps) => {
-      clubApps.forEach((app) => {
-        totalGames++;
-        totalRating += app.rating;
-        totalGoals += app.goals ?? 0;
-        totalAssists += app.assists ?? 0;
-        if (app.result === 'win') totalWins++;
-      });
-    });
-  });
+  for (const season of Object.keys(appearances)) {
+    const clubApps = appearances[season][currentClubId] ?? [];
+    for (const app of clubApps) {
+      totalGames++;
+      totalRating += app.rating;
+      totalGoals += app.goals ?? 0;
+      totalAssists += app.assists ?? 0;
+      if (app.result === 'win') totalWins++;
+    }
+  }
 
-  const avgRating = totalGames > 0 ? (totalRating / totalGames).toFixed(1) : '—';
-  const winRate = totalGames > 0 ? Math.round((totalWins / totalGames) * 100) : 0;
+  if (totalGames === 0) return null;
+
+  const avgRating = (totalRating / totalGames).toFixed(1);
+  const winRate   = Math.round((totalWins / totalGames) * 100);
 
   return (
     <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, ...pixelShadow }}>
@@ -114,17 +123,17 @@ function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
         borderBottomWidth: 2, borderBottomColor: WK.border,
       }}>
         <PixelText size={9} color={WK.yellow}>APPEARANCES</PixelText>
-        <PixelText size={8} color={WK.dim}>{seasons.length} SEASON{seasons.length !== 1 ? 'S' : ''}</PixelText>
+        <BodyText size={11} color={WK.dim} numberOfLines={1}>{currentClubName}</BodyText>
       </View>
 
-      {/* Summary stats row — 5 stats */}
+      {/* Summary stats row */}
       <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 14 }}>
         {[
-          { label: 'APPS', value: String(totalGames) },
-          { label: 'AVG RTG', value: avgRating },
-          { label: 'WIN %', value: `${winRate}%` },
-          { label: 'GOALS', value: String(totalGoals) },
-          { label: 'ASSISTS', value: String(totalAssists) },
+          { label: 'APPS',    value: String(totalGames)    },
+          { label: 'AVG RTG', value: avgRating             },
+          { label: 'WIN %',   value: `${winRate}%`         },
+          { label: 'GOALS',   value: String(totalGoals)    },
+          { label: 'ASSISTS', value: String(totalAssists)  },
         ].map((stat, i) => (
           <View key={stat.label} style={{
             flex: 1, alignItems: 'center',
@@ -136,33 +145,18 @@ function AppearancesCard({ appearances }: { appearances: PlayerAppearances }) {
         ))}
       </View>
 
-      {/* Per-season breakdown */}
-      {seasons.map((season) => {
-        const clubEntries = Object.entries(appearances[season]);
-        const seasonGames   = clubEntries.reduce((sum, [, apps]) => sum + apps.length, 0);
-        const seasonWins    = clubEntries.reduce((sum, [, apps]) => sum + apps.filter(a => a.result === 'win').length, 0);
-        const seasonGoals   = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + (a.goals ?? 0), 0), 0);
-        const seasonAssists = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + (a.assists ?? 0), 0), 0);
-        const seasonRating  = clubEntries.reduce((sum, [, apps]) => sum + apps.reduce((s, a) => s + a.rating, 0), 0);
-        const seasonAvg = seasonGames > 0 ? (seasonRating / seasonGames).toFixed(1) : '—';
-
-        return (
-          <View key={season} style={{
-            borderTopWidth: 2, borderTopColor: WK.border,
-            paddingHorizontal: 14, paddingVertical: 10,
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <PixelText size={8} color={WK.tealLight}>{season.toUpperCase()}</PixelText>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <PixelText size={8} color={WK.text}>{seasonGames}G</PixelText>
-              <PixelText size={8} color={WK.text}>AVG {seasonAvg}</PixelText>
-              <PixelText size={8} color={WK.green}>{seasonGoals} GL</PixelText>
-              <PixelText size={8} color={WK.tealLight}>{seasonAssists} AS</PixelText>
-              <PixelText size={8} color={WK.yellow}>{Math.round((seasonWins / Math.max(1, seasonGames)) * 100)}%W</PixelText>
-            </View>
-          </View>
-        );
-      })}
+      {/* History link */}
+      <Pressable
+        onPress={onViewHistory}
+        style={{
+          borderTopWidth: 2, borderTopColor: WK.border,
+          paddingHorizontal: 14, paddingVertical: 10,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        }}
+      >
+        <PixelText size={7} color={WK.tealLight}>VIEW APPEARANCE HISTORY</PixelText>
+        <PixelText size={7} color={WK.dim}>→</PixelText>
+      </Pressable>
     </View>
   );
 }
@@ -200,6 +194,19 @@ export default function PlayerDetailScreen() {
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const analyticsUnlocked = useFacilityStore((s) => (s.levels['scouting_center'] ?? 0) > 0);
   const userClubName = useClubStore((s) => s.club.name ?? 'the club');
+  const ampClubId   = useClubStore((s) => s.club.id);
+  const ampClubName = useClubStore((s) => s.club.name ?? 'Academy');
+  const worldClubs  = useWorldStore((s) => s.clubs);
+
+  // Current club ID/name — AMP player uses the AMP club; NPC player found via worldStore
+  const currentClubId = useMemo(() => {
+    if (!isNpc) return ampClubId;
+    for (const [cid, wc] of Object.entries(worldClubs)) {
+      if (wc.players.some((p) => p.id === id)) return cid;
+    }
+    return '';
+  }, [isNpc, ampClubId, worldClubs, id]);
+  const currentClubName = isNpc ? (npcClubName ?? '') : ampClubName;
   const allGuardians = useGuardianStore((s) => s.guardians);
   const guardians = useMemo(
     () => allGuardians.filter((g) => g.playerId === id),
@@ -505,7 +512,14 @@ export default function PlayerDetailScreen() {
         )}
 
         {/* ── 5b. Appearances ──────────────────────────────────────────────────── */}
-        {player.appearances && <AppearancesCard appearances={player.appearances} />}
+        {player.appearances && currentClubId && (
+          <AppearancesCard
+            appearances={player.appearances}
+            currentClubId={currentClubId}
+            currentClubName={currentClubName}
+            onViewHistory={() => router.push(`/appearances/${id}`)}
+          />
+        )}
 
         {/* ── 6. Scout's Report ────────────────────────────────────────────────── */}
         <ScoutReportCard player={player} />

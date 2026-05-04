@@ -241,6 +241,8 @@ export function processWeeklyTick(): WeeklyTick {
         addTransfer({
           playerId: player.id,
           playerName: player.name,
+          direction: 'out',
+          position: player.position,
           destinationClub: 'Contract Expired',
           grossFee: 0,
           agentCommission: 0,
@@ -467,7 +469,52 @@ export function processWeeklyTick(): WeeklyTick {
             description: `Transfer: ${biddingPlayer.name} → ${bid.biddingClubName}`,
             weekNumber,
           });
+          useFinanceStore.getState().addTransfer({
+            playerId:        bid.playerId,
+            playerName:      biddingPlayer.name,
+            direction:       'out',
+            position:        biddingPlayer.position,
+            destinationClub: bid.biddingClubName,
+            grossFee:        bid.fee,
+            agentCommission: 0,
+            netProceeds:     bid.fee,
+            type:            'sale',
+            week:            weekNumber,
+          });
           useSquadStore.getState().removePlayer(bid.playerId);
+
+          // Add sold player to the NPC club's world roster
+          {
+            const { clubs, mutateClubRoster } = useWorldStore.getState();
+            const npcClub = clubs[bid.biddingClubId];
+            if (npcClub) {
+              const nameParts = biddingPlayer.name.split(' ');
+              const lastName  = nameParts.pop() ?? '';
+              const firstName = nameParts.join(' ') || lastName;
+              const worldPos  = (biddingPlayer.position === 'FWD' ? 'ATT' : biddingPlayer.position) as 'GK' | 'DEF' | 'MID' | 'ATT';
+              void mutateClubRoster(bid.biddingClubId, [
+                ...npcClub.players,
+                {
+                  id:          biddingPlayer.id,
+                  firstName,
+                  lastName,
+                  position:    worldPos,
+                  nationality: biddingPlayer.nationality,
+                  dateOfBirth: biddingPlayer.dateOfBirth,
+                  pace:      biddingPlayer.attributes?.pace      ?? biddingPlayer.overallRating,
+                  technical: biddingPlayer.attributes?.technical ?? biddingPlayer.overallRating,
+                  vision:    biddingPlayer.attributes?.vision    ?? biddingPlayer.overallRating,
+                  power:     biddingPlayer.attributes?.power     ?? biddingPlayer.overallRating,
+                  stamina:   biddingPlayer.attributes?.stamina   ?? biddingPlayer.overallRating,
+                  heart:     biddingPlayer.attributes?.heart     ?? biddingPlayer.overallRating,
+                  personality: biddingPlayer.personality,
+                  appearance:  biddingPlayer.appearance,
+                  npcClubId:   bid.biddingClubId,
+                },
+              ]);
+            }
+          }
+
           useInboxStore.getState().purgeForPlayer(bid.playerId);
           useInboxStore.getState().addMessage({
             id:      `dof-sell-${bid.playerId}-wk${weekNumber}`,
@@ -647,6 +694,8 @@ export function processWeeklyTick(): WeeklyTick {
           addTransfer({
             playerId: lowestMoralePlayer.id,
             playerName: lowestMoralePlayer.name,
+            direction: 'out',
+            position: lowestMoralePlayer.position,
             destinationClub: 'Left Club',
             grossFee: 0,
             agentCommission: 0,

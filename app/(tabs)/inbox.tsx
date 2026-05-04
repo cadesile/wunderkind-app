@@ -9,6 +9,8 @@ import { useInboxStore, InboxMessage, InboxMessageType } from '@/stores/inboxSto
 import { useNarrativeStore } from '@/stores/narrativeStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
+import { useWorldStore } from '@/stores/worldStore';
+import type { WorldPlayer } from '@/types/world';
 import { useGuardianStore } from '@/stores/guardianStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useMarketStore } from '@/stores/marketStore';
@@ -547,6 +549,49 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
       description: `Transfer: ${player!.name} → ${biddingClubName}`,
       weekNumber:  message.week,
     });
+    useFinanceStore.getState().addTransfer({
+      playerId:        player!.id,
+      playerName:      player!.name,
+      direction:       'out',
+      position:        player!.position,
+      destinationClub: biddingClubName,
+      grossFee:        fee,
+      agentCommission: 0,
+      netProceeds:     fee,
+      type:            'sale',
+      week:            message.week,
+    });
+    // Add sold player to the NPC club's world roster
+    const biddingClubId = (meta.biddingClubId as string) ?? '';
+    if (biddingClubId) {
+      const { clubs, mutateClubRoster } = useWorldStore.getState();
+      const npcClub = clubs[biddingClubId];
+      if (npcClub) {
+        const nameParts = player!.name.split(' ');
+        const lastName  = nameParts.pop() ?? '';
+        const firstName = nameParts.join(' ') || lastName;
+        const worldPos  = (player!.position === 'FWD' ? 'ATT' : player!.position) as 'GK' | 'DEF' | 'MID' | 'ATT';
+        const worldPlayer: WorldPlayer = {
+          id:          player!.id,
+          firstName,
+          lastName,
+          position:    worldPos,
+          nationality: player!.nationality,
+          dateOfBirth: player!.dateOfBirth,
+          pace:      player!.attributes?.pace      ?? player!.overallRating,
+          technical: player!.attributes?.technical ?? player!.overallRating,
+          vision:    player!.attributes?.vision    ?? player!.overallRating,
+          power:     player!.attributes?.power     ?? player!.overallRating,
+          stamina:   player!.attributes?.stamina   ?? player!.overallRating,
+          heart:     player!.attributes?.heart     ?? player!.overallRating,
+          personality: player!.personality,
+          appearance:  player!.appearance,
+          npcClubId:   biddingClubId,
+        };
+        void mutateClubRoster(biddingClubId, [...npcClub.players, worldPlayer]);
+      }
+    }
+
     removePlayer(player!.id);
     respond(message.id, 'accepted');
     purgeForPlayer(player!.id);

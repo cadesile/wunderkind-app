@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { View, ScrollView, Pressable, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
@@ -10,6 +10,8 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { PixelFootballBadge, getNpcBadgeShape } from '@/components/ui/ClubBadge/PixelFootballBadge';
 import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
+import { useInboxStore } from '@/stores/inboxStore';
+import { formatCurrencyCompact } from '@/utils/currency';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer } from '@/types/world';
 
@@ -84,14 +86,46 @@ function DashCard({
   );
 }
 
+type NpcTransferEntry = {
+  week: number;
+  playerName: string;
+  direction: 'in' | 'out'; // relative to this club
+  otherClub: string;
+  fee: number; // pence
+};
+
 export default function ClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
   const club    = useWorldStore((s) => s.clubs[id]);
   const isInitialized = useWorldStore((s) => s.isInitialized);
   const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
+  const inboxMessages = useInboxStore((s) => s.messages);
 
   const season = `Season ${Math.ceil(weekNumber / 38)}`;
+
+  // ── NPC transfer history for this club ───────────────────────────────────────
+  const npcTransfers = useMemo<NpcTransferEntry[]>(() => {
+    if (!club) return [];
+    const entries: NpcTransferEntry[] = [];
+    for (const msg of inboxMessages) {
+      if (msg.type !== 'system') continue;
+      const meta = msg.metadata as Record<string, unknown> | undefined;
+      if (meta?.systemType !== 'npc_transfers') continue;
+      const transfers = meta.transfers as Array<{
+        playerName: string; fromClub: string; toClub: string; fee: number;
+      }> | undefined;
+      if (!transfers) continue;
+      for (const t of transfers) {
+        if (t.toClub === club.name) {
+          entries.push({ week: msg.week, playerName: t.playerName, direction: 'in', otherClub: t.fromClub, fee: t.fee });
+        } else if (t.fromClub === club.name) {
+          entries.push({ week: msg.week, playerName: t.playerName, direction: 'out', otherClub: t.toClub, fee: t.fee });
+        }
+      }
+    }
+    return entries.sort((a, b) => b.week - a.week);
+  }, [club, inboxMessages]);
 
   // ── Dashboard stats ──────────────────────────────────────────────────────────
   const dashStats = useMemo(() => {
@@ -331,6 +365,72 @@ export default function ClubDetailScreen() {
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {/* ── Transfer history ──────────────────────────────────────────────── */}
+        <View style={[{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.border,
+        }, pixelShadow]}>
+          {/* Section header */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            borderBottomWidth: 2,
+            borderBottomColor: WK.border,
+            backgroundColor: WK.tealDark,
+          }}>
+            <PixelText size={7} color={WK.yellow}>TRANSFERS</PixelText>
+            <PixelText size={6} color={WK.dim}>{npcTransfers.length} RECORDS</PixelText>
+          </View>
+
+          {npcTransfers.length === 0 ? (
+            <View style={{ padding: 14, alignItems: 'center' }}>
+              <PixelText size={7} color={WK.dim}>NO TRANSFERS RECORDED</PixelText>
+            </View>
+          ) : (
+            npcTransfers.map((t, i) => (
+              <View
+                key={`${t.week}-${t.playerName}-${i}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  borderBottomWidth: i < npcTransfers.length - 1 ? 1 : 0,
+                  borderBottomColor: WK.border,
+                  gap: 8,
+                }}
+              >
+                {/* Direction arrow */}
+                {t.direction === 'in' ? (
+                  <ArrowDownLeft size={13} color={WK.green} />
+                ) : (
+                  <ArrowUpRight size={13} color={WK.yellow} />
+                )}
+
+                {/* Player + other club */}
+                <View style={{ flex: 1 }}>
+                  <BodyText size={13} numberOfLines={1} style={{ color: WK.text }}>{t.playerName}</BodyText>
+                  <BodyText size={10} numberOfLines={1} color={WK.dim}>
+                    {t.direction === 'in' ? `from ${t.otherClub}` : `to ${t.otherClub}`}
+                  </BodyText>
+                </View>
+
+                {/* Week + fee */}
+                <View style={{ alignItems: 'flex-end' }}>
+                  <PixelText size={6} color={WK.dim}>WK {t.week}</PixelText>
+                  {t.fee > 0 && (
+                    <VT323Text size={14} color={WK.yellow}>{formatCurrencyCompact(t.fee)}</VT323Text>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
       </ScrollView>

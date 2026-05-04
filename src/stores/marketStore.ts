@@ -320,6 +320,28 @@ export const useMarketStore = create<MarketState>()(
           void mutateClubRoster(ampClubId, [...ampWorldClub.players, worldPlayer]);
         }
 
+        // Record incoming signing in the transfer ledger
+        {
+          const fromClubEntry = Object.values(clubs).find((c) =>
+            c.players.some((wp) => wp.id === playerId),
+          );
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { useFinanceStore } = require('@/stores/financeStore') as typeof import('@/stores/financeStore');
+          useFinanceStore.getState().addTransfer({
+            playerId,
+            playerName: `${player.firstName} ${player.lastName}`,
+            direction: 'in',
+            position: player.position,
+            destinationClub: useClubStore.getState().club.name ?? 'Academy',
+            fromClub: fromClubEntry?.name ?? null,
+            grossFee: 0,
+            agentCommission: 0,
+            netProceeds: 0,
+            type: 'signing',
+            week: weekNumber,
+          });
+        }
+
         // Signing a player is a visible club activity — meaningful rep boost
         const { setReputation: setRep, markRepActivity } = useClubStore.getState();
         setRep(1.0);
