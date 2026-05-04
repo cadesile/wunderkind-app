@@ -26,6 +26,36 @@ import type { Guardian } from '@/types/guardian';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+const ALL_TIERS = ['local', 'regional', 'national', 'elite'] as const;
+
+/** Fetch all four tiers in parallel and merge, de-duplicating by entity id. */
+async function fetchAllTiers(): Promise<import('@/types/market').MarketData> {
+  const results = await Promise.all(
+    ALL_TIERS.map((tier) => marketApi.getMarketData(null, tier)),
+  );
+
+  function mergeById<T extends { id: string }>(arrays: T[][]): T[] {
+    const seen = new Set<string>();
+    const merged: T[] = [];
+    for (const arr of arrays) {
+      for (const item of arr) {
+        if (!seen.has(item.id)) { seen.add(item.id); merged.push(item); }
+      }
+    }
+    return merged;
+  }
+
+  return {
+    players:   mergeById(results.map((r) => r.players)),
+    coaches:   mergeById(results.map((r) => r.coaches)),
+    scouts:    mergeById(results.map((r) => r.scouts)),
+    agents:    mergeById(results.map((r) => r.agents)),
+    // Sponsors and investors are tier-agnostic — take the first non-empty result
+    sponsors:  results.find((r) => r.sponsors.length > 0)?.sponsors  ?? results[0].sponsors,
+    investors: results.find((r) => r.investors.length > 0)?.investors ?? results[0].investors,
+  };
+}
+
 function deriveMarketAskingPrice(baseValue: number): number {
   const roll = Math.random();
   if (roll < 0.70) {
@@ -159,8 +189,7 @@ export const useMarketStore = create<MarketState>()(
 
         set({ isLoading: true, error: null });
         try {
-          const tier = (await import('@/stores/clubStore')).useClubStore.getState().club.reputationTier;
-          const data = await marketApi.getMarketData(null, tier);
+          const data = await fetchAllTiers();
           get().setMarketData(data);
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Failed to fetch market data' });
@@ -173,8 +202,7 @@ export const useMarketStore = create<MarketState>()(
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
-          const tier = (await import('@/stores/clubStore')).useClubStore.getState().club.reputationTier;
-          const data = await marketApi.getMarketData(null, tier);
+          const data = await fetchAllTiers();
           get().setMarketData(data);
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Failed to refresh market pool' });

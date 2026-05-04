@@ -242,6 +242,98 @@ function FacilityCard({
   );
 }
 
+// ─── Attendance summary card ──────────────────────────────────────────────────
+
+function AttendanceSummaryCard() {
+  const records      = useAttendanceStore((s) => s.records);
+  const stadiumName  = useClubStore((s) => s.club.stadiumName ?? null);
+  const templates    = useFacilityStore((s) => s.templates);
+  const levels       = useFacilityStore((s) => s.levels);
+
+  const capacity = calculateStadiumCapacity(templates, levels);
+
+  const last5 = records.slice(0, 5);
+  const avgAttendance = last5.length > 0
+    ? Math.round(last5.reduce((sum, r) => sum + r.attendance, 0) / last5.length)
+    : null;
+  const avgFillPct = capacity > 0 && avgAttendance !== null
+    ? Math.round((avgAttendance / capacity) * 100)
+    : null;
+
+  return (
+    <View style={[{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.border,
+      marginBottom: 14,
+      overflow: 'hidden',
+    }, pixelShadow]}>
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealDark,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <PixelText size={8} color={WK.yellow}>STADIUM OVERVIEW</PixelText>
+        {last5.length > 0 && (
+          <PixelText size={6} color={WK.dim}>AVG LAST {last5.length}</PixelText>
+        )}
+      </View>
+
+      <View style={{ padding: 12, gap: 10 }}>
+        {/* Stadium name + capacity */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <BodyText size={12} style={{ color: WK.dim }}>STADIUM</BodyText>
+          <BodyText size={13} style={{ color: WK.text }} numberOfLines={1}>
+            {stadiumName ?? 'Unnamed Stadium'}
+          </BodyText>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <BodyText size={12} style={{ color: WK.dim }}>CAPACITY</BodyText>
+          <BodyText size={13} style={{ color: WK.tealLight }}>
+            {capacity > 0 ? capacity.toLocaleString() : '—'}
+          </BodyText>
+        </View>
+
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: WK.border }} />
+
+        {/* Average attendance */}
+        {avgAttendance === null ? (
+          <BodyText size={12} style={{ color: WK.dim, textAlign: 'center' }}>
+            No home games yet
+          </BodyText>
+        ) : (
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <BodyText size={12} style={{ color: WK.dim }}>AVG ATTENDANCE</BodyText>
+              <BodyText size={13} style={{ color: WK.yellow }}>
+                {avgAttendance.toLocaleString()}
+                {capacity > 0 ? ` / ${capacity.toLocaleString()}` : ''}
+              </BodyText>
+            </View>
+            {avgFillPct !== null && (
+              <View>
+                <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+                  <View style={{ height: '100%', width: `${Math.min(100, avgFillPct)}%`, backgroundColor: WK.yellow }} />
+                </View>
+                <BodyText size={10} style={{ color: WK.dim, textAlign: 'right', marginTop: 3 }}>
+                  {avgFillPct}% capacity
+                </BodyText>
+              </View>
+            )}
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── Attendance log ───────────────────────────────────────────────────────────
 
 function AttendanceLog() {
@@ -988,6 +1080,7 @@ export default function OfficeScreen() {
         )}
         {activeTab === 'ATTENDANCE' && (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
+            <AttendanceSummaryCard />
             <AttendanceLog />
           </ScrollView>
         )}

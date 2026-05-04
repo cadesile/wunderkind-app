@@ -9,6 +9,7 @@ export interface InboxMessage {
   id: string;
   type: InboxMessageType;
   week: number;
+  createdAt: string;
   subject: string;
   body: string;
   isRead: boolean;
@@ -66,7 +67,9 @@ export const useInboxStore = create<InboxState>()(
       incidents: [],
 
       addMessage: (msg) =>
-        set((state) => ({ messages: [msg, ...state.messages] })),
+        set((state) => ({
+          messages: [{ createdAt: new Date().toISOString(), ...msg }, ...state.messages],
+        })),
 
       markRead: (id) =>
         set((state) => ({
@@ -138,12 +141,16 @@ export const useInboxStore = create<InboxState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         state.messages = state.messages.map((m: any) => {
-          if (m.type) return m as InboxMessage;
+          if (m.type) {
+            // Backfill createdAt for existing messages that predate this field
+            return { createdAt: new Date().toISOString(), ...m } as InboxMessage;
+          }
           // Legacy GuardianMessage — coerce to InboxMessage
           return {
             id: m.id,
             type: 'guardian' as InboxMessageType,
             week: m.week,
+            createdAt: new Date().toISOString(),
             subject: m.subject,
             body: m.body,
             isRead: m.isRead,

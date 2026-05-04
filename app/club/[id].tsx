@@ -11,6 +11,7 @@ import { PixelFootballBadge, getNpcBadgeShape } from '@/components/ui/ClubBadge/
 import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
+import { useFinanceStore } from '@/stores/financeStore';
 import { formatCurrencyCompact } from '@/utils/currency';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer } from '@/types/world';
@@ -101,6 +102,7 @@ export default function ClubDetailScreen() {
   const isInitialized = useWorldStore((s) => s.isInitialized);
   const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const inboxMessages = useInboxStore((s) => s.messages);
+  const ampTransfers  = useFinanceStore((s) => s.transfers);
 
   const season = `Season ${Math.ceil(weekNumber / 38)}`;
 
@@ -108,6 +110,8 @@ export default function ClubDetailScreen() {
   const npcTransfers = useMemo<NpcTransferEntry[]>(() => {
     if (!club) return [];
     const entries: NpcTransferEntry[] = [];
+
+    // Source 1: NPC-to-NPC digest inbox messages
     for (const msg of inboxMessages) {
       if (msg.type !== 'system') continue;
       const meta = msg.metadata as Record<string, unknown> | undefined;
@@ -124,8 +128,21 @@ export default function ClubDetailScreen() {
         }
       }
     }
+
+    // Source 2: AMP academy transfers involving this club
+    const ampClubName = useClubStore.getState().club.name ?? '';
+    for (const t of ampTransfers) {
+      if (t.direction === 'out' && t.destinationClub === club.name) {
+        // AMP sold a player to this NPC club
+        entries.push({ week: t.week, playerName: t.playerName, direction: 'in', otherClub: ampClubName, fee: t.grossFee });
+      } else if (t.direction === 'in' && (t.fromClub === club.name)) {
+        // AMP signed a player from this NPC club
+        entries.push({ week: t.week, playerName: t.playerName, direction: 'out', otherClub: ampClubName, fee: t.grossFee });
+      }
+    }
+
     return entries.sort((a, b) => b.week - a.week);
-  }, [club, inboxMessages]);
+  }, [club, inboxMessages, ampTransfers]);
 
   // ── Dashboard stats ──────────────────────────────────────────────────────────
   const dashStats = useMemo(() => {

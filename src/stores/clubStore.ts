@@ -182,44 +182,62 @@ export const useClubStore = create<ClubState>()(
           club: { ...state.club, weekNumber },
         })),
       applyServerSync: (data) =>
-        set((state) => ({
-          club: {
-            ...state.club,
-            reputation: data.reputation,
-            reputationTier: computeTier(data.reputation),
-            // Take max — frontend accumulates earnings locally; backend may lag or return 0
-            totalCareerEarnings: Math.max(state.club.totalCareerEarnings, data.totalCareerEarnings),
-            hallOfFamePoints: data.hallOfFamePoints,
-          },
-        })),
+        set((state) => {
+          const { useLeagueStore } = require('@/stores/leagueStore');
+          const leagueCap: number | null = useLeagueStore.getState().league?.reputationCap ?? null;
+          const ceiling = leagueCap !== null ? Math.min(100, leagueCap) : 100;
+          const reputation = Math.min(data.reputation, ceiling);
+          return {
+            club: {
+              ...state.club,
+              reputation,
+              reputationTier: computeTier(reputation),
+              // Take max — frontend accumulates earnings locally; backend may lag or return 0
+              totalCareerEarnings: Math.max(state.club.totalCareerEarnings, data.totalCareerEarnings),
+              hallOfFamePoints: data.hallOfFamePoints,
+            },
+          };
+        }),
       syncWithApi: (data) =>
-        set((state) => ({
-          club: {
-            ...state.club,
-            reputation: data.reputation,
-            reputationTier: computeTier(data.reputation),
-            weekNumber: data.weekNumber,
-            totalCareerEarnings: Math.max(state.club.totalCareerEarnings, data.totalCareerEarnings),
-            hallOfFamePoints: data.hallOfFamePoints,
-            // API returns balance in pence — store directly in pence
-            balance: data.balance,
-          },
-        })),
+        set((state) => {
+          const { useLeagueStore } = require('@/stores/leagueStore');
+          const leagueCap: number | null = useLeagueStore.getState().league?.reputationCap ?? null;
+          const ceiling = leagueCap !== null ? Math.min(100, leagueCap) : 100;
+          const reputation = Math.min(data.reputation, ceiling);
+          return {
+            club: {
+              ...state.club,
+              reputation,
+              reputationTier: computeTier(reputation),
+              weekNumber: data.weekNumber,
+              totalCareerEarnings: Math.max(state.club.totalCareerEarnings, data.totalCareerEarnings),
+              hallOfFamePoints: data.hallOfFamePoints,
+              // API returns balance in pence — store directly in pence
+              balance: data.balance,
+            },
+          };
+        }),
       updateFromSyncResponse: (data) =>
-        set((state) => ({
-          club: {
-            ...state.club,
-            id: data.id,
-            reputation: data.reputation,
-            reputationTier: computeTier(data.reputation),
-            totalCareerEarnings: Math.max(state.club.totalCareerEarnings, data.totalCareerEarnings),
-            hallOfFamePoints: data.hallOfFamePoints,
-            // balance is optional — only update if the server returned it; stored in pence
-            ...(data.balance !== undefined
-              ? { balance: data.balance }
-              : {}),
-          },
-        })),
+        set((state) => {
+          const { useLeagueStore } = require('@/stores/leagueStore');
+          const leagueCap: number | null = useLeagueStore.getState().league?.reputationCap ?? null;
+          const ceiling = leagueCap !== null ? Math.min(100, leagueCap) : 100;
+          const reputation = Math.min(data.reputation, ceiling);
+          return {
+            club: {
+              ...state.club,
+              id: data.id,
+              reputation,
+              reputationTier: computeTier(reputation),
+              totalCareerEarnings: Math.max(state.club.totalCareerEarnings, data.totalCareerEarnings),
+              hallOfFamePoints: data.hallOfFamePoints,
+              // balance is optional — only update if the server returned it; stored in pence
+              ...(data.balance !== undefined
+                ? { balance: data.balance }
+                : {}),
+            },
+          };
+        }),
       setManagerProfile: (profile) =>
         set({ managerProfile: profile }),
 

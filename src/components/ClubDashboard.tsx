@@ -735,6 +735,39 @@ export function ClubDashboard() {
         <FanFavoriteCard />
       </View>
 
+      {/* ── Quick-links: Museum + Transfer History ───────────────────────── */}
+      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
+        <Pressable
+          onPress={() => router.push('/museum')}
+          style={[{
+            flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+            paddingHorizontal: 12, paddingVertical: 12,
+          }, pixelShadow]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Trophy size={14} color={WK.yellow} />
+            <PixelText size={7} color={WK.yellow}>MUSEUM</PixelText>
+          </View>
+          <ChevronRight size={14} color={WK.dim} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push('/transfers')}
+          style={[{
+            flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+            paddingHorizontal: 12, paddingVertical: 12,
+          }, pixelShadow]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <UserPlus size={14} color={WK.tealLight} />
+            <PixelText size={7} color={WK.tealLight}>TRANSFERS</PixelText>
+          </View>
+          <ChevronRight size={14} color={WK.dim} />
+        </Pressable>
+      </View>
+
       {/* ── Row 5: Latest Signing | Roster Balance ───────────────────────── */}
       <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10, alignItems: 'flex-start' }}>
         {/* Latest Signing */}

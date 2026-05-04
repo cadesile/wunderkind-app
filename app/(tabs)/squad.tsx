@@ -501,9 +501,9 @@ export default function SquadScreen() {
         onChange={(tab) => setActiveTab(tab as SquadTab)}
       />
 
-      {activeTab === 'PLAYERS' ? (
-        <PlayersPane />
-      ) : (
+      {activeTab === 'PLAYERS' && <PlayersPane />}
+      {activeTab === 'PERFORMANCE' && <PerformancePane />}
+      {activeTab === 'DRESSING ROOM' && (
         <DressingRoomPane
           onRenamePress={(clique) => {
             setRenameTarget(clique);

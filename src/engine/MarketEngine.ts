@@ -3,6 +3,7 @@ import type { TransferOffer } from '@/types/market';
 import type { WorldClub, WorldPlayer } from '@/types/world';
 import { uuidv7 } from '@/utils/uuidv7';
 import { useWorldStore } from '@/stores/worldStore';
+import type { LeaguePlayerAbilityRanges } from '@/types/gameConfig';
 
 // ─── Tier mapping ─────────────────────────────────────────────────────────────
 
@@ -181,6 +182,7 @@ export async function processNPCTransfers(
   worldClubs: Record<string, WorldClub>,
   squadSizeMin = 11,
   squadSizeMax = 25,
+  abilityRanges: LeaguePlayerAbilityRanges = [],
 ): Promise<NpcTransferDigest> {
   const digest: NpcTransferDigest = { weekNumber, transfers: [] };
 
@@ -200,7 +202,10 @@ export async function processNPCTransfers(
 
     for (const pos of POSITIONS) {
       const buyerCount = buyerClub.players.filter((p) => normalizeWorldPosition(p.position) === pos).length;
-      if (buyerCount >= targets[pos].min) continue;
+      // Buy when below min+2 (want a depth buffer, not just bare minimum)
+      if (buyerCount >= targets[pos].min + 2) continue;
+      // Random gate — not every eligible club buys every tick
+      if (Math.random() > 0.5) continue;
 
       const potentialSellers = Object.values(mutableClubs).filter((c) => {
         if (c.id === buyerClub.id) return false;
@@ -209,7 +214,8 @@ export async function processNPCTransfers(
         if (c.players.length <= squadSizeMin) return false;
         const sellerTargets = getFormationTargets(c.formation);
         const sellerCount   = c.players.filter((p) => normalizeWorldPosition(p.position) === pos).length;
-        return sellerCount > sellerTargets[pos].max;
+        // Sell when above min+1 — keeps a 1-player buffer above their formation floor
+        return sellerCount > sellerTargets[pos].min + 1;
       });
 
       if (potentialSellers.length === 0) continue;
@@ -239,6 +245,66 @@ export async function processNPCTransfers(
         fee,
       });
     }
+  }
+
+  // ── Quality-upgrade pass ──────────────────────────────────────────────────
+  // Clubs with a comfortable squad size occasionally sell their weakest player
+  // to a smaller club and buy a stronger replacement from a tier-adjacent seller.
+  // This keeps the world market alive even when positional deficits are rare.
+  for (const club of Object.values(mutableClubs)) {
+    // Only clubs not at capacity and with enough players to spare
+    if (club.players.length < squadSizeMin + 4) continue;
+    if (club.players.length >= squadSizeMax) continue;
+    // ~25% chance any club triggers an upgrade this tick
+    if (Math.random() > 0.25) continue;
+
+    const clubTier = worldTierToAppTier(club.tier);
+
+    // Find the weakest player in the squad
+    const weakest = [...club.players].sort(
+      (a, b) => worldPlayerOverall(a as WorldPlayer) - worldPlayerOverall(b as WorldPlayer),
+    )[0] as WorldPlayer | undefined;
+    if (!weakest) continue;
+
+    const weakestPos  = normalizeWorldPosition(weakest.position);
+    const weakestOvr  = worldPlayerOverall(weakest);
+
+    // Find a tier-adjacent club with a stronger player of the same position to sell
+    const upgradeSource = Object.values(mutableClubs).find((c) => {
+      if (c.id === club.id) return false;
+      if (Math.abs(worldTierToAppTier(c.tier) - clubTier) > 1) return false;
+      if (c.players.length <= squadSizeMin) return false;
+      const sourceTargets = getFormationTargets(c.formation);
+      const posCount = c.players.filter((p) => normalizeWorldPosition(p.position) === weakestPos).length;
+      if (posCount <= sourceTargets[weakestPos].min) return false;
+      return c.players.some(
+        (p) => normalizeWorldPosition(p.position) === weakestPos && worldPlayerOverall(p as WorldPlayer) > weakestOvr + 5,
+      );
+    });
+    if (!upgradeSource) continue;
+
+    // Pick the best available player of that position from the source
+    const candidate = [...upgradeSource.players]
+      .filter((p) => normalizeWorldPosition(p.position) === weakestPos)
+      .sort((a, b) => worldPlayerOverall(b as WorldPlayer) - worldPlayerOverall(a as WorldPlayer))[0] as WorldPlayer | undefined;
+    if (!candidate) continue;
+
+    const fee = worldPlayerOverall(candidate) * 1000;
+
+    // Execute swap: club sells weakest, buys candidate
+    club.players          = club.players.filter((p) => p.id !== weakest.id);
+    upgradeSource.players = upgradeSource.players.filter((p) => p.id !== candidate.id);
+    club.players          = [...club.players, { ...candidate, npcClubId: club.id }];
+
+    mutatedIds.add(club.id);
+    mutatedIds.add(upgradeSource.id);
+
+    digest.transfers.push({
+      playerName: `${candidate.firstName} ${candidate.lastName}`,
+      fromClub:   upgradeSource.name,
+      toClub:     club.name,
+      fee,
+    });
   }
 
   // Flush all mutated club rosters in parallel — one write per club, not per transfer

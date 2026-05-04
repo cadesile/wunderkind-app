@@ -96,6 +96,28 @@ export default function CompetitionsScreen() {
             </BodyText>
           </View>
         ) : (
+          <View style={{ flex: 1 }}>
+            {/* Season / League context strip */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              paddingVertical: 8,
+              borderBottomWidth: 2,
+              borderBottomColor: WK.border,
+              backgroundColor: WK.tealMid,
+            }}>
+              <PixelText size={7} color={WK.yellow}>SEASON {league.season}</PixelText>
+              <PixelText size={7} color={WK.dim}>|</PixelText>
+              <PixelText size={7} color={WK.tealLight}>LEAGUE {league.tier}</PixelText>
+              {league.reputationTier && (
+                <>
+                  <PixelText size={7} color={WK.dim}>|</PixelText>
+                  <PixelText size={7} color={WK.tealLight}>{league.reputationTier.toUpperCase()}</PixelText>
+                </>
+              )}
+            </View>
           <LeagueTable
             fixtures={fixtures}
             clubs={clubs}
@@ -106,6 +128,7 @@ export default function CompetitionsScreen() {
             ampSquad={ampSquad}
             onClubPress={handleClubPress}
           />
+          </View>
         )
       )}
 

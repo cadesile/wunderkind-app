@@ -1,4 +1,45 @@
+// ─── League ability ranges ────────────────────────────────────────────────────
+
+export interface LeagueTierRange {
+  tier: number;
+  min: number;
+  max: number;
+}
+
+export interface CountryAbilityRanges {
+  country: string;
+  leagues: LeagueTierRange[];
+}
+
+export type LeaguePlayerAbilityRanges = CountryAbilityRanges[];
+
+const TIER_DEFAULTS: Record<number, LeagueTierRange> = {
+  1: { tier: 1, min: 55, max: 95 },
+  2: { tier: 2, min: 45, max: 65 },
+  3: { tier: 3, min: 35, max: 55 },
+  4: { tier: 4, min: 25, max: 50 },
+  5: { tier: 5, min: 25, max: 40 },
+  6: { tier: 6, min: 15, max: 35 },
+  7: { tier: 7, min: 15, max: 25 },
+  8: { tier: 8, min: 5,  max: 15 },
+};
+
+export function resolveAbilityRange(
+  ranges: LeaguePlayerAbilityRanges,
+  country: string,
+  tier: number,
+): LeagueTierRange {
+  const countryEntry = ranges.find((e) => e.country === country);
+  return countryEntry?.leagues.find((l) => l.tier === tier)
+    ?? TIER_DEFAULTS[tier]
+    ?? { tier, min: 10, max: 60 };
+}
+
+// ─── GameConfig ───────────────────────────────────────────────────────────────
+
 export interface GameConfig {
+  /** Per-country, per-league-tier ability ranges for NPC player generation. */
+  leaguePlayerAbilityRanges: LeaguePlayerAbilityRanges;
   // ── Squad Configuration ───────────────────────────────────────────────────
   /** Minimum players required in active squad. Default: 11 */
   squadSizeMin: number;
@@ -195,6 +236,8 @@ export interface GameConfig {
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
+  leaguePlayerAbilityRanges: [],
+
   squadSizeMin: 11,
   squadSizeMax: 25,
 

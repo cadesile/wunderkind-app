@@ -1828,16 +1828,19 @@ export default function InboxScreen() {
   const totalUnread = inboxUnread + narrativeUnread;
   const headerLabel = totalUnread > 0 ? `INBOX (${totalUnread})` : 'INBOX';
 
-  // Priority order: actionable narrative → narrative → inbox (agent offers disabled)
+  // All items sorted by createdAt descending; actionable unresponded narratives bubble up within same timestamp
   const allListItems: ListItem[] = [
-    ...narrativeMessages
-      .filter((m) => m.isActionable && !m.respondedAt)
-      .map((m): ListItem => ({ kind: 'narrative', message: m })),
-    ...narrativeMessages
-      .filter((m) => !(m.isActionable && !m.respondedAt))
-      .map((m): ListItem => ({ kind: 'narrative', message: m })),
+    ...narrativeMessages.map((m): ListItem => ({ kind: 'narrative', message: m })),
     ...inboxMessages.map((m): ListItem => ({ kind: 'inbox', message: m })),
-  ];
+  ].sort((a, b) => {
+    const tsA = a.message.createdAt ?? '';
+    const tsB = b.message.createdAt ?? '';
+    if (tsB !== tsA) return tsB < tsA ? -1 : 1;
+    // Within same timestamp: actionable unresponded narratives first
+    const aPriority = a.kind === 'narrative' && a.message.isActionable && !a.message.respondedAt ? 1 : 0;
+    const bPriority = b.kind === 'narrative' && b.message.isActionable && !b.message.respondedAt ? 1 : 0;
+    return bPriority - aPriority;
+  });
 
   const listItems = allListItems.filter((item) => {
     if (unreadOnly) {
