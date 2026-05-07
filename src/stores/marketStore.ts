@@ -26,7 +26,7 @@ import type { Guardian } from '@/types/guardian';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-const ALL_TIERS = ['local', 'regional', 'national', 'elite'] as const;
+const ALL_TIERS = ['Local', 'Regional', 'National', 'Elite'] as const;
 
 /** Fetch all four tiers in parallel and merge, de-duplicating by entity id. */
 async function fetchAllTiers(): Promise<import('@/types/market').MarketData> {

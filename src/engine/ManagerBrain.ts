@@ -211,7 +211,7 @@ export class ManagerBrain {
     if (posDepth >= minTarget) score += 10; // well covered per formation targets
 
     // Financial pressure
-    if (clubBalance < 20000) score += 20;
+    if (clubBalance < 2_000_000) score += 20; // < £20,000
 
     // Manager personality
     score += (ambition - 10) * 1.5;
@@ -228,7 +228,7 @@ export class ManagerBrain {
         reasoning = `The offer is ${Math.round(ratio * 100)}% of transfer value — an excellent return. I'd take it.`;
       } else if (isSquadBest && ratio >= 1.2) {
         reasoning = `They're our best ${player.position}, but the fee is too good to turn down. Worth selling if we reinvest well.`;
-      } else if (clubBalance < 20000) {
+      } else if (clubBalance < 2_000_000) {
         reasoning = 'We are tight on funds. Selling could give us room to strengthen elsewhere.';
       } else if (ovrGap <= -10) {
         reasoning = `We have better ${player.position}s in the squad. The fee is decent — move them on.`;
@@ -260,7 +260,7 @@ export class ManagerBrain {
    * @param manager        The coach entity with role 'manager'
    * @param marketPlayer   The revealed MarketPlayer
    * @param squad          Full AMP squad (for positional depth check)
-   * @param clubBalance    AMP club balance in whole pounds (stores convention)
+   * @param clubBalance    AMP club balance in pence (stores convention)
    * @param weeklyWage     Asking weekly wage in pence (matches Player.wage / MarketPlayer.currentOffer)
    */
   static assessScoutedPlayer(
@@ -278,8 +278,8 @@ export class ManagerBrain {
     if (posDepth <= 1) score += 25;
     if (posDepth >= 5) score -= 15;
 
-    // Wage affordability — compare 10 weeks' cost to balance
-    const tenWeekCost = (weeklyWage / 100) * 10; // convert pence/wk to £, times 10 weeks
+    // Wage affordability — compare 10 weeks' cost to balance (all in pence)
+    const tenWeekCost = weeklyWage * 10;
     if (tenWeekCost > clubBalance * 0.5) score -= 20;
     if (tenWeekCost < clubBalance * 0.1) score += 10;
 

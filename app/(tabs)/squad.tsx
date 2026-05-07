@@ -21,6 +21,7 @@ import { Player } from '@/types/player';
 import { Clique, CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
 import { MoraleBar } from '@/components/ui/MoraleBar';
+import { PerformancePane } from '@/components/PerformancePane';
 
 function getInjuryStatusStyle(player: Player): {
   borderColor: string;
@@ -61,7 +62,7 @@ function getInjuryStatusStyle(player: Player): {
   }
 }
 
-const SQUAD_TABS = ['PLAYERS', 'DRESSING ROOM'] as const;
+const SQUAD_TABS = ['PLAYERS', 'PERFORMANCE', 'DRESSING ROOM'] as const;
 type SquadTab = typeof SQUAD_TABS[number];
 
 const POSITION_FILTERS = ['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const;
@@ -99,6 +100,7 @@ function PlayerCard({ player }: { player: Player }) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        opacity: player.notForSale ? 0.8 : 1,
         ...pixelShadow,
       }}>
         <Avatar appearance={player.appearance} role="PLAYER" size={44} morale={player.morale ?? 70} age={player.age} />

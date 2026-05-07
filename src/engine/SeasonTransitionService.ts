@@ -1,8 +1,9 @@
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
-import { useLeagueStore } from '@/stores/leagueStore';
+import { useLeagueStore, selectCurrentSeason } from '@/stores/leagueStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useLeagueHistoryStore } from '@/stores/leagueHistoryStore';
@@ -303,18 +304,18 @@ export function distributeSeasonFinances(
   const leaguePositionDecPct = ampSeasonLeague?.leaguePositionDecreasePercent ?? currentLeague.leaguePositionDecreasePercent ?? 0;
 
   if (tvDeal > 0) {
-    addTransaction({ amount: penceToPounds(tvDeal), category: 'tv_deal', description: `Season ${nextSeason} TV deal`, weekNumber });
+    addTransaction({ amount: Math.round(tvDeal), category: 'tv_deal', description: `Season ${nextSeason} TV deal`, weekNumber });
   }
   if (sponsorPot > 0) {
-    addTransaction({ amount: penceToPounds(sponsorPot), category: 'league_sponsor', description: `Season ${nextSeason} league sponsor`, weekNumber });
+    addTransaction({ amount: Math.round(sponsorPot), category: 'league_sponsor', description: `Season ${nextSeason} league sponsor`, weekNumber });
   }
   if (prizeMoney > 0) {
-    addTransaction({ amount: penceToPounds(prizeMoney), category: 'earnings', description: `Season ${currentSeason} prize money (Pos ${finalPosition})`, weekNumber });
+    addTransaction({ amount: Math.round(prizeMoney), category: 'earnings', description: `Season ${currentSeason} prize money (Pos ${finalPosition})`, weekNumber });
   }
   const posMultiplier = Math.max(0, 1 - (leaguePositionDecPct / 100) * (finalPosition - 1));
   const posPrize      = Math.round(leaguePositionPot * posMultiplier);
   if (posPrize > 0) {
-    addTransaction({ amount: penceToPounds(posPrize), category: 'earnings', description: `Season ${currentSeason} position prize (Pos ${finalPosition})`, weekNumber });
+    addTransaction({ amount: Math.round(posPrize), category: 'earnings', description: `Season ${currentSeason} position prize (Pos ${finalPosition})`, weekNumber });
   }
 }
 
@@ -577,4 +578,10 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
 
   awardSeasonTrophies(snapshot, pyramidLeagues, responseLeagues);
   awardSeasonFanEvents(snapshot);
+
+  // Prune match result records older than the previous season
+  useMatchResultStore.getState().pruneOldSeasons(nextSeason);
+
+  // Advance the persistent season counter
+  useLeagueStore.getState().incrementSeason();
 }

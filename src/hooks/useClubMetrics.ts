@@ -156,7 +156,7 @@ export default function useClubMetrics(): ClubMetrics {
   const squadTotalPotential = players.reduce((sum, p) => sum + p.potential, 0);
 
   // ── Weekly Net Cashflow ────────────────────────────────────────────────────
-  // calculateWeeklyFinances covers wages, upkeep, reputation income, and sponsors.
+  // calculateWeeklyFinances covers wages, upkeep, and sponsors.
   // Sponsor income is derived from contracts stored on the club (same weeklyPayment field).
   const sponsorIncomePence = (club.sponsorContracts ?? []).reduce((s, c) => s + c.weeklyPayment, 0);
   const baseNet = calculateWeeklyFinances(

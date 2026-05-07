@@ -21,7 +21,8 @@ import { calculateWeeklyFinances } from '@/engine/finance';
 import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
-import { penceToPounds, formatCurrencyCompact, formatPounds } from '@/utils/currency';
+import { renderMoney } from '@/utils/currency';
+import { Money } from '@/components/ui/Money';
 import useClubMetrics from '@/hooks/useClubMetrics';
 
 const FINANCE_TABS = ['BALANCE', 'INVESTORS', 'SPONSORS', 'LOANS', 'LEDGER'] as const;
@@ -29,18 +30,29 @@ type FinanceTab = typeof FINANCE_TABS[number];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function FinanceRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function FinanceRow({ label, value, accent, pence, moneyStyle = 'whole', sign = false }: {
+  label: string;
+  value?: string;
+  accent?: string;
+  pence?: number;
+  moneyStyle?: 'whole' | 'compact' | 'decimal';
+  sign?: boolean;
+}) {
   return (
     <View style={{
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 10,
+      paddingVertical: 12,
       borderBottomWidth: 2,
       borderBottomColor: WK.border,
     }}>
-      <BodyText size={13} dim style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>{label}</BodyText>
-      <PixelText size={9} color={accent ?? WK.text} style={{ flexShrink: 0 }}>{value}</PixelText>
+      <BodyText size={14} dim style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>{label}</BodyText>
+      {pence !== undefined ? (
+        <Money pence={pence} style={moneyStyle} sign={sign} size={17} color={accent} textStyle={{ flexShrink: 0 }} />
+      ) : (
+        <PixelText size={17} color={accent ?? WK.text} style={{ flexShrink: 0 }}>{value}</PixelText>
+      )}
     </View>
   );
 }
@@ -59,12 +71,7 @@ function BalancePane() {
   const currentMatchday = useFixtureStore((s) => s.currentMatchday);
   const nonMatchPct = useGameConfigStore((s) => s.config.nonMatchFacilityIncomePercent ?? 0);
 
-  // balance is stored in pence — convert to whole pounds for display
-  const balance = penceToPounds(
-    typeof club.balance === 'number' && !isNaN(club.balance) ? club.balance : 0,
-  );
-
-  const weeklyRepayment = totalWeeklyRepayment();
+  const weeklyRepaymentPence = totalWeeklyRepayment();
 
   const record = calculateWeeklyFinances(
     club.weekNumber ?? 1,
@@ -73,39 +80,34 @@ function BalancePane() {
     coaches,
     facilityLevels,
     [],
-    weeklyRepayment,
+    weeklyRepaymentPence,
     facilityTemplates,
   );
 
-  // All values in whole pounds for consistent display
-  const sponsorIncome = (club.sponsorContracts ?? []).reduce(
-    (sum, c) => sum + Math.round(c.weeklyPayment / 100),
+  // All values in pence for consistent display via Money component
+  const sponsorIncomePence = (club.sponsorContracts ?? []).reduce(
+    (sum, c) => sum + c.weeklyPayment,
     0,
   );
-  const reputationIncome = club.reputation; // reputation×100 pence ÷ 100 = reputation pounds
-  // wage and salary are stored in pence — convert to pounds for display
-  const playerWages = Math.round(players.reduce((sum, p) => sum + (p.wage ?? 0), 0) / 100);
-  const coachSalaries = Math.round(coaches.reduce((sum, c) => sum + c.salary, 0) / 100);
-  // facilityMaint from breakdown is in pence — convert to pounds
-  const facilityMaint = Math.round(
-    record.breakdown
-      .filter((b) => b.label.includes('maintenance'))
-      .reduce((sum, b) => sum + b.amount, 0) / 100,
-  );
+  const playerWagesPence = players.reduce((sum, p) => sum + (p.wage ?? 0), 0);
+  const coachSalariesPence = coaches.reduce((sum, c) => sum + c.salary, 0);
+  const facilityMaintPence = record.breakdown
+    .filter((b) => b.label.includes('maintenance'))
+    .reduce((sum, b) => sum + b.amount, 0);
+
   const hasHomeMatch = fixtures.some(
     (f) => f.round === currentMatchday && f.homeClubId === club.id,
   );
   const facilityMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
-  const facilityIncome = Math.round(
+  const facilityIncomePence = Math.round(
     calculateMatchdayIncome(facilityTemplates, facilityLevels, facilityConditions, club.reputation)
-    * facilityMultiplier / 100,
+    * facilityMultiplier
   );
   const facilityIncomeLabel = hasHomeMatch
     ? 'FACILITY INCOME'
     : `FACILITY INCOME (${nonMatchPct}% NON-MATCHDAY)`;
-  // displayNet computed entirely in pounds (record.net mixes pence/pounds units)
-  const displayNet = sponsorIncome + reputationIncome + facilityIncome - playerWages - coachSalaries - facilityMaint - weeklyRepayment;
-  const netColor = displayNet >= 0 ? WK.green : WK.red;
+
+  const displayNetPence = sponsorIncomePence + facilityIncomePence - playerWagesPence - coachSalariesPence - facilityMaintPence - weeklyRepaymentPence;
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: FAB_CLEARANCE }}>
@@ -118,9 +120,7 @@ function BalancePane() {
         ...pixelShadow,
       }}>
         <BodyText size={13} dim style={{ marginBottom: 6 }}>CURRENT BALANCE</BodyText>
-        <PixelText size={22} color={balance >= 0 ? WK.yellow : WK.red}>
-          {formatPounds(balance)}
-        </PixelText>
+        <Money pence={club.balance ?? 0} size={22} autoColor color={club.balance >= 0 ? WK.yellow : undefined} />
       </View>
 
       {/* Weekly cashflow card */}
@@ -135,38 +135,39 @@ function BalancePane() {
 
         <FinanceRow
           label="SPONSOR INCOME"
-          value={`+£${sponsorIncome.toLocaleString()}`}
+          pence={sponsorIncomePence}
           accent={WK.green}
-        />
-        <FinanceRow
-          label="REPUTATION INCOME"
-          value={`+£${reputationIncome.toLocaleString()}`}
-          accent={WK.green}
+          sign
         />
         <FinanceRow
           label={facilityIncomeLabel}
-          value={`+£${facilityIncome.toLocaleString()}`}
-          accent={facilityIncome > 0 ? WK.green : WK.dim}
+          pence={facilityIncomePence}
+          accent={facilityIncomePence > 0 ? WK.green : WK.dim}
+          sign
         />
         <FinanceRow
           label="PLAYER WAGES"
-          value={`-£${playerWages.toLocaleString()}`}
-          accent={playerWages > 0 ? WK.orange : WK.dim}
+          pence={-playerWagesPence}
+          accent={playerWagesPence > 0 ? WK.orange : WK.dim}
+          sign
         />
         <FinanceRow
           label="COACH SALARIES"
-          value={`-£${coachSalaries.toLocaleString()}`}
-          accent={coachSalaries > 0 ? WK.orange : WK.dim}
+          pence={-coachSalariesPence}
+          accent={coachSalariesPence > 0 ? WK.orange : WK.dim}
+          sign
         />
         <FinanceRow
           label="FACILITY MAINTENANCE"
-          value={`-£${facilityMaint.toLocaleString()}`}
-          accent={facilityMaint > 0 ? WK.orange : WK.dim}
+          pence={-facilityMaintPence}
+          accent={facilityMaintPence > 0 ? WK.orange : WK.dim}
+          sign
         />
         <FinanceRow
           label="LOAN REPAYMENTS"
-          value={`-£${weeklyRepayment.toLocaleString()}`}
-          accent={weeklyRepayment > 0 ? WK.red : WK.dim}
+          pence={-weeklyRepaymentPence}
+          accent={weeklyRepaymentPence > 0 ? WK.red : WK.dim}
+          sign
         />
 
         {/* Net divider */}
@@ -174,15 +175,13 @@ function BalancePane() {
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
-          paddingVertical: 10,
+          paddingVertical: 12,
           borderTopWidth: 2,
           borderTopColor: WK.tealMid,
           marginTop: 2,
         }}>
-          <PixelText size={8}>NET THIS WEEK</PixelText>
-          <PixelText size={9} color={netColor}>
-            {displayNet >= 0 ? '+' : '-'}£{Math.abs(displayNet).toLocaleString()}
-          </PixelText>
+          <PixelText size={10}>NET THIS WEEK</PixelText>
+          <Money pence={displayNetPence} size={18} autoColor sign />
         </View>
       </View>
 
@@ -195,9 +194,7 @@ function BalancePane() {
         ...pixelShadow,
       }}>
         <BodyText size={13} dim style={{ marginBottom: 6 }}>TOTAL CAREER EARNINGS</BodyText>
-        <PixelText size={18} color={WK.tealLight}>
-          £{penceToPounds(club.totalCareerEarnings).toLocaleString()}
-        </PixelText>
+        <Money pence={club.totalCareerEarnings} size={18} color={WK.tealLight} />
       </View>
 
       {/* Hall of fame */}
@@ -239,7 +236,7 @@ function InvestorsPane() {
     addTransaction({
       weekNumber: club.weekNumber ?? 1,
       category: 'investor_buyout',
-      amount: -Math.round(buyoutCostPence / 100),
+      amount: -buyoutCostPence, // pence
       description: `Investor buyout — ${assignedInvestor.name} (${equityTaken}% equity)`,
     });
     setInvestorId(null);
@@ -265,12 +262,13 @@ function InvestorsPane() {
             />
             <FinanceRow
               label="INVESTMENT"
-              value={`£${Math.round(originalInvestmentPence / 100).toLocaleString()}`}
+              pence={originalInvestmentPence}
               accent={WK.yellow}
             />
             <FinanceRow
               label="BUYOUT COST"
-              value={formatCurrencyCompact(buyoutCostPence)}
+              pence={buyoutCostPence}
+              moneyStyle="compact"
               accent={canAfford ? WK.tealLight : WK.red}
             />
 
@@ -338,12 +336,14 @@ function InvestorsPane() {
                 />
                 <FinanceRow
                   label="COST"
-                  value={formatCurrencyCompact(buyoutCostPence)}
+                  pence={buyoutCostPence}
+                  moneyStyle="compact"
                   accent={WK.yellow}
                 />
                 <FinanceRow
                   label="BALANCE AFTER"
-                  value={formatCurrencyCompact(club.balance - buyoutCostPence)}
+                  pence={club.balance - buyoutCostPence}
+                  moneyStyle="compact"
                   accent={(club.balance - buyoutCostPence) < 0 ? WK.red : WK.tealLight}
                 />
 
@@ -383,8 +383,8 @@ function SponsorsPane() {
   const weekNumber = club.weekNumber ?? 1;
 
   const contracts = club.sponsorContracts ?? [];
-  const totalWeeklyIncome = contracts.reduce(
-    (sum, c) => sum + Math.round(c.weeklyPayment / 100),
+  const totalWeeklyIncomePence = contracts.reduce(
+    (sum, c) => sum + c.weeklyPayment,
     0,
   );
 
@@ -394,8 +394,9 @@ function SponsorsPane() {
       <Card>
         <FinanceRow
           label="WEEKLY SPONSOR INCOME"
-          value={`+£${totalWeeklyIncome.toLocaleString()}`}
+          pence={totalWeeklyIncomePence}
           accent={WK.green}
+          sign
         />
         <FinanceRow label="ACTIVE SPONSORS" value={String(contracts.length)} />
       </Card>
@@ -412,7 +413,6 @@ function SponsorsPane() {
           const weeksRemaining = Math.max(0, contract.endWeek - weekNumber);
           const totalContractWeeks = contract.endWeek - (weekNumber - weeksRemaining);
           const progressPct = totalContractWeeks > 0 ? (1 - weeksRemaining / totalContractWeeks) * 100 : 100;
-          const weeklyPounds = Math.round(contract.weeklyPayment / 100);
 
           return (
             <View key={contract.id} style={{
@@ -428,8 +428,9 @@ function SponsorsPane() {
               </View>
               <FinanceRow
                 label="WEEKLY PAYMENT"
-                value={`+£${weeklyPounds.toLocaleString()}`}
+                pence={contract.weeklyPayment}
                 accent={WK.green}
+                sign
               />
               <FinanceRow
                 label="WEEKS REMAINING"
@@ -437,7 +438,7 @@ function SponsorsPane() {
               />
               <FinanceRow
                 label="TOTAL REMAINING"
-                value={`£${(weeklyPounds * weeksRemaining).toLocaleString()}`}
+                pence={contract.weeklyPayment * weeksRemaining}
                 accent={WK.yellow}
               />
               {/* Contract progress bar */}
@@ -477,8 +478,8 @@ function LoanCard({ loan }: { loan: Loan }) {
       marginBottom: 10,
       ...pixelShadow,
     }}>
-      <FinanceRow label="LOAN AMOUNT" value={`£${loan.amount.toLocaleString()}`} accent={WK.yellow} />
-      <FinanceRow label="WEEKLY REPAYMENT" value={`-£${loan.weeklyRepayment.toLocaleString()}`} accent={WK.orange} />
+      <FinanceRow label="LOAN AMOUNT" pence={loan.amount} accent={WK.yellow} />
+      <FinanceRow label="WEEKLY REPAYMENT" pence={-loan.weeklyRepayment} accent={WK.orange} sign />
       <FinanceRow label="WEEKS REMAINING" value={String(loan.weeksRemaining)} />
       <View style={{ marginTop: 8 }}>
         <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
@@ -498,8 +499,8 @@ function LoansPane() {
   const [amountText, setAmountText] = useState('');
   const [loanError, setLoanError] = useState<string | null>(null);
 
-  const loanLimit = getLoanLimit(club.reputation);
-  const weeklyRepayment = totalWeeklyRepayment();
+  const loanLimitPounds = getLoanLimit(club.reputation);
+  const weeklyRepaymentPence = totalWeeklyRepayment();
 
   function handleTakeLoan() {
     setLoanError(null);
@@ -524,8 +525,8 @@ function LoansPane() {
       {/* Summary + Take Loan */}
       <View style={{ margin: 10, gap: 10 }}>
         <Card>
-          <FinanceRow label="CURRENT LOAN LIMIT" value={`£${loanLimit.toLocaleString()}`} accent={WK.yellow} />
-          <FinanceRow label="WEEKLY REPAYMENTS" value={`-£${weeklyRepayment.toLocaleString()}`} accent={WK.orange} />
+          <FinanceRow label="CURRENT LOAN LIMIT" pence={loanLimitPounds * 100} accent={WK.yellow} />
+          <FinanceRow label="WEEKLY REPAYMENTS" pence={-weeklyRepaymentPence} accent={WK.orange} sign />
           <FinanceRow label="INTEREST RATE" value="4.6% / 52 WK" accent={WK.dim} />
         </Card>
         <Button label="◈ TAKE A LOAN" variant="yellow" fullWidth onPress={() => { setLoanError(null); setShowModal(true); }} />
@@ -559,12 +560,15 @@ function LoansPane() {
               ...pixelShadow,
             }}>
               <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 16 }}>Take a Loan</PixelText>
-              <BodyText size={13} dim style={{ marginBottom: 6 }}>
-                CURRENT LIMIT: £{loanLimit.toLocaleString()}
-              </BodyText>
-              <BodyText size={13} dim style={{ marginBottom: 14 }}>
-                INTEREST RATE: 4.6% OVER 52 WEEKS
-              </BodyText>
+              <View style={{ gap: 6, marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <BodyText size={13} dim>CURRENT LIMIT:</BodyText>
+                  <Money pence={loanLimitPounds * 100} dim />
+                </View>
+                <BodyText size={13} dim style={{ textAlign: 'center' }}>
+                  INTEREST RATE: 4.6% OVER 52 WEEKS
+                </BodyText>
+              </View>
 
               <BodyText size={13} dim style={{ marginBottom: 6 }}>AMOUNT (£)</BodyText>
               <TextInput
@@ -656,9 +660,9 @@ function LedgerPane() {
 
   const incomeCats: FinancialCategory[] = ['sponsor_payment', 'investment', 'earnings', 'transfer_fee', 'tv_deal', 'league_sponsor', 'matchday_income'];
   const expenseCats: FinancialCategory[] = ['wages', 'upkeep', 'facility_upgrade', 'contract_termination'];
-  const totalIncome = incomeCats.reduce((s, c) => s + Math.max(0, getTotalByCategory(c, rangeWeeks)), 0);
-  const totalExpenses = expenseCats.reduce((s, c) => s + Math.abs(Math.min(0, getTotalByCategory(c, rangeWeeks))), 0);
-  const netTotal = totalIncome - totalExpenses;
+  const totalIncomePence = incomeCats.reduce((s, c) => s + Math.max(0, getTotalByCategory(c, rangeWeeks)), 0);
+  const totalExpensesPence = expenseCats.reduce((s, c) => s + Math.abs(Math.min(0, getTotalByCategory(c, rangeWeeks))), 0);
+  const netTotalPence = totalIncomePence - totalExpensesPence;
 
   const selectedCatLabel = CATEGORY_FILTER_OPTIONS.find((o) => o.value === catFilter)?.label ?? 'ALL';
 
@@ -674,7 +678,7 @@ function LedgerPane() {
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 12,
         paddingHorizontal: 10,
         backgroundColor: rowBg,
         borderBottomWidth: 1,
@@ -696,14 +700,12 @@ function LedgerPane() {
 
         {/* Description + week number */}
         <View style={{ flex: 1 }}>
-          <BodyText size={12} color={WK.text} numberOfLines={1}>{item.description}</BodyText>
+          <BodyText size={13} color={WK.text} numberOfLines={1}>{item.description}</BodyText>
           <BodyText size={11} dim>WK {item.weekNumber}</BodyText>
         </View>
 
         {/* Amount */}
-        <PixelText size={9} color={isPositive ? WK.green : WK.red}>
-          {isPositive ? '+' : '-'}£{Math.abs(item.amount).toLocaleString()}
-        </PixelText>
+        <Money pence={item.amount} size={17} autoColor sign />
       </View>
     );
   }
@@ -803,23 +805,21 @@ function LedgerPane() {
         borderWidth: 2,
         borderColor: WK.border,
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 8,
       }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
-          <BodyText size={13} dim>INCOME</BodyText>
-          <PixelText size={9} color={WK.green}>+£{totalIncome.toLocaleString()}</PixelText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+          <BodyText size={14} dim>INCOME</BodyText>
+          <Money pence={totalIncomePence} size={17} color={WK.green} sign />
         </View>
         <View style={{ height: 1, backgroundColor: WK.border }} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
-          <BodyText size={13} dim>EXPENSES</BodyText>
-          <PixelText size={9} color={WK.red}>-£{totalExpenses.toLocaleString()}</PixelText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+          <BodyText size={14} dim>EXPENSES</BodyText>
+          <Money pence={-totalExpensesPence} size={17} color={WK.red} sign />
         </View>
         <View style={{ height: 1, backgroundColor: WK.tealMid }} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
-          <BodyText size={13}>NET ({RANGE_OPTIONS.find((r) => r.weeks === rangeWeeks)?.label})</BodyText>
-          <PixelText size={9} color={netTotal >= 0 ? WK.green : WK.red}>
-            {netTotal >= 0 ? '+' : '-'}£{Math.abs(netTotal).toLocaleString()}
-          </PixelText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+          <BodyText size={14}>NET ({RANGE_OPTIONS.find((r) => r.weeks === rangeWeeks)?.label})</BodyText>
+          <Money pence={netTotalPence} size={18} autoColor sign />
         </View>
       </View>
 
@@ -846,13 +846,6 @@ export default function FinanceHubScreen() {
   const [activeTab, setActiveTab] = useState<FinanceTab>('BALANCE');
   const club = useClubStore((s) => s.club);
 
-  // balance is stored in pence — convert to whole pounds for display
-  const balance = penceToPounds(
-    typeof club.balance === 'number' && !isNaN(club.balance)
-      ? club.balance
-      : club.totalCareerEarnings * 100,
-  );
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: WK.greenDark }} edges={['bottom']}>
       <PitchBackground />
@@ -874,7 +867,7 @@ export default function FinanceHubScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Finances</PixelText>
-        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
+        <Money pence={club.balance ?? 0} size={14} color={WK.yellow} />
       </View>
 
       {activeTab === 'BALANCE' && <BalancePane />}
@@ -885,3 +878,4 @@ export default function FinanceHubScreen() {
     </SafeAreaView>
   );
 }
+

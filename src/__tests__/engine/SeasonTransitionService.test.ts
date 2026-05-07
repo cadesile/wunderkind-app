@@ -427,33 +427,36 @@ describe('distributeSeasonFinances', () => {
     const tvCall = addTransactionMock.mock.calls.find((c) => c[0].category === 'tv_deal');
     expect(tvCall).toBeDefined();
     expect(tvCall![0].description).toContain('Season 2');
-    expect(tvCall![0].amount).toBe(5000); // 500000 pence = £5000
+    expect(tvCall![0].amount).toBe(500000); // 500000 pence = £5000
   });
 
   it('credits sponsor pot for next season', () => {
     distributeSeasonFinances(undefined, league8, 2, 1, 38);
     const sponsorCall = addTransactionMock.mock.calls.find((c) => c[0].category === 'league_sponsor');
     expect(sponsorCall).toBeDefined();
+    expect(sponsorCall![0].amount).toBe(18329782);
   });
 
   it('credits prize money with correct season label', () => {
     distributeSeasonFinances(undefined, league8, 2, 1, 38);
     const prizeCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('prize money'));
+    expect(prizeCall).toBeDefined();
     expect(prizeCall![0].description).toContain('Season 1');
+    expect(prizeCall![0].amount).toBe(500000);
   });
 
   it('calculates position prize correctly for Pos 1 (no decrease)', () => {
     // pos 1: multiplier = 1 - (8/100)*(1-1) = 1 - 0.08*0 = 1.0 → posPrize = 500000 pence = £5000
     distributeSeasonFinances(undefined, league8, 2, 1, 38);
     const posCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('position prize'));
-    expect(posCall![0].amount).toBe(5000);
+    expect(posCall![0].amount).toBe(500000);
   });
 
   it('reduces position prize for lower positions', () => {
     // pos 2: multiplier = 1 - (8/100)*(2-1) = 0.92 → posPrize = Math.round(500000*0.92) = 460000 pence = £4600
     distributeSeasonFinances(undefined, league8, 2, 2, 38);
     const posCall = addTransactionMock.mock.calls.find((c) => c[0].description?.includes('position prize'));
-    expect(posCall![0].amount).toBe(4600);
+    expect(posCall![0].amount).toBe(460000);
   });
 
   it('uses ampSeasonLeague financials when provided', () => {
@@ -463,7 +466,7 @@ describe('distributeSeasonFinances', () => {
     };
     distributeSeasonFinances(newLeague, league8, 2, 1, 38);
     const tvCall = addTransactionMock.mock.calls.find((c) => c[0].category === 'tv_deal');
-    expect(tvCall![0].amount).toBe(100000); // 10000000 pence = £100000
+    expect(tvCall![0].amount).toBe(10000000); // 10000000 pence = £100000
   });
 });
 

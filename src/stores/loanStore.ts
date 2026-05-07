@@ -28,19 +28,20 @@ export const useLoanStore = create<LoanState>()(
     (set, get) => ({
       loans: [],
 
-      takeLoan: (amount, currentWeek, reputation) => {
+      takeLoan: (amountInPounds, currentWeek, reputation) => {
         const limit = getLoanLimit(reputation);
-        if (amount > limit) {
+        if (amountInPounds > limit) {
           return new Error(`Loan limit at current reputation is £${limit.toLocaleString()}`);
         }
-        if (amount <= 0) {
+        if (amountInPounds <= 0) {
           return new Error('Loan amount must be positive');
         }
 
-        const weeklyRepayment = Math.ceil((amount * (1 + INTEREST_RATE)) / LOAN_WEEKS);
+        const amountPence = amountInPounds * 100;
+        const weeklyRepayment = Math.ceil((amountPence * (1 + INTEREST_RATE)) / LOAN_WEEKS);
         const loan: Loan = {
           id: uuidv7(),
-          amount,
+          amount: amountPence,
           interestRate: INTEREST_RATE,
           weeklyRepayment,
           weeksRemaining: LOAN_WEEKS,

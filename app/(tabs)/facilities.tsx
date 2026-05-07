@@ -23,14 +23,16 @@ import { Badge } from '@/components/ui/Badge';
 import { FlagText } from '@/components/ui/FlagText';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { PitchBackground } from '@/components/ui/PitchBackground';
+import { Money } from '@/components/ui/Money';
 import { WK, pixelShadow } from '@/constants/theme';
-import { penceToPounds, formatPounds } from '@/utils/currency';
 import { hapticTap } from '@/utils/haptics';
+import { penceToPounds } from '@/utils/currency';
 import { nationalityToCode } from '@/utils/nationality';
 import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 import { MarketCoach, MarketScout } from '@/types/market';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
+import { generateAppearance } from '@/engine/appearance';
 import type { Player } from '@/types/player';
 
 function isoToFlag(code: string): string {
@@ -182,14 +184,14 @@ function FacilityCard({
       </View>
 
       <BodyText size={12} dim style={{ marginBottom: 12 }}>
-        MAINT: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/wk`}
-        {!atMax ? `  ·  LV${level + 1}: £${(nextMaintenance / 100).toFixed(2)}/wk` : ''}
+        MAINT: {maintenance === 0 ? 'FREE' : <Money pence={maintenance} dim />}
+        {!atMax ? <>  ·  LV{level + 1}: <Money pence={nextMaintenance} dim /></> : ''}
       </BodyText>
 
       <View style={{ gap: 8 }}>
         {needsRepair && (
           <Button
-            label={`REPAIR  £${repairCost.toLocaleString()}`}
+            label={`REPAIR  £${Math.round(repairCost / 100).toLocaleString()}`}
             variant={condition < 30 ? 'orange' : 'teal'}
             fullWidth
             onPress={() => setRepairModalVisible(true)}
@@ -203,7 +205,7 @@ function FacilityCard({
           </View>
         ) : (
           <Button
-            label={`UPGRADE → LV${level + 1}  £${upgradeCost.toLocaleString()}`}
+            label={`UPGRADE → LV${level + 1}  £${Math.round(upgradeCost / 100).toLocaleString()}`}
             variant={canAffordUpgrade ? 'yellow' : 'teal'}
             fullWidth
             onPress={() => setUpgradeModalVisible(true)}
@@ -218,13 +220,19 @@ function FacilityCard({
             <View style={{ backgroundColor: WK.tealCard, borderWidth: 4, borderColor: WK.yellow, padding: 20, minWidth: 280, maxWidth: 340, ...pixelShadow }}>
               <PixelText size={9} upper style={{ marginBottom: 12 }}>Upgrade {template.label}</PixelText>
               {!canAffordUpgrade ? (
-                <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
-                  INSUFFICIENT FUNDS — need £{upgradeCost.toLocaleString()}
-                </BodyText>
+                <View style={{ marginBottom: 20 }}>
+                  <BodyText size={13} color={WK.orange}>
+                    INSUFFICIENT FUNDS — need
+                  </BodyText>
+                  <Money pence={upgradeCost} color={WK.orange} size={13} />
+                </View>
               ) : (
                 <>
                   <BodyText size={13} dim style={{ marginBottom: 4 }}>LEVEL {level} → {level + 1}</BodyText>
-                  <BodyText size={13} color={WK.yellow} style={{ marginBottom: 20 }}>COST: £{upgradeCost.toLocaleString()}</BodyText>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 20 }}>
+                    <BodyText size={13} color={WK.yellow}>COST:</BodyText>
+                    <Money pence={upgradeCost} color={WK.yellow} size={13} />
+                  </View>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -242,13 +250,19 @@ function FacilityCard({
             <View style={{ backgroundColor: WK.tealCard, borderWidth: 4, borderColor: WK.orange, padding: 20, minWidth: 280, maxWidth: 340, ...pixelShadow }}>
               <PixelText size={9} upper style={{ marginBottom: 12 }}>Repair {template.label}</PixelText>
               {!canAffordRepair ? (
-                <BodyText size={13} color={WK.red} style={{ marginBottom: 20 }}>
-                  INSUFFICIENT FUNDS — need £{repairCost.toLocaleString()}
-                </BodyText>
+                <View style={{ marginBottom: 20 }}>
+                  <BodyText size={13} color={WK.red}>
+                    INSUFFICIENT FUNDS — need
+                  </BodyText>
+                  <Money pence={repairCost * 100} color={WK.red} size={13} />
+                </View>
               ) : (
                 <>
                   <BodyText size={13} dim style={{ marginBottom: 4 }}>CONDITION {Math.round(condition)}% → 100%</BodyText>
-                  <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>COST: £{repairCost.toLocaleString()}</BodyText>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 20 }}>
+                    <BodyText size={13} color={WK.orange}>COST:</BodyText>
+                    <Money pence={repairCost * 100} color={WK.orange} size={13} />
+                  </View>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -359,13 +373,13 @@ function HirePane({
   function signCoach(mc: MarketCoach) {
     const block = getCapBlock(mc.role);
     if (block) { setCapPopup(block); return; }
-    const fee = Math.round((mc.salary * 4) / 100);
-    if ((club.balance ?? 0) < fee) {
-      setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
+    const feePence = mc.salary * 4;
+    if ((club.balance ?? 0) < feePence) {
+      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(feePence / 100).toLocaleString()}`);
       return;
     }
     useFinanceStore.getState().addTransaction({
-      amount:      -fee,
+      amount:      -feePence,
       category:    'staff_signing',
       description: `Signed ${mc.firstName} ${mc.lastName}`,
       weekNumber,
@@ -376,13 +390,13 @@ function HirePane({
   function signScout(ms: MarketScout) {
     const block = getCapBlock(ms.role);
     if (block) { setCapPopup(block); return; }
-    const fee = Math.round((ms.salary * 4) / 100);
-    if ((club.balance ?? 0) < fee) {
-      setSignError(`INSUFFICIENT FUNDS — need £${fee.toLocaleString()}`);
+    const feePence = ms.salary * 4;
+    if ((club.balance ?? 0) < feePence) {
+      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(feePence / 100).toLocaleString()}`);
       return;
     }
     useFinanceStore.getState().addTransaction({
-      amount:      -fee,
+      amount:      -feePence,
       category:    'staff_signing',
       description: `Signed ${ms.firstName} ${ms.lastName}`,
       weekNumber,
@@ -421,6 +435,7 @@ function HirePane({
 
           if (item.kind === 'coach') {
             const mc = item.data;
+            const coachAppearance = generateAppearance(mc.id, 'COACH', 35);
             return (
               <Pressable
                 onPress={() => {
@@ -434,18 +449,23 @@ function HirePane({
                 }]}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Avatar appearance={undefined} role="COACH" size={44} />
+                  <Avatar appearance={coachAppearance} role="COACH" size={44} />
                   <View style={{ flex: 1 }}>
                     <BodyText size={14} upper numberOfLines={1}>{mc.firstName} {mc.lastName}</BodyText>
                     <PixelText size={8} color={WK.tealLight}>{formatStaffRole(mc.role).toUpperCase()}</PixelText>
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                       <FlagText nationality={mc.nationality} size={11} />
-                      <BodyText size={11} dim>· £{Math.round(mc.salary / 100).toLocaleString()}/wk</BodyText>
+                      <BodyText size={11} dim>· </BodyText>
+                      <Money pence={mc.salary} dim size={11} />
+                      <BodyText size={11} dim>/wk</BodyText>
                     </View>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <Badge label={`INF ${mc.influence}`} color="yellow" />
-                    <BodyText size={10} dim>Fee: £{signingFeePounds.toLocaleString()}</BodyText>
+                    <View style={{ flexDirection: 'row', gap: 3 }}>
+                      <BodyText size={10} dim>Fee:</BodyText>
+                      <Money pence={mc.salary * 4} dim size={10} />
+                    </View>
                   </View>
                 </View>
               </Pressable>
@@ -453,6 +473,7 @@ function HirePane({
           }
 
           const ms = item.data;
+          const scoutAppearance = generateAppearance(ms.id, 'SCOUT', 35);
           const rangeLabel: Record<string, string> = { local: 'LOCAL', national: 'NATIONAL', international: 'INTL' };
           const rangeColor: Record<string, string> = { local: WK.dim, national: WK.yellow, international: WK.red };
           const range = ms.scoutingRange ?? 'local';
@@ -469,20 +490,24 @@ function HirePane({
               }]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Avatar appearance={undefined} role="SCOUT" size={44} />
+                <Avatar appearance={scoutAppearance} role="SCOUT" size={44} />
                 <View style={{ flex: 1 }}>
                   <BodyText size={14} upper numberOfLines={1}>{ms.firstName} {ms.lastName}</BodyText>
                   <PixelText size={8} color={rangeColor[range]}>{rangeLabel[range]} SCOUT</PixelText>
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                     <FlagText nationality={ms.nationality} size={11} />
-                    <BodyText size={11} dim>· £{Math.round(ms.salary / 100).toLocaleString()}/wk</BodyText>
+                    <BodyText size={11} dim>· </BodyText>
+                    <Money pence={ms.salary} dim size={11} />
+                    <BodyText size={11} dim>/wk</BodyText>
                   </View>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                   <Badge label={`${ms.successRate}%`} color="green" />
-                  <BodyText size={10} dim>Fee: £{signingFeePounds.toLocaleString()}</BodyText>
-                </View>
-              </View>
+                  <View style={{ flexDirection: 'row', gap: 3 }}>
+                    <BodyText size={10} dim>Fee:</BodyText>
+                    <Money pence={ms.salary * 4} dim size={10} />
+                  </View>
+                </View>              </View>
             </Pressable>
           );
         }}
@@ -636,7 +661,7 @@ export default function FacilitiesScreen() {
             </View>
           )}
         </View>
-        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
+        <Money pence={club.balance ?? 0} size={14} color={WK.yellow} />
       </View>
 
       {activeTab === 'HIRE' ? (
@@ -665,9 +690,7 @@ export default function FacilitiesScreen() {
             ...pixelShadow,
           }}>
             <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
-            <PixelText size={12} color={WK.orange}>
-              £{(calculateTotalUpkeep(templates, levels) / 100).toFixed(2)}
-            </PixelText>
+            <Money pence={calculateTotalUpkeep(templates, levels)} color={WK.orange} size={12} />
           </View>
         </ScrollView>
       )}

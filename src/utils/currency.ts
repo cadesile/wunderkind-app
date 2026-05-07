@@ -1,8 +1,40 @@
 /**
  * Currency formatting utilities.
- * Backend stores all monetary values in pence (100 = £1.00).
- * Local Zustand stores use whole pounds — only use these formatters for API response data.
+ * All monetary values are stored and processed as pence integers (100 = £1.00).
+ * Conversion to pounds happens only at display time.
  */
+
+export type MoneyStyle = 'whole' | 'compact' | 'decimal';
+
+interface MoneyOptions {
+  style?: MoneyStyle;
+  symbol?: string;
+  sign?: boolean; // If true, always show + or -
+}
+
+/**
+ * The primary wrapper function for rendering all financial values.
+ * @param pence The value in pence to render.
+ * @param options Formatting options.
+ */
+export const renderMoney = (pence: number, options: MoneyOptions = {}): string => {
+  const { style = 'whole', symbol = '£', sign = false } = options;
+  const isNegative = pence < 0;
+  const absPence = Math.abs(pence);
+
+  let formatted = '';
+  if (style === 'compact') {
+    formatted = formatCurrencyCompact(absPence, symbol);
+  } else if (style === 'decimal') {
+    formatted = formatCurrency(absPence, symbol);
+  } else {
+    formatted = formatCurrencyWhole(absPence, symbol);
+  }
+
+  if (isNegative) return `-${formatted}`;
+  if (sign && pence > 0) return `+${formatted}`;
+  return formatted;
+};
 
 /**
  * Format pence to currency with 2 decimal places.
@@ -30,16 +62,16 @@ export const formatCurrencyWhole = (pence: number, symbol: string = '£'): strin
  * @example formatCurrencyCompact(500000) → "£5.0k"
  * @example formatCurrencyCompact(120000000) → "£1.2M"
  */
-export const formatCurrencyCompact = (pence: number): string => {
+export const formatCurrencyCompact = (pence: number, symbol: string = '£'): string => {
   const pounds = pence / 100;
 
   if (pounds >= 1_000_000) {
-    return `£${(pounds / 1_000_000).toFixed(1)}M`;
+    return `${symbol}${(pounds / 1_000_000).toFixed(1)}M`;
   } else if (pounds >= 1_000) {
-    return `£${(pounds / 1_000).toFixed(1)}k`;
+    return `${symbol}${(pounds / 1_000).toFixed(1)}k`;
   }
 
-  return formatCurrencyWhole(pence);
+  return formatCurrencyWhole(pence, symbol);
 };
 
 /**
@@ -47,6 +79,7 @@ export const formatCurrencyCompact = (pence: number): string => {
  * Handles negative values by prepending a minus sign.
  * @example formatPounds(5000) → "£5,000"
  * @example formatPounds(-200) → "-£200"
+ * @deprecated Use renderMoney instead.
  */
 export const formatPounds = (pounds: number, symbol: string = '£'): string => {
   const abs = Math.abs(pounds);

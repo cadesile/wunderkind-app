@@ -124,18 +124,19 @@ export function generateAppearance(
   }
 
   // ── Expression mapped from personality, random otherwise ──────────────────
+  const fallbackExpression = rng.pick([0, 0, 1, 2] as const);
   let expression: AppearanceExpression;
+
   if (personality) {
     if (personality.temperament > 14) {
       expression = 2; // stern
     } else if (personality.determination > 14) {
       expression = 1; // determined
     } else {
-      // Weighted toward neutral: 50% neutral, 25% determined, 25% stern
-      expression = rng.pick([0, 0, 1, 2] as const);
+      expression = fallbackExpression;
     }
   } else {
-    expression = rng.pick([0, 0, 1, 2] as const);
+    expression = fallbackExpression;
   }
 
   // ── Role-specific accessory ────────────────────────────────────────────────

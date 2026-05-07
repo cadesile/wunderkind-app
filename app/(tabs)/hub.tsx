@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { View, FlatList, ScrollView, Modal, Pressable, TextInput } from 'react-native';
 import { SlidersHorizontal } from 'lucide-react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -30,12 +30,14 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
-import { penceToPounds, formatPounds } from '@/utils/currency';
+import { Money } from '@/components/ui/Money';
 import { hapticTap, hapticWarning } from '@/utils/haptics';
+import { penceToPounds } from '@/utils/currency';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { Scout } from '@/types/market';
 import { ArchetypeBadge } from '@/components/ArchetypeBadge';
+import { PerformancePane } from '@/components/PerformancePane';
 import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 
@@ -89,6 +91,7 @@ function PlayerRow({ player }: { player: Player }) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
+        opacity: player.notForSale ? 0.5 : 1,
         ...pixelShadow,
       }}>
         {/* Avatar */}
@@ -169,7 +172,9 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
             <FlagText nationality={coach.nationality} size={11} />
             <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{coach.nationality}</BodyText>
-            <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(coach.salary / 100).toLocaleString()}/wk</BodyText>
+            <BodyText size={11} dim style={{ flexShrink: 0 }}>· </BodyText>
+            <Money pence={coach.salary} dim size={11} />
+            <BodyText size={11} dim style={{ flexShrink: 0 }}>/wk</BodyText>
           </View>
 
           {/* Influence bar */}
@@ -266,7 +271,9 @@ function ScoutRow({ scout }: { scout: Scout }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
               <FlagText nationality={scout.nationality} size={11} />
               <BodyText size={11} dim numberOfLines={1} style={{ flex: 1 }}>{scout.nationality}</BodyText>
-              <BodyText size={11} dim style={{ flexShrink: 0 }}>· £{Math.round(scout.salary / 100).toLocaleString()}/wk</BodyText>
+              <BodyText size={11} dim style={{ flexShrink: 0 }}>· </BodyText>
+              <Money pence={scout.salary} dim size={11} />
+              <BodyText size={11} dim style={{ flexShrink: 0 }}>/wk</BodyText>
             </View>
 
             {/* Success rate bar */}
@@ -426,7 +433,10 @@ function SquadPane() {
           defaultSortDir="desc"
           onRowPress={(p) => { hapticTap(); router.push(`/player/${p.id}`); }}
           emptyMessage="NO PLAYERS"
-          rowStyle={(p) => p.injury ? injuryStyle(p) : undefined}
+          rowStyle={(p) => ({
+            ...(p.injury ? injuryStyle(p) : {}),
+            opacity: p.notForSale ? 0.5 : 1,
+          })}
         />
       </ScrollView>
     </View>
@@ -526,7 +536,8 @@ function StaffPane() {
           {coaches.length} COACH{coaches.length !== 1 ? 'ES' : ''} · {scouts.length} SCOUT{scouts.length !== 1 ? 'S' : ''}
         </BodyText>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <BodyText size={11} dim>£{Math.round(totalWeeklyCost / 100).toLocaleString()}/wk</BodyText>
+          <Money pence={totalWeeklyCost} dim size={11} />
+          <BodyText size={11} dim>/wk</BodyText>
           <Pressable
             onPress={() => { hapticTap(); setShowFilter(true); }}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
@@ -602,7 +613,7 @@ function StaffPane() {
         <PixelDialog
           visible
           title="RELEASE STAFF"
-          message={`Release ${pendingFireCoach.coach.name}?\n\nEarly termination fee: £${pendingFireCoach.penalty.toLocaleString()}\n(25% of 26 remaining weeks)`}
+          message={<>Release {pendingFireCoach.coach.name}?{'\n\n'}Early termination fee: <Money pence={pendingFireCoach.penaltyPence} />{'\n'}(25% of 26 remaining weeks)</>}
           confirmLabel="RELEASE"
           confirmVariant="red"
           onConfirm={confirmFireCoach}
@@ -625,269 +636,7 @@ function StaffPane() {
 
 // ─── Performance Pane ────────────────────────────────────────────────────────
 
-type PerfSortKey = 'name' | 'games' | 'goals' | 'assists' | 'avgRating';
-
-function PerformancePane() {
-  const allPlayers = useSquadStore((s) => s.players);
-  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
-  const router = useRouter();
-
-  const [sortKey, setSortKey] = useState<PerfSortKey>('goals');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-
-  const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
-
-  const seasonNum = Math.ceil(weekNumber / 38);
-  const currentSeason = `Season ${seasonNum}`;
-  const seasonStartWeek = (seasonNum - 1) * 38 + 1;
-
-  type PlayerStats = {
-    player: Player;
-    games: number;
-    goals: number;
-    assists: number;
-    avgRating: number;
-    allTimeGoals: number;
-    allTimeAssists: number;
-    startOvr: number;
-    currentOvr: number;
-    improvement: number;
-  };
-
-  const playerStats = useMemo((): PlayerStats[] => {
-    return activePlayers.map((player) => {
-      const seasonData = player.appearances?.[currentSeason] ?? {};
-      const seasonMatches = Object.values(seasonData).flat();
-      const games = seasonMatches.length;
-      const goals = seasonMatches.reduce((s, m) => s + m.goals, 0);
-      const assists = seasonMatches.reduce((s, m) => s + m.assists, 0);
-      const totalRating = seasonMatches.reduce((s, m) => s + m.rating, 0);
-      const avgRating = games > 0 ? totalRating / games : 0;
-
-      const allMatches = Object.values(player.appearances ?? {}).flatMap((s) => Object.values(s).flat());
-      const allTimeGoals = allMatches.reduce((s, m) => s + m.goals, 0);
-      const allTimeAssists = allMatches.reduce((s, m) => s + m.assists, 0);
-
-      const log = player.developmentLog ?? [];
-      const startSnapshot = log.find((snap) => snap.weekNumber >= seasonStartWeek);
-      const startOvr = startSnapshot?.overallRating ?? player.overallRating;
-      const improvement = player.overallRating - startOvr;
-
-      return { player, games, goals, assists, avgRating, allTimeGoals, allTimeAssists, startOvr, currentOvr: player.overallRating, improvement };
-    });
-  }, [activePlayers, currentSeason, seasonStartWeek]);
-
-  const topScorerSeason    = useMemo(() => [...playerStats].filter((s) => s.goals > 0).sort((a, b) => b.goals - a.goals)[0] ?? null, [playerStats]);
-  const topScorerAllTime   = useMemo(() => [...playerStats].filter((s) => s.allTimeGoals > 0).sort((a, b) => b.allTimeGoals - a.allTimeGoals)[0] ?? null, [playerStats]);
-  const assistMakerSeason  = useMemo(() => [...playerStats].filter((s) => s.assists > 0).sort((a, b) => b.assists - a.assists)[0] ?? null, [playerStats]);
-  const assistMakerAllTime = useMemo(() => [...playerStats].filter((s) => s.allTimeAssists > 0).sort((a, b) => b.allTimeAssists - a.allTimeAssists)[0] ?? null, [playerStats]);
-  const seasonPerformers   = useMemo(() => playerStats.filter((s) => s.games > 0), [playerStats]);
-  const totalImprovement   = useMemo(() => playerStats.reduce((sum, s) => sum + Math.max(0, s.improvement), 0), [playerStats]);
-  const mostImproved       = useMemo(() => [...playerStats].filter((s) => s.improvement > 0).sort((a, b) => b.improvement - a.improvement)[0] ?? null, [playerStats]);
-
-  const sortedPerformers = useMemo(() => {
-    return [...seasonPerformers].sort((a, b) => {
-      let av: number | string = 0, bv: number | string = 0;
-      if (sortKey === 'name')      { av = a.player.name; bv = b.player.name; }
-      else if (sortKey === 'games')     { av = a.games;     bv = b.games; }
-      else if (sortKey === 'goals')     { av = a.goals;     bv = b.goals; }
-      else if (sortKey === 'assists')   { av = a.assists;   bv = b.assists; }
-      else if (sortKey === 'avgRating') { av = a.avgRating; bv = b.avgRating; }
-      if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
-      return sortDir === 'asc' ? av - (bv as number) : (bv as number) - av;
-    });
-  }, [seasonPerformers, sortKey, sortDir]);
-
-  function handleSort(key: PerfSortKey) {
-    hapticTap();
-    if (sortKey === key) setSortDir((d) => d === 'desc' ? 'asc' : 'desc');
-    else { setSortKey(key); setSortDir('desc'); }
-  }
-
-  // Render a leader panel (THIS SEASON or ALL TIME) — not a React component, avoids hook rule issues
-  function renderLeaderPanel(
-    label: string,
-    stat: PlayerStats | null,
-    statBadge: string,
-  ) {
-    if (!stat) {
-      return (
-        <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 12, minHeight: 130 }}>
-          <PixelText size={6} color={WK.dim} style={{ marginBottom: 10 }}>{label}</PixelText>
-          <BodyText size={11} dim>—</BodyText>
-        </View>
-      );
-    }
-    return (
-      <Pressable
-        style={({ pressed }) => ({
-          flex: 1,
-          backgroundColor: pressed ? WK.tealMid : WK.tealDark,
-          borderWidth: 2,
-          borderColor: WK.border,
-          padding: 12,
-          minHeight: 130,
-        })}
-        onPress={() => { hapticTap(); router.push(`/player/${stat.player.id}`); }}
-      >
-        {/* Section label */}
-        <PixelText size={6} color={WK.dim} style={{ marginBottom: 8 }}>{label}</PixelText>
-
-        {/* Stat badge + position */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <View style={{ backgroundColor: WK.yellow, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 7, paddingVertical: 4 }}>
-            <PixelText size={9} color={WK.border}>{statBadge}</PixelText>
-          </View>
-        </View>
-
-        {/* Player first name */}
-        <BodyText size={15} upper numberOfLines={1} style={{ marginBottom: 10 }}>
-          {stat.player.name.split(' ')[0]}
-        </BodyText>
-
-        {/* Avatar + age */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Avatar appearance={stat.player.appearance} role="PLAYER" size={32} morale={stat.player.morale ?? 70} age={stat.player.age} />
-          <BodyText size={11} dim>AGE {stat.player.age}</BodyText>
-          <BodyText size={12} dim>{stat.player.position}</BodyText>
-        </View>
-      </Pressable>
-    );
-  }
-
-  function SortHeader({ label, col, flex, width }: { label: string; col: PerfSortKey; flex?: number; width?: number }) {
-    const active = sortKey === col;
-    const arrow = sortDir === 'desc' ? ' v' : ' ^';
-    return (
-      <Pressable
-        onPress={() => handleSort(col)}
-        hitSlop={8}
-        style={[
-          { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-          flex != null ? { flex } : { width },
-        ]}
-      >
-        <PixelText size={6} color={active ? WK.yellow : WK.dim}>
-          {label}{active ? arrow : ''}
-        </PixelText>
-      </Pressable>
-    );
-  }
-
-  return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
-
-      {/* TOP SCORER */}
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>TOP SCORER</PixelText>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {renderLeaderPanel('THIS SEASON', topScorerSeason, topScorerSeason ? `${topScorerSeason.goals} GOALS` : '— GOALS')}
-          {renderLeaderPanel('ALL TIME', topScorerAllTime, topScorerAllTime ? `${topScorerAllTime.allTimeGoals} GOALS` : '— GOALS')}
-        </View>
-      </View>
-
-      {/* ASSIST MAKER */}
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>ASSIST MAKER</PixelText>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {renderLeaderPanel('THIS SEASON', assistMakerSeason, assistMakerSeason ? `${assistMakerSeason.assists} ASSISTS` : '— ASSISTS')}
-          {renderLeaderPanel('ALL TIME', assistMakerAllTime, assistMakerAllTime ? `${assistMakerAllTime.allTimeAssists} ASSISTS` : '— ASSISTS')}
-        </View>
-      </View>
-
-      {/* SEASON PERFORMANCE TABLE */}
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>SEASON PERFORMANCE</PixelText>
-
-        {/* Sortable header row */}
-        <View style={{ flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: WK.border, marginBottom: 4 }}>
-          <SortHeader label="NAME" col="name" flex={2.5} />
-          <View style={{ width: 22, justifyContent: 'center', alignItems: 'center', paddingVertical: 6 }}>
-            <PixelText size={6} color={WK.dim}>NAT</PixelText>
-          </View>
-          <SortHeader label="GP"  col="games"     width={28} />
-          <SortHeader label="G"   col="goals"     width={24} />
-          <SortHeader label="A"   col="assists"   width={24} />
-          <SortHeader label="RTG" col="avgRating" width={36} />
-        </View>
-
-        {sortedPerformers.length === 0 ? (
-          <BodyText size={11} dim style={{ textAlign: 'center', marginTop: 16 }}>
-            NO MATCH DATA — PLAY A FIXTURE
-          </BodyText>
-        ) : (
-          sortedPerformers.map((s) => (
-            <Pressable
-              key={s.player.id}
-              onPress={() => { hapticTap(); router.push(`/player/${s.player.id}`); }}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 7,
-                borderBottomWidth: 1,
-                borderBottomColor: WK.border + '44',
-                backgroundColor: pressed ? WK.tealDark : 'transparent',
-              })}
-            >
-              <BodyText size={12} upper numberOfLines={1} style={{ flex: 2.5 }}>{shortName(s.player.name)}</BodyText>
-              <View style={{ width: 22, alignItems: 'center' }}>
-                <FlagText nationality={s.player.nationality} size={12} />
-              </View>
-              <PixelText size={7} style={{ width: 28, textAlign: 'center' }}>{s.games}</PixelText>
-              <PixelText size={7} color={s.goals > 0 ? WK.yellow : WK.dim} style={{ width: 24, textAlign: 'center' }}>{s.goals}</PixelText>
-              <PixelText size={7} color={s.assists > 0 ? WK.tealLight : WK.dim} style={{ width: 24, textAlign: 'center' }}>{s.assists}</PixelText>
-              <PixelText size={7} color={WK.text} style={{ width: 36, textAlign: 'center' }}>{s.avgRating > 0 ? s.avgRating.toFixed(1) : '—'}</PixelText>
-            </Pressable>
-          ))
-        )}
-      </View>
-
-      {/* SEASON DEVELOPMENT */}
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>SEASON DEVELOPMENT</PixelText>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, marginBottom: 12 }}>
-          <BodyText size={13} dim>SQUAD OVR GAINED</BodyText>
-          <PixelText size={10} color={totalImprovement > 0 ? WK.green : WK.dim}>+{totalImprovement}</PixelText>
-        </View>
-
-        <PixelText size={6} color={WK.dim} style={{ marginBottom: 8 }}>MOST IMPROVED</PixelText>
-        {mostImproved ? (
-          <Pressable
-            onPress={() => { hapticTap(); router.push(`/player/${mostImproved.player.id}`); }}
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? WK.tealMid : WK.tealDark,
-              borderWidth: 2,
-              borderColor: WK.green,
-              padding: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-            })}
-          >
-            <Avatar appearance={mostImproved.player.appearance} role="PLAYER" size={40} morale={mostImproved.player.morale ?? 70} age={mostImproved.player.age} />
-            <View style={{ flex: 1 }}>
-              <BodyText size={13} upper numberOfLines={1}>{mostImproved.player.name}</BodyText>
-              <BodyText size={11} dim style={{ marginTop: 2 }}>{mostImproved.player.position} · {mostImproved.player.nationality}</BodyText>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <View style={{ backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 6, paddingVertical: 3 }}>
-                  <PixelText size={7} color={WK.dim}>START {mostImproved.startOvr}</PixelText>
-                </View>
-                <PixelText size={8} color={WK.dim}>→</PixelText>
-                <View style={{ backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.green, paddingHorizontal: 6, paddingVertical: 3 }}>
-                  <PixelText size={7} color={WK.green}>NOW {mostImproved.currentOvr}</PixelText>
-                </View>
-                <Badge label={`+${mostImproved.improvement}`} color="green" />
-              </View>
-            </View>
-          </Pressable>
-        ) : (
-          <BodyText size={11} dim>No development data yet.</BodyText>
-        )}
-      </View>
-    </ScrollView>
-  );
-}
+// Moved to src/components/PerformancePane.tsx
 
 // ─── Dressing Room ────────────────────────────────────────────────────────────
 
@@ -1173,15 +922,22 @@ function UpkeepWarningBanner() {
       alignItems: 'center',
     }}>
       <BodyText size={13} color={WK.text}>HIGH UPKEEP</BodyText>
-      <BodyText size={13} color={WK.text}>
-        £{penceToPounds(totalUpkeep).toLocaleString()}/WK · {weeksUntilBroke}WK LEFT
-      </BodyText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Money pence={totalUpkeep} color={WK.text} size={13} />
+        <BodyText size={13} color={WK.text}>/WK · {weeksUntilBroke}WK LEFT</BodyText>
+      </View>
     </View>
   );
 }
 
 export default function ClubHubScreen() {
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<ClubTab>('SQUAD');
+  useEffect(() => {
+    if (tabParam && CLUB_TABS.includes(tabParam as ClubTab)) {
+      setActiveTab(tabParam as ClubTab);
+    }
+  }, [tabParam]);
   const [renameTarget, setRenameTarget] = useState<Clique | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameClique = useInteractionStore((s) => s.renameClique);
@@ -1215,7 +971,7 @@ export default function ClubHubScreen() {
         alignItems: 'center',
       }}>
         <PixelText size={10} upper>Club</PixelText>
-        <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
+        <Money pence={club.balance ?? 0} size={14} color={WK.yellow} />
       </View>
       <UpkeepWarningBanner />
       <DangerStatusCard />

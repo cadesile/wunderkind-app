@@ -207,7 +207,7 @@ export const useWorldStore = create<WorldState>()(
             const weekNumber = useClubStore.getState().club.weekNumber ?? 1;
             if (tvDeal > 0) {
               useFinanceStore.getState().addTransaction({
-                amount:      penceToPounds(tvDeal),
+                amount:      tvDeal,
                 category:    'tv_deal',
                 description: 'Season 1 TV deal',
                 weekNumber,
@@ -215,7 +215,7 @@ export const useWorldStore = create<WorldState>()(
             }
             if (sponsorPot > 0) {
               useFinanceStore.getState().addTransaction({
-                amount:      penceToPounds(sponsorPot),
+                amount:      sponsorPot,
                 category:    'league_sponsor',
                 description: 'Season 1 league sponsor',
                 weekNumber,

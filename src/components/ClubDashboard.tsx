@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -12,12 +12,15 @@ import { ChevronRight, Trophy, UserPlus } from 'lucide-react-native';
 import useClubMetrics from '@/hooks/useClubMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
+import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
+import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
@@ -31,7 +34,7 @@ import { FanFavoriteCard } from '@/components/FanFavoriteCard';
 import { PixelFootballBadge } from '@/components/ui/ClubBadge/PixelFootballBadge';
 import { WK, pixelShadow } from '@/constants/theme';
 import { InboxMessage } from '@/stores/inboxStore';
-import type { Player } from '@/types/player';
+import type { Player, DevelopmentSnapshot } from '@/types/player';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,78 +91,89 @@ function StatRow({ label, value, valueColor }: {
   );
 }
 
-// ─── Position groups for squad development chart ──────────────────────────────
+// ─── Squad OVR Development helpers ───────────────────────────────────────────
 
-const POS_GROUPS: { label: string; positions: string[] }[] = [
-  { label: 'GK',  positions: ['GK'] },
-  { label: 'DEF', positions: ['CB','LB','RB','LWB','RWB','SW','DC','DL','DR'] },
-  { label: 'MID', positions: ['CM','CAM','CDM','RM','LM','DM','AM','MC','ML','MR'] },
-  { label: 'FWD', positions: ['ST','CF','LW','RW','SS','FW','FC','ATT','WL','WR'] },
-];
-
-function SquadDevelopmentChart({ players }: { players: Player[] }) {
+/**
+ * Computes the aggregate OVR delta across active players for a given lookback window.
+ * weeksAgo=null → all-time (oldest snapshot as baseline).
+ * Only players who have a snapshot at or before the cutoff contribute to the result.
+ * NOTE: Baseline data comes from DevelopmentSnapshots recorded by GameLoop every 4 weeks
+ * (recordDevelopmentSnapshots). If no snapshots exist yet, returns null.
+ */
+function computeSquadOVRDelta(
+  players: Player[],
+  currentWeek: number,
+  weeksAgo: number | null,
+): { delta: number; count: number } | null {
   const active = players.filter((p) => p.isActive);
-  if (active.length === 0) {
-    return <PixelText size={7} dim>No players enrolled yet.</PixelText>;
+  if (active.length === 0) return null;
+
+  let totalDelta = 0;
+  let count = 0;
+
+  for (const p of active) {
+    const log = p.developmentLog;
+    if (!log || log.length === 0) continue;
+
+    let baseline: DevelopmentSnapshot | undefined;
+    if (weeksAgo === null) {
+      baseline = log.reduce((a, b) => (a.weekNumber <= b.weekNumber ? a : b));
+    } else {
+      const cutoff = currentWeek - weeksAgo;
+      const candidates = log.filter((s) => s.weekNumber <= cutoff);
+      if (candidates.length === 0) continue;
+      baseline = candidates.reduce((a, b) => (a.weekNumber >= b.weekNumber ? a : b));
+    }
+
+    if (baseline !== undefined) {
+      totalDelta += p.overallRating - baseline.overallRating;
+      count++;
+    }
   }
 
-  const groups = POS_GROUPS.map((g) => {
-    const inGroup = active.filter((p) =>
-      g.positions.some((pos) => p.position?.toUpperCase().startsWith(pos)),
-    );
-    const avg = inGroup.length > 0
-      ? inGroup.reduce((s, p) => s + p.overallRating, 0) / inGroup.length
-      : 0;
-    const avgPot = inGroup.length > 0
-      ? inGroup.reduce((s, p) => s + p.potential, 0) / inGroup.length
-      : 0;
-    return { label: g.label, count: inGroup.length, avg, avgPot };
-  }).filter((g) => g.count > 0);
+  return count > 0 ? { delta: totalDelta, count } : null;
+}
 
-  const MAX_OVR = 20;
+function SquadOVRDevelopmentCard({ players, currentWeek }: { players: Player[]; currentWeek: number }) {
+  const rows = [
+    { label: 'ALL TIME',   result: computeSquadOVRDelta(players, currentWeek, null) },
+    { label: 'LAST 12 MO', result: computeSquadOVRDelta(players, currentWeek, 52) },
+    { label: 'LAST 12 WK', result: computeSquadOVRDelta(players, currentWeek, 12) },
+  ];
 
   return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 2 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <View style={{ width: 8, height: 8, backgroundColor: WK.tealLight, borderWidth: 1, borderColor: WK.border }} />
-          <BodyText size={10} dim>OVR</BodyText>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <View style={{ width: 8, height: 8, backgroundColor: WK.yellow + '60', borderWidth: 1, borderColor: WK.yellow }} />
-          <BodyText size={10} dim>POT</BodyText>
-        </View>
-      </View>
-
-      {groups.map((g) => (
-        <View key={g.label}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-            <View style={{ width: 28 }}>
-              <PixelText size={7} color={WK.yellow}>{g.label}</PixelText>
+    <View style={{ gap: 0 }}>
+      {rows.map(({ label, result }, i) => {
+        const isLast = i === rows.length - 1;
+        const deltaStr = result
+          ? `${result.delta >= 0 ? '+' : ''}${result.delta.toFixed(1)}`
+          : 'N/A';
+        const deltaColor = result
+          ? result.delta > 0 ? WK.green : result.delta < 0 ? WK.red : WK.dim
+          : WK.dim;
+        return (
+          <View
+            key={label}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8,
+              borderBottomWidth: isLast ? 0 : 2,
+              borderBottomColor: WK.border,
+            }}
+          >
+            <View style={{ width: 90 }}>
+              <BodyText size={11} dim>{label}</BodyText>
             </View>
             <View style={{ flex: 1 }}>
-              <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: WK.border, overflow: 'hidden' }}>
-                <View style={{
-                  position: 'absolute', top: 0, left: 0, bottom: 0,
-                  width: `${(g.avgPot / MAX_OVR) * 100}%`,
-                  backgroundColor: WK.yellow + '40',
-                }} />
-                <View style={{
-                  height: '100%',
-                  width: `${(g.avg / MAX_OVR) * 100}%`,
-                  backgroundColor: WK.tealLight,
-                }} />
-              </View>
+              <PixelText size={9} color={deltaColor}>{deltaStr}</PixelText>
             </View>
-            <View style={{ width: 36, alignItems: 'flex-end' }}>
-              <BodyText size={10} color={WK.tealLight}>{g.avg.toFixed(1)}</BodyText>
-            </View>
-            <View style={{ width: 22, alignItems: 'flex-end' }}>
-              <BodyText size={10} dim>×{g.count}</BodyText>
-            </View>
+            <BodyText size={10} dim>
+              {result ? `${result.count} plyr` : '—'}
+            </BodyText>
           </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -439,7 +453,7 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
 
 // ─── Row 2 Left: Latest Result ────────────────────────────────────────────────
 
-function LatestResultCard({ ampClubId }: { ampClubId: string }) {
+function LatestResultCard({ ampClubId, onPress }: { ampClubId: string; onPress?: () => void }) {
   const fixtures = useFixtureStore((s) => s.fixtures);
   const league   = useLeagueStore((s) => s.league);
 
@@ -468,7 +482,7 @@ function LatestResultCard({ ampClubId }: { ampClubId: string }) {
   const opponentClub = league?.clubs.find((c) => c.id === opponentId);
   const opponentName = opponentClub?.name ?? 'OPPONENT';
 
-  return (
+  const card = (
     <View style={{
       flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
       padding: 14, ...pixelShadow,
@@ -496,19 +510,27 @@ function LatestResultCard({ ampClubId }: { ampClubId: string }) {
       </View>
     </View>
   );
+
+  if (onPress) {
+    return (
+      <Pressable style={{ flex: 1 }} onPress={onPress} hitSlop={4}>
+        {card}
+      </Pressable>
+    );
+  }
+  return card;
 }
 
 // ─── Row 2 Right: Season stats (Top Scorer + Top Assists) ─────────────────────
 
 function AmpSeasonStatCards({ ampClubId, players }: { ampClubId: string; players: Player[] }) {
   const fixtures = useFixtureStore((s) => s.fixtures);
+  const lsRecords = useLeagueStatsStore((s) => s.records);
 
   const currentSeasonNumber = useMemo(() => {
     if (fixtures.length === 0) return 1;
     return Math.max(...fixtures.map((f) => f.season));
   }, [fixtures]);
-
-  const seasonKey = `Season ${currentSeasonNumber}`;
 
   const { topScorer, topGoals, topAssister, topAssists } = useMemo(() => {
     let topScorer: Player | null   = null;
@@ -517,14 +539,16 @@ function AmpSeasonStatCards({ ampClubId, players }: { ampClubId: string; players
     let topAssists                 = -1;
 
     for (const p of players.filter((p) => p.isActive)) {
-      const apps    = p.appearances?.[seasonKey]?.[ampClubId] ?? [];
-      const goals   = apps.reduce((s, a) => s + (a.goals   ?? 0), 0);
-      const assists = apps.reduce((s, a) => s + (a.assists  ?? 0), 0);
+      const relevant = Object.values(lsRecords).filter(
+        (r) => r.playerId === p.id && r.season === currentSeasonNumber && r.clubId === ampClubId,
+      );
+      const goals   = relevant.reduce((s, r) => s + r.goals, 0);
+      const assists = relevant.reduce((s, r) => s + r.assists, 0);
       if (goals   > topGoals)   { topGoals   = goals;   topScorer   = p; }
       if (assists > topAssists) { topAssists = assists; topAssister = p; }
     }
     return { topScorer, topGoals, topAssister, topAssists };
-  }, [players, seasonKey, ampClubId]);
+  }, [players, lsRecords, currentSeasonNumber, ampClubId]);
 
   return (
     <View style={{ gap: 8 }}>
@@ -598,12 +622,41 @@ export function ClubDashboard() {
     weeklyNetCashflow,
   } = useClubMetrics();
 
-  const messages = useInboxStore((s) => s.messages);
-  const club     = useClubStore((s) => s.club);
-  const archetypes = useArchetypeStore((s) => s.archetypes);
-  const players  = useSquadStore((s) => s.players);
-  const coaches  = useCoachStore((s) => s.coaches);
+  const messages     = useInboxStore((s) => s.messages);
+  const club         = useClubStore((s) => s.club);
+  const archetypes   = useArchetypeStore((s) => s.archetypes);
+  const players      = useSquadStore((s) => s.players);
+  const coaches      = useCoachStore((s) => s.coaches);
   const { levels, conditions, templates: facilityTemplates } = useFacilityStore();
+  const leagueClubs  = useLeagueStore((s) => s.clubs);
+  const allFixtures  = useFixtureStore((s) => s.fixtures);
+
+  // ── Match result overlay ───────────────────────────────────────────────────
+  const [overlayFixtureId, setOverlayFixtureId] = useState<string | null>(null);
+
+  const latestPlayedFixture = useMemo(() => {
+    return allFixtures
+      .filter((f) => f.result !== null && (f.homeClubId === club.id || f.awayClubId === club.id))
+      .sort((a, b) => new Date(b.result!.playedAt).getTime() - new Date(a.result!.playedAt).getTime())[0] ?? null;
+  }, [allFixtures, club.id]);
+
+  const dashboardClubNameMap = useMemo(() => {
+    const map = new Map<string, string>(leagueClubs.map((c) => [c.id, c.name]));
+    map.set(club.id, club.name);
+    return map;
+  }, [leagueClubs, club.id, club.name]);
+
+  const overlayFixture = useMemo(
+    () => allFixtures.find((f) => f.id === overlayFixtureId) ?? null,
+    [allFixtures, overlayFixtureId],
+  );
+
+  const matchResults = useMatchResultStore((s) => s.results);
+
+  const overlayData = useMemo(() => {
+    if (!overlayFixture) return null;
+    return buildMatchResultData(overlayFixture, club.id, club.name, dashboardClubNameMap, matchResults);
+  }, [overlayFixture, club.id, club.name, dashboardClubNameMap, matchResults]);
 
   const crownJewelArchetype = crownJewel
     ? getArchetypeForPlayer(crownJewel, archetypes)
@@ -627,11 +680,6 @@ export function ClubDashboard() {
   const latestSigning    = activePlayers.length > 0
     ? activePlayers.reduce((best, p) => (p.joinedWeek ?? 0) > (best.joinedWeek ?? 0) ? p : best)
     : null;
-  const avgPotential     = activePlayers.length > 0
-    ? activePlayers.reduce((sum, p) => sum + p.potential, 0) / activePlayers.length
-    : 0;
-  const highCeilingCount = activePlayers.filter((p) => p.potential >= 70).length;
-
   const injuredPlayers  = players.filter((p) => p.injury && p.injury.weeksRemaining > 0);
   const minorCount      = injuredPlayers.filter((p) => p.injury!.severity === 'minor').length;
   const moderateCount   = injuredPlayers.filter((p) => p.injury!.severity === 'moderate').length;
@@ -660,6 +708,7 @@ export function ClubDashboard() {
   const nextLabel = nextTier ?? 'MAX';
 
   return (
+    <>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 10, paddingBottom: 20 }}>
       <PitchBackground />
 
@@ -674,7 +723,10 @@ export function ClubDashboard() {
 
       {/* ── Row 2: Latest Result | Top Scorer + Top Assists ──────────────── */}
       <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
-        <LatestResultCard ampClubId={club.id} />
+        <LatestResultCard
+          ampClubId={club.id}
+          onPress={latestPlayedFixture ? () => setOverlayFixtureId(latestPlayedFixture.id) : undefined}
+        />
         <View style={{ flex: 1 }}>
           <AmpSeasonStatCards ampClubId={club.id} players={players} />
         </View>
@@ -771,40 +823,50 @@ export function ClubDashboard() {
       {/* ── Row 5: Latest Signing | Roster Balance ───────────────────────── */}
       <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10, alignItems: 'flex-start' }}>
         {/* Latest Signing */}
-        <View style={{
-          flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
-          padding: 12, gap: 6, ...pixelShadow,
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-            <UserPlus size={12} color={WK.dim} />
-            <BodyText size={10} dim>LATEST SIGNING</BodyText>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => latestSigning && router.push(`/player/${latestSigning.id}`)}
+        >
+          <View style={{
+            flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+            padding: 12, gap: 6, ...pixelShadow,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+              <UserPlus size={12} color={WK.dim} />
+              <BodyText size={10} dim>LATEST SIGNING</BodyText>
+            </View>
+            {latestSigning ? (
+              <>
+                <PixelText size={8} numberOfLines={1}>{latestSigning.name}</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <BodyText size={10} color={WK.tealLight}>{latestSigning.position}</BodyText>
+                  <BodyText size={10} dim>·</BodyText>
+                  <BodyText size={10} color={WK.yellow}>OVR {latestSigning.overallRating}</BodyText>
+                </View>
+                <BodyText size={10} dim>WK {latestSigning.joinedWeek ?? '–'}</BodyText>
+              </>
+            ) : (
+              <BodyText size={10} dim>No signings yet</BodyText>
+            )}
           </View>
-          {latestSigning ? (
-            <>
-              <PixelText size={8} numberOfLines={1}>{latestSigning.name}</PixelText>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <BodyText size={10} color={WK.tealLight}>{latestSigning.position}</BodyText>
-                <BodyText size={10} dim>·</BodyText>
-                <BodyText size={10} color={WK.yellow}>OVR {latestSigning.overallRating}</BodyText>
-              </View>
-              <BodyText size={10} dim>WK {latestSigning.joinedWeek ?? '–'}</BodyText>
-            </>
-          ) : (
-            <BodyText size={10} dim>No signings yet</BodyText>
-          )}
-        </View>
+        </Pressable>
 
         {/* Roster Balance */}
-        <View style={{
-          flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
-          padding: 12, ...pixelShadow,
-        }}>
-          <PixelText size={7} dim upper style={{ marginBottom: 12 }}>Roster Balance</PixelText>
-          <RosterStackedBar
-            playerCount={activePlayers.length}
-            coachCount={coaches.length}
-          />
-        </View>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => router.push('/(tabs)/hub?tab=SQUAD')}
+        >
+          <View style={{
+            flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
+            padding: 12, ...pixelShadow,
+          }}>
+            <PixelText size={7} dim upper style={{ marginBottom: 12 }}>Roster Balance</PixelText>
+            <RosterStackedBar
+              playerCount={activePlayers.length}
+              coachCount={coaches.length}
+            />
+          </View>
+        </Pressable>
       </View>
 
       {/* ── Row 6: Inbox ─────────────────────────────────────────────────── */}
@@ -894,13 +956,18 @@ export function ClubDashboard() {
             {tickDeltaSign}£{Math.abs(tickDeltaPounds).toLocaleString()} NEXT TICK
           </BodyText>
         </View>
-        <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 12, ...pixelShadow }}>
-          <BodyText size={12} dim style={{ marginBottom: 6 }}>SALES</BodyText>
-          <PixelText size={10} color={WK.green} numberOfLines={1}>
-            £{careerSalesPounds.toLocaleString()}
-          </PixelText>
-          <BodyText size={11} dim style={{ marginTop: 5 }}>CAREER TOTAL</BodyText>
-        </View>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => router.push('/transfers?filter=out')}
+        >
+          <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 12, ...pixelShadow }}>
+            <BodyText size={12} dim style={{ marginBottom: 6 }}>SALES</BodyText>
+            <PixelText size={10} color={WK.green} numberOfLines={1}>
+              £{careerSalesPounds.toLocaleString()}
+            </PixelText>
+            <BodyText size={11} dim style={{ marginTop: 5 }}>CAREER TOTAL</BodyText>
+          </View>
+        </Pressable>
       </View>
 
       {/* Negative balance warning */}
@@ -923,8 +990,11 @@ export function ClubDashboard() {
       )}
 
       {/* Leaderboard Position */}
-      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
-        <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 12, gap: 6, ...pixelShadow }}>
+      <Pressable
+        onPress={() => router.push('/(tabs)/competitions?tab=RANKINGS')}
+        style={{ marginHorizontal: 10, marginBottom: 10 }}
+      >
+        <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 12, gap: 6, ...pixelShadow }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
             <Trophy size={12} color={WK.dim} />
             <BodyText size={10} dim>LEADERBOARD</BodyText>
@@ -935,27 +1005,15 @@ export function ClubDashboard() {
           <BodyText size={10} dim>REP {club.reputation.toFixed(1)}</BodyText>
           <BodyText size={10} color={WK.tealLight}>{(club.reputationTier ?? 'LOCAL').toUpperCase()}</BodyText>
         </View>
-        {/* Squad Potential */}
-        <View style={{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 12, ...pixelShadow }}>
-          <BodyText size={12} dim style={{ marginBottom: 6 }}>SQUAD POTENTIAL</BodyText>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-            <PixelText size={11} color={WK.yellow}>{avgPotential.toFixed(1)}</PixelText>
-            <BodyText size={11} dim>/ 100 AVG</BodyText>
-          </View>
-          <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border, marginBottom: 6, overflow: 'hidden' }}>
-            <View style={{ height: '100%', width: `${Math.min(avgPotential, 100)}%`, backgroundColor: WK.yellow }} />
-          </View>
-          <BodyText size={11} color={highCeilingCount > 0 ? WK.tealLight : WK.dim}>
-            {highCeilingCount} HIGH CEILING
-          </BodyText>
-        </View>
-      </View>
+      </Pressable>
 
       {/* Squad Development */}
-      <SectionCard>
-        <PixelText size={7} dim upper style={{ marginBottom: 10 }}>Squad Development</PixelText>
-        <SquadDevelopmentChart players={players} />
-      </SectionCard>
+      <Pressable onPress={() => router.push('/(tabs)/hub?tab=PERFORMANCE')}>
+        <SectionCard>
+          <PixelText size={7} dim upper style={{ marginBottom: 10 }}>Squad Development</PixelText>
+          <SquadOVRDevelopmentCard players={players} currentWeek={club.weekNumber ?? 1} />
+        </SectionCard>
+      </Pressable>
 
       {/* Medical Report */}
       <SectionCard>
@@ -1026,5 +1084,12 @@ export function ClubDashboard() {
         )}
       </SectionCard>
     </ScrollView>
+
+    <MatchResultOverlay
+      visible={overlayFixtureId !== null}
+      data={overlayData}
+      onClose={() => setOverlayFixtureId(null)}
+    />
+  </>
   );
 }

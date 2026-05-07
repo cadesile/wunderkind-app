@@ -169,4 +169,6 @@ export interface Player {
   developmentLog?: DevelopmentSnapshot[];
   /** Match appearance history — keyed season → clubId → appearances[] */
   appearances?: PlayerAppearances;
+  /** If true, the club will not receive any transfer bids for this player */
+  notForSale?: boolean;
 }

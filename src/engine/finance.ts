@@ -79,10 +79,8 @@ export function calculateWeeklyFinances(
   // Sponsor income
   const sponsorIncome = sponsors.reduce((sum, s) => sum + s.weeklyPayment, 0);
 
-  // Reputation-based passive income
-  const reputationIncome = Math.floor(club.reputation * 100);
-
-  const income = sponsorIncome + reputationIncome;
+  // Reputation-based passive income is disabled
+  const income = sponsorIncome;
   const net = income - expenses;
 
   return { week, income, expenses, net, breakdown };

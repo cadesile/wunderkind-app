@@ -29,8 +29,10 @@ import { PixelFootballBadge } from '@/components/ui/ClubBadge/PixelFootballBadge
 import { StadiumView } from '@/components/stadium/StadiumView';
 import type { StadiumFacility } from '@/components/stadium/StadiumView';
 import type { BaseShape } from '@/components/ui/ClubBadge/types';
-import { penceToPounds, formatPounds } from '@/utils/currency';
+import { Money } from '@/components/ui/Money';
 import { hapticTap } from '@/utils/haptics';
+import { ManagerSackingOverlay } from '@/components/ManagerSackingOverlay';
+import { penceToPounds } from '@/utils/currency';
 import type { StaffRole, Coach } from '@/types/coach';
 import FansScreen from '../office/fans';
 
@@ -90,7 +92,7 @@ function FacilityCard({
   function confirmUpgrade() {
     setUpgradeModalVisible(false);
     upgradeLevel(template.slug);
-    addBalance(-upgradeCost * 100);
+    addBalance(-upgradeCost);
     useFinanceStore.getState().addTransaction({
       amount:      -upgradeCost,
       category:    'facility_upgrade',
@@ -161,14 +163,14 @@ function FacilityCard({
       </View>
 
       <BodyText size={12} dim style={{ marginBottom: 12 }}>
-        MAINT: {maintenance === 0 ? 'FREE' : `£${(maintenance / 100).toFixed(2)}/wk`}
-        {!atMax ? `  ·  LV${level + 1}: £${(nextMaintenance / 100).toFixed(2)}/wk` : ''}
+        MAINT: {maintenance === 0 ? 'FREE' : <Money pence={maintenance} dim />}
+        {!atMax ? <>  ·  LV{level + 1}: <Money pence={nextMaintenance} dim /></> : ''}
       </BodyText>
 
       <View style={{ gap: 8 }}>
         {needsRepair && (
           <Button
-            label={`REPAIR  £${repairCost.toLocaleString()}`}
+            label={`REPAIR  £${Math.round(repairCost / 100).toLocaleString()}`}
             variant={condition < 30 ? 'orange' : 'teal'}
             fullWidth
             onPress={() => setRepairModalVisible(true)}
@@ -182,7 +184,7 @@ function FacilityCard({
           </View>
         ) : (
           <Button
-            label={`UPGRADE → LV${level + 1}  £${upgradeCost.toLocaleString()}`}
+            label={`UPGRADE → LV${level + 1}  £${Math.round(upgradeCost / 100).toLocaleString()}`}
             variant={canAffordUpgrade ? 'yellow' : 'teal'}
             fullWidth
             onPress={() => setUpgradeModalVisible(true)}
@@ -197,13 +199,19 @@ function FacilityCard({
             <View style={{ backgroundColor: WK.tealCard, borderWidth: 4, borderColor: WK.yellow, padding: 20, minWidth: 280, maxWidth: 340, ...pixelShadow }}>
               <PixelText size={9} upper style={{ marginBottom: 12 }}>Upgrade {template.label}</PixelText>
               {!canAffordUpgrade ? (
-                <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>
-                  INSUFFICIENT FUNDS — need £{upgradeCost.toLocaleString()}
-                </BodyText>
+                <View style={{ marginBottom: 20 }}>
+                  <BodyText size={13} color={WK.orange}>
+                    INSUFFICIENT FUNDS — need
+                  </BodyText>
+                  <Money pence={upgradeCost} color={WK.orange} size={13} />
+                </View>
               ) : (
                 <>
                   <BodyText size={13} dim style={{ marginBottom: 4 }}>LEVEL {level} → {level + 1}</BodyText>
-                  <BodyText size={13} color={WK.yellow} style={{ marginBottom: 20 }}>COST: £{upgradeCost.toLocaleString()}</BodyText>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 20 }}>
+                    <BodyText size={13} color={WK.yellow}>COST:</BodyText>
+                    <Money pence={upgradeCost} color={WK.yellow} size={13} />
+                  </View>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -221,13 +229,19 @@ function FacilityCard({
             <View style={{ backgroundColor: WK.tealCard, borderWidth: 4, borderColor: WK.orange, padding: 20, minWidth: 280, maxWidth: 340, ...pixelShadow }}>
               <PixelText size={9} upper style={{ marginBottom: 12 }}>Repair {template.label}</PixelText>
               {!canAffordRepair ? (
-                <BodyText size={13} color={WK.red} style={{ marginBottom: 20 }}>
-                  INSUFFICIENT FUNDS — need £{repairCost.toLocaleString()}
-                </BodyText>
+                <View style={{ marginBottom: 20 }}>
+                  <BodyText size={13} color={WK.red}>
+                    INSUFFICIENT FUNDS — need
+                  </BodyText>
+                  <Money pence={repairCost * 100} color={WK.red} size={13} />
+                </View>
               ) : (
                 <>
                   <BodyText size={13} dim style={{ marginBottom: 4 }}>CONDITION {Math.round(condition)}% → 100%</BodyText>
-                  <BodyText size={13} color={WK.orange} style={{ marginBottom: 20 }}>COST: £{repairCost.toLocaleString()}</BodyText>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 20 }}>
+                    <BodyText size={13} color={WK.orange}>COST:</BodyText>
+                    <Money pence={repairCost * 100} color={WK.orange} size={13} />
+                  </View>
                 </>
               )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -564,10 +578,32 @@ function KeyStaffSection({
   coaches: Coach[];
   onNavigateToHire: (role: string) => void;
 }) {
-  const archetypes = useArchetypeStore((s) => s.archetypes);
+  const archetypes     = useArchetypeStore((s) => s.archetypes);
   const managerRecords = useManagerRecordStore((s) => s.records);
+  const club           = useClubStore((s) => s.club);
+
+  const [sackTarget, setSackTarget] = useState<Coach | null>(null);
+
+  function confirmSack() {
+    if (!sackTarget) return;
+    const { removeCoach } = useCoachStore.getState();
+    const { addBalance } = useClubStore.getState();
+    const { addTransaction } = useFinanceStore.getState();
+    // 25% early-termination fee (same as coach release)
+    const penaltyPence = Math.floor(sackTarget.salary * 26 * 0.25);
+    addBalance(-penaltyPence);
+    addTransaction({
+      amount: -penaltyPence,
+      category: 'contract_termination',
+      description: `Sacked ${sackTarget.name} (manager termination)`,
+      weekNumber: club.weekNumber ?? 1,
+    });
+    removeCoach(sackTarget.id);
+    setSackTarget(null);
+  }
 
   return (
+    <>
     <SectionCard label="KEY STAFF">
       {SINGLETON_ROLES.map(({ role, label }, idx) => {
         const hired = coaches.find((c) => c.role === role);
@@ -674,6 +710,22 @@ function KeyStaffSection({
                     value={!!hired.autoManageEvents}
                     onToggle={() => updateCoach(hired.id, { autoManageEvents: !hired.autoManageEvents })}
                   />
+
+                  {/* Sack manager button */}
+                  <Pressable
+                    onPress={() => { hapticTap(); setSackTarget(hired); }}
+                    style={{
+                      marginTop: 10,
+                      paddingVertical: 10,
+                      alignItems: 'center',
+                      borderWidth: 2,
+                      borderColor: WK.red,
+                      backgroundColor: 'rgba(200,30,30,0.10)',
+                    }}
+                    hitSlop={4}
+                  >
+                    <PixelText size={7} color={WK.red}>SACK MANAGER</PixelText>
+                  </Pressable>
                 </View>
               );
             })()}
@@ -721,6 +773,19 @@ function KeyStaffSection({
         );
       })}
     </SectionCard>
+
+    {sackTarget && (
+      <ManagerSackingOverlay
+        visible={sackTarget !== null}
+        manager={sackTarget}
+        record={managerRecords[sackTarget.id]}
+        allTrophies={club.trophies ?? []}
+        currentWeek={club.weekNumber ?? 1}
+        onConfirm={confirmSack}
+        onCancel={() => setSackTarget(null)}
+      />
+    )}
+  </>
   );
 }
 
@@ -1004,7 +1069,7 @@ export default function OfficeScreen() {
       }}>
         <PixelText size={10} upper>Office</PixelText>
         {activeTab === 'STADIUM'
-          ? <PixelText size={7} color={WK.yellow}>{formatPounds(balance)}</PixelText>
+          ? <Money pence={club.balance ?? 0} size={14} color={WK.yellow} />
           : <Badge label={(club.reputationTier ?? 'LOCAL').toUpperCase()} color="yellow" />
         }
       </View>
@@ -1071,9 +1136,7 @@ export default function OfficeScreen() {
                 ...pixelShadow,
               }}>
                 <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
-                <PixelText size={12} color={WK.orange}>
-                  £{(calculateTotalUpkeep(stadiumTemplates, levels) / 100).toFixed(2)}
-                </PixelText>
+                <Money pence={calculateTotalUpkeep(stadiumTemplates, levels)} color={WK.orange} size={12} />
               </View>
             )}
           </ScrollView>

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { View, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react-native';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
@@ -10,7 +10,7 @@ import { useFinanceStore } from '@/stores/financeStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
-import { formatCurrencyCompact } from '@/utils/currency';
+import { Money } from '@/components/ui/Money';
 import type { TransferRecord } from '@/types/finance';
 
 // ─── Data types ────────────────────────────────────────────────────────────────
@@ -52,13 +52,14 @@ const FILTERS: { key: Filter; label: string }[] = [
 // ─── Row helpers ───────────────────────────────────────────────────────────────
 
 function typeLabel(record: TransferRecord): string {
-  switch (record.type) {
+  const type = record.type as string;
+  switch (type) {
     case 'signing':        return 'SIGNED';
     case 'sale':           return 'SOLD';
     case 'agent_assisted': return 'SOLD';
     case 'loan':           return 'LOAN';
     case 'free_release':   return record.direction === 'out' ? 'RELEASED' : 'FREE';
-    default:               return record.type.toUpperCase();
+    default:               return type.toUpperCase();
   }
 }
 
@@ -199,7 +200,7 @@ function TransferRow({
       {/* Fee — right side */}
       {fee > 0 && (
         <View style={{ justifyContent: 'center', alignItems: 'flex-end', paddingRight: 12, paddingLeft: 6 }}>
-          <PixelText size={8} color={WK.yellow}>{formatCurrencyCompact(fee)}</PixelText>
+          <Money pence={fee} style="compact" size={8} color={WK.yellow} />
         </View>
       )}
     </View>
@@ -210,7 +211,13 @@ function TransferRow({
 
 export default function TransferHistoryScreen() {
   const router = useRouter();
+  const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
   const [filter, setFilter] = useState<Filter>('all');
+  useEffect(() => {
+    if (filterParam && FILTERS.some((f) => f.key === filterParam)) {
+      setFilter(filterParam as Filter);
+    }
+  }, [filterParam]);
 
   const ampRecords    = useFinanceStore((s) => s.transfers);
   const inboxMessages = useInboxStore((s) => s.messages);

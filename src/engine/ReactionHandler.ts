@@ -84,9 +84,9 @@ export function handleGuardianResponse(
       // balance is stored in pence — deduct pence directly
       useClubStore.getState().addBalance(-costPence);
 
-      // Ledger entry — amount in whole pounds, negative = expense
+      // Ledger entry — amount in pence, negative = expense
       useFinanceStore.getState().addTransaction({
-        amount: -Math.round(costPence / 100),
+        amount: -costPence,
         category: 'guardian_payment',
         description: `Guardian payment — ${player.name}`,
         weekNumber,

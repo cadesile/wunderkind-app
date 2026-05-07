@@ -47,8 +47,8 @@ export const useFinanceStore = create<FinanceState>()(
         set((state) => ({
           transactions: [newTx, ...state.transactions].slice(0, MAX_TRANSACTIONS),
         }));
-        // Ledger is the source of truth: amounts in whole pounds → balance in pence
-        useClubStore.getState().addBalance(newTx.amount * 100);
+        // Ledger is the source of truth: amount in pence → balance in pence
+        useClubStore.getState().addBalance(newTx.amount);
       },
 
       getRecentHistory: (weeks = ROLLING_WEEKS) => {

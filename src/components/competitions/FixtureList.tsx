@@ -13,6 +13,7 @@ export interface FixtureListProps {
   ampStadiumName: string | null;
   currentMatchday: number;
   onClubPress?: (clubId: string) => void;
+  onFixturePress?: (fixture: Fixture) => void;
 }
 
 interface FixtureSection {
@@ -20,7 +21,7 @@ interface FixtureSection {
   data: Fixture[];
 }
 
-export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumName, currentMatchday, onClubPress }: FixtureListProps) {
+export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumName, currentMatchday, onClubPress, onFixturePress }: FixtureListProps) {
   const listRef = useRef<SectionList<Fixture, FixtureSection>>(null);
 
   const clubNameMap = useMemo(() => {
@@ -124,7 +125,7 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumNam
           else resultColor = WK.yellow;
         }
 
-        return (
+        const rowContent = (
           <View style={{
             paddingHorizontal: 12,
             paddingVertical: 10,
@@ -192,6 +193,15 @@ export function FixtureList({ fixtures, clubs, ampClubId, ampName, ampStadiumNam
             </View>
           </View>
         );
+
+        if (isPlayed && onFixturePress) {
+          return (
+            <Pressable onPress={() => onFixturePress(item)} hitSlop={4}>
+              {rowContent}
+            </Pressable>
+          );
+        }
+        return rowContent;
       }}
       contentContainerStyle={{ paddingBottom: 80 }}
     />

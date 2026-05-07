@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
@@ -14,12 +15,13 @@ import { useInteractionStore } from '@/stores/interactionStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useGuardianStore } from '@/stores/guardianStore';
 import { useUnifiedPlayer } from '@/hooks/useUnifiedPlayer';
-import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { AttributesRadar } from '@/components/radar/AttributesRadar';
+import { Money } from '@/components/ui/Money';
 import { WK, pixelShadow, traitColor } from '@/constants/theme';
 import { AttributeName, TraitName, PlayerAppearances } from '@/types/player';
 import { Guardian } from '@/types/guardian';
@@ -176,6 +178,107 @@ function AttributeBar({ name, value }: { name: AttributeName; value: number }) {
   );
 }
 
+// ─── Transfer History section ─────────────────────────────────────────────────
+
+function TransferHistorySection({
+  playerId,
+  ampClubId,
+  ampClubName,
+  worldClubs,
+}: {
+  playerId: string;
+  ampClubId: string;
+  ampClubName: string;
+  worldClubs: Record<string, { name: string }>;
+}) {
+  const records = useLeagueStatsStore((s) => s.records);
+
+  const byClub = useMemo(() => {
+    const map = new Map<string, { goals: number; assists: number; appearances: number }>();
+    for (const r of Object.values(records)) {
+      if (r.playerId !== playerId) continue;
+      const prev = map.get(r.clubId);
+      if (prev) {
+        map.set(r.clubId, {
+          goals:       prev.goals + r.goals,
+          assists:     prev.assists + r.assists,
+          appearances: prev.appearances + r.appearances,
+        });
+      } else {
+        map.set(r.clubId, { goals: r.goals, assists: r.assists, appearances: r.appearances });
+      }
+    }
+    return Array.from(map.entries()).map(([clubId, stats]) => ({ clubId, ...stats }));
+  }, [records, playerId]);
+
+  if (byClub.length === 0) return null;
+
+  function resolveClubName(clubId: string): string {
+    if (clubId === ampClubId) return ampClubName;
+    return worldClubs[clubId]?.name ?? clubId;
+  }
+
+  return (
+    <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, ...pixelShadow }}>
+      {/* Header */}
+      <View style={{
+        paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10,
+        borderBottomWidth: 2, borderBottomColor: WK.border,
+      }}>
+        <PixelText size={9} color={WK.yellow}>TRANSFER HISTORY</PixelText>
+      </View>
+
+      {/* Column headers */}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 14, paddingVertical: 8,
+        borderBottomWidth: 2, borderBottomColor: WK.border,
+        backgroundColor: WK.tealDark,
+      }}>
+        <VT323Text size={14} color={WK.dim} style={{ flex: 1, minWidth: 0 }}>CLUB</VT323Text>
+        <VT323Text size={14} color={WK.dim} style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>GOALS</VT323Text>
+        <VT323Text size={14} color={WK.dim} style={{ width: 52, flexShrink: 0, textAlign: 'right' }}>ASSISTS</VT323Text>
+        {/* TODO: Transfer fee history requires a future task to store joinFee on player records */}
+        <VT323Text size={14} color={WK.dim} style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>FEE</VT323Text>
+      </View>
+
+      {/* Rows */}
+      {byClub.map((entry, i) => (
+        <View
+          key={entry.clubId}
+          style={{
+            flexDirection: 'row', alignItems: 'center',
+            paddingHorizontal: 14, paddingVertical: 10,
+            borderBottomWidth: i < byClub.length - 1 ? 2 : 0,
+            borderBottomColor: WK.border,
+          }}
+        >
+          <BodyText size={12} numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+            {resolveClubName(entry.clubId)}
+          </BodyText>
+          <VT323Text
+            size={18}
+            color={entry.goals > 0 ? WK.yellow : WK.dim}
+            style={{ width: 44, flexShrink: 0, textAlign: 'right' }}
+          >
+            {entry.goals}
+          </VT323Text>
+          <VT323Text
+            size={18}
+            color={entry.assists > 0 ? WK.tealLight : WK.dim}
+            style={{ width: 52, flexShrink: 0, textAlign: 'right' }}
+          >
+            {entry.assists}
+          </VT323Text>
+          <VT323Text size={16} color={WK.dim} style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>
+            —
+          </VT323Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function PlayerDetailScreen() {
@@ -234,11 +337,11 @@ export default function PlayerDetailScreen() {
     contractPct >= 60 ? WK.orange : WK.tealLight;
 
   // Contract extension cost: 5% of total 52-week contract value
-  // wage is pence/week → total value = 52 × wage pence → 5% → convert to whole pounds
-  const extensionCostPounds = player
-    ? Math.max(1, Math.round(52 * (player.wage ?? 0) * 0.05 / 100))
+  // wage is pence/week → total value = 52 × wage pence → 5%
+  const extensionCostPence = player
+    ? Math.max(1, Math.round(52 * (player.wage ?? 0) * 0.05))
     : 0;
-  const canAffordExtension = clubBalance >= extensionCostPounds * 100; // balance stored in pence
+  const canAffordExtension = clubBalance >= extensionCostPence;
 
   const [attrsExpanded, setAttrsExpanded]   = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
@@ -325,9 +428,9 @@ export default function PlayerDetailScreen() {
   }
 
   function handleExtend() {
-    addBalance(-(extensionCostPounds * 100)); // pence
+    addBalance(-extensionCostPence);
     addTransaction({
-      amount: -extensionCostPounds,
+      amount: -extensionCostPence,
       category: 'wages',
       description: `${player!.name} enrollment extension`,
       weekNumber,
@@ -337,12 +440,17 @@ export default function PlayerDetailScreen() {
   }
 
   async function confirmRelease() {
+    if (!player) return;
     const result = await releasePlayer(player.id);
     if (result.success) {
       router.replace('/squad');
     } else {
       setReleaseResultDialog({ title: 'Error', message: result.error ?? 'Failed to release player.' });
     }
+  }
+
+  function toggleNotForSale() {
+    updatePlayer(player!.id, { notForSale: !player!.notForSale });
   }
 
   return (
@@ -437,6 +545,36 @@ export default function PlayerDetailScreen() {
           );
         })()}
 
+        {/* ── 2.5 Transfer status — full width toggle ──────────────────────────── */}
+        {!isNpc && (
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 3,
+            borderColor: player.notForSale ? WK.red : WK.border,
+            padding: 14,
+            ...pixelShadow,
+          }}>
+            <PixelText size={8} upper style={{ marginBottom: 8 }}>TRANSFER STATUS</PixelText>
+            <BodyText size={12} dim style={{ marginBottom: 14 }}>
+              When "Not for sale", other clubs will not submit transfer bids for this player.
+            </BodyText>
+            <Pressable
+              onPress={toggleNotForSale}
+              style={{
+                backgroundColor: player.notForSale ? WK.red : WK.tealMid,
+                borderWidth: 2,
+                borderColor: player.notForSale ? WK.red : WK.border,
+                paddingVertical: 12,
+                alignItems: 'center',
+              }}
+            >
+              <PixelText size={9} color={WK.text}>
+                {player.notForSale ? "NOT FOR SALE" : "MARK NOT FOR SALE"}
+              </PixelText>
+            </Pressable>
+          </View>
+        )}
+
         {/* ── 3. Attributes — collapsible with top-2 preview ──────────────────── */}
         {attrEntries && (
           <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, ...pixelShadow }}>
@@ -520,6 +658,14 @@ export default function PlayerDetailScreen() {
             onViewHistory={() => router.push(`/appearances/${id}`)}
           />
         )}
+
+        {/* ── 5c. Transfer History ──────────────────────────────────────────────── */}
+        <TransferHistorySection
+          playerId={id!}
+          ampClubId={ampClubId}
+          ampClubName={ampClubName}
+          worldClubs={worldClubs}
+        />
 
         {/* ── 6. Scout's Report ────────────────────────────────────────────────── */}
         <ScoutReportCard player={player} />
@@ -707,7 +853,7 @@ export default function PlayerDetailScreen() {
                 <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 10, gap: 8 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <BodyText size={13} dim>WEEKLY FEE</BodyText>
-                    <PixelText size={8} color={WK.tealLight}>£{weeklyFee}/wk</PixelText>
+                    <Money pence={player.wage ?? 0} size={8} color={WK.tealLight} />
                   </View>
                   {player.morale !== undefined && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -736,9 +882,12 @@ export default function PlayerDetailScreen() {
                       borderColor: canAffordExtension ? WK.tealLight : WK.dim,
                     }}
                   >
-                    <PixelText size={8} color={canAffordExtension ? WK.tealLight : WK.dim}>
-                      EXTEND CONTRACT  £{extensionCostPounds.toLocaleString()}
-                    </PixelText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <PixelText size={8} color={canAffordExtension ? WK.tealLight : WK.dim}>
+                        EXTEND CONTRACT
+                      </PixelText>
+                      <Money pence={extensionCostPence} size={8} color={canAffordExtension ? WK.tealLight : WK.dim} />
+                    </View>
                   </Pressable>
                 )}
               </View>
@@ -862,8 +1011,8 @@ export default function PlayerDetailScreen() {
         title="Extend Enrollment?"
         message={
           canAffordExtension
-            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${extensionCostPounds.toLocaleString()}. Fee is 5% of their total 52-week contract value.`
-            : `You cannot afford this extension. You need £${extensionCostPounds.toLocaleString()} but your balance is insufficient.`
+            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${Math.round(extensionCostPence / 100).toLocaleString()}. Fee is 5% of their total 52-week contract value.`
+            : `You cannot afford this extension. You need £${Math.round(extensionCostPence / 100).toLocaleString()} but your balance is insufficient.`
         }
         onClose={() => setShowExtendDialog(false)}
         {...(canAffordExtension ? { onConfirm: handleExtend, confirmLabel: 'EXTEND' } : {})}

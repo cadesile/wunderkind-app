@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Modal, Pressable } from 'react-native';
 import { PixelText } from './PixelText';
 import { Button } from './Button';
@@ -6,7 +7,7 @@ import { WK, pixelShadow } from '@/constants/theme';
 interface PixelDialogProps {
   visible: boolean;
   title: string;
-  message: string;
+  message: string | React.ReactNode;
   onClose: () => void;
   /** If provided, renders Cancel + Confirm buttons instead of a single OK */
   onConfirm?: () => void;
@@ -30,6 +31,7 @@ export function PixelDialog({
     <Modal
       visible={visible}
       transparent
+      statusBarTranslucent
       animationType="fade"
       onRequestClose={onClose}
     >
@@ -48,7 +50,11 @@ export function PixelDialog({
             ...pixelShadow,
           }}>
             <PixelText size={9} upper style={{ marginBottom: 12 }}>{title}</PixelText>
-            <PixelText size={7} dim style={{ marginBottom: 20, lineHeight: 14 }}>{message}</PixelText>
+            {typeof message === 'string' ? (
+              <PixelText size={7} dim style={{ marginBottom: 20, lineHeight: 14 }}>{message}</PixelText>
+            ) : (
+              <View style={{ marginBottom: 20 }}>{message}</View>
+            )}
 
             {onConfirm ? (
               <View style={{ flexDirection: 'row', gap: 10 }}>

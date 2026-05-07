@@ -129,6 +129,7 @@ export function generateNPCBids(
     if (!player.isActive) continue;
     if (player.status && player.status !== 'active') continue;
     if (player.injury) continue;
+    if (player.notForSale) continue;
     if (pendingOfferPlayerIds.has(player.id)) continue;
 
     // Probability: 5% base + 2% per OVR point above 50, capped at 40%

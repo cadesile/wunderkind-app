@@ -23,7 +23,7 @@ interface Props<T extends { id: string }> {
   onRowPress?: (item: T) => void;
   emptyMessage?: string;
   /** Optional per-row style overrides — return undefined for default styling */
-  rowStyle?: (item: T) => { backgroundColor?: string; borderColor?: string } | undefined;
+  rowStyle?: (item: T) => { backgroundColor?: string; borderColor?: string; opacity?: number } | undefined;
 }
 
 export function SortableTable<T extends { id: string }>({
@@ -140,6 +140,7 @@ export function SortableTable<T extends { id: string }>({
                   borderRightWidth: 3,
                   borderBottomWidth: index === sorted.length - 1 ? 3 : 1,
                   borderColor: custom?.borderColor ?? WK.border,
+                  opacity: custom?.opacity ?? 1,
                 }}>
                   {columns.map((col) => (
                     <View

@@ -61,7 +61,7 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
     // Log transaction (amount in pence per FinancialTransaction spec)
     const positionLabel = selectedPosition ? ` (${selectedPosition})` : '';
     addTransaction({
-      amount: -penceToPounds(costPence),
+      amount: -costPence,
       category: 'upkeep',
       description: `Scouting mission — ${scout.name}${positionLabel}`,
       weekNumber: club.weekNumber ?? 1,
@@ -94,7 +94,7 @@ export function AssignMissionOverlay({ scout, visible, onClose }: Props) {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+    <Modal visible={visible} transparent statusBarTranslucent animationType="slide" onRequestClose={handleClose}>
       <View style={{
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.7)',

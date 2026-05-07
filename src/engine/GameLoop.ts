@@ -1,6 +1,7 @@
 import { calculateTraitShifts } from './personality';
 import { shouldRetire } from './retirementEngine';
 import { calculateWeeklyFinances } from './finance';
+import { renderMoney } from '@/utils/currency';
 import {
   calculateWeeklyXP,
   calculateInjuryProbability,
@@ -105,6 +106,10 @@ export function processWeeklyTick(): WeeklyTick {
 
   const weekNumber = club.weekNumber ?? 1;
 
+  const injuredPlayerIds: string[] = [];
+  const incidents: any[] = [];
+  const traitShifts: Record<string, Record<string, number>> = {};
+
   // Expire stale chain boosts before evaluating any events this tick
   useEventChainStore.getState().expireChains(weekNumber);
 
@@ -184,7 +189,7 @@ export function processWeeklyTick(): WeeklyTick {
   const injuryProb = calculateInjuryProbability(facilityEffects.injuryProbabilityDelta, config.baseInjuryProbability);
 
   // ── 3. Personality shifts ─────────────────────────────────────────────────────
-  const traitShifts: Record<string, Partial<PersonalityMatrix>> = {};
+  // already defined above: const traitShifts: Record<string, Partial<PersonalityMatrix>> = {};
 
   players.forEach((player) => {
     traitShifts[player.id] = calculateTraitShifts(
@@ -210,12 +215,13 @@ export function processWeeklyTick(): WeeklyTick {
   });
 
   const slotsAvailable = Math.max(0, maxAllowed - currentInjuredCount);
-  const injuredPlayerIds = injuryCandidates.slice(0, slotsAvailable);
+  const tickInjuredPlayerIds = injuryCandidates.slice(0, slotsAvailable);
 
   // Apply injuries and collect metadata for inbox messages
   type NewInjury = { playerId: string; severity: 'minor' | 'moderate' | 'serious'; weeksRemaining: number };
   const newInjuries: NewInjury[] = [];
-  injuredPlayerIds.forEach((id) => {
+  tickInjuredPlayerIds.forEach((id) => {
+    injuredPlayerIds.push(id);
     const tier = pickInjurySeverity(INJURY_TIERS);
     const weeksRemaining = calculateInjuryDuration(tier, facilityEffects.injuryRecoveryWeeksDelta);
     setPlayerInjury(id, { severity: tier.severity, weeksRemaining, injuredWeek: weekNumber });
@@ -344,40 +350,36 @@ export function processWeeklyTick(): WeeklyTick {
   const { addTransaction, clearOldTransactions } = useFinanceStore.getState();
   const nextWeek = weekNumber + 1; // transactions belong to the week just processed
 
-  // All amounts stored in whole pounds for consistent ledger display
+  // All amounts stored in pence for consistent ledger
   const WAGE_LABELS = new Set(['Player wages', 'Coach salaries', 'Staff wages']);
-  const wagesPounds = Math.round(
+  const wagesPence = Math.round(
     financialSummary.breakdown
       .filter((item) => WAGE_LABELS.has(item.label))
-      .reduce((sum, item) => sum + item.amount, 0) / 100,
+      .reduce((sum, item) => sum + item.amount, 0)
   );
-  const maintenancePounds = Math.round(
+  const maintenancePence = Math.round(
     financialSummary.breakdown
       .filter((item) => !WAGE_LABELS.has(item.label) && item.label !== 'Loan repayment')
-      .reduce((sum, item) => sum + item.amount, 0) / 100,
+      .reduce((sum, item) => sum + item.amount, 0)
   );
-  const reputationIncome = Math.floor(club.reputation); // 0–100 scale → whole pounds
-  const facilityIncomePounds = Math.round(facilityIncomePence / 100);
+  const facilityIncomePenceVal = Math.round(facilityIncomePence);
 
-  if (wagesPounds > 0) {
-    addTransaction({ amount: -wagesPounds,       category: 'wages',  description: `Week ${nextWeek} payroll`,              weekNumber: nextWeek });
+  if (wagesPence > 0) {
+    addTransaction({ amount: -wagesPence,       category: 'wages',  description: `Week ${nextWeek} payroll`,              weekNumber: nextWeek });
   }
-  if (maintenancePounds > 0) {
-    addTransaction({ amount: -maintenancePounds, category: 'upkeep', description: `Week ${nextWeek} facility maintenance`, weekNumber: nextWeek });
+  if (maintenancePence > 0) {
+    addTransaction({ amount: -maintenancePence, category: 'upkeep', description: `Week ${nextWeek} facility maintenance`, weekNumber: nextWeek });
   }
   if (weeklyLoanRepayment > 0) {
-    addTransaction({ amount: -Math.round(weeklyLoanRepayment / 100), category: 'loan_repayment', description: `Week ${nextWeek} loan repayment`, weekNumber: nextWeek });
+    addTransaction({ amount: -Math.round(weeklyLoanRepayment), category: 'loan_repayment', description: `Week ${nextWeek} loan repayment`, weekNumber: nextWeek });
   }
   if (sponsorIncomePence > 0) {
-    addTransaction({ amount: Math.round(sponsorIncomePence / 100), category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`, weekNumber: nextWeek });
-  }
-  if (reputationIncome > 0) {
-    addTransaction({ amount: reputationIncome,    category: 'earnings',        description: `Week ${nextWeek} reputation income`,     weekNumber: nextWeek });
+    addTransaction({ amount: Math.round(sponsorIncomePence), category: 'sponsor_payment', description: `Week ${nextWeek} sponsor income`, weekNumber: nextWeek });
   }
   const facilityDesc = hasHomeMatch
     ? `Week ${nextWeek} facility income (matchday)`
     : `Week ${nextWeek} facility income (${nonMatchPct}% non-matchday)`;
-  addTransaction({ amount: facilityIncomePounds, category: 'matchday_income', description: facilityDesc, weekNumber: nextWeek });
+  addTransaction({ amount: facilityIncomePenceVal, category: 'matchday_income', description: facilityDesc, weekNumber: nextWeek });
 
   clearOldTransactions();
 
@@ -461,10 +463,9 @@ export function processWeeklyTick(): WeeklyTick {
           : null;
 
         if (opinion?.recommendation === 'sell') {
-          const feeWholePounds = Math.round(bid.fee / 100);
           addEarnings(bid.fee);
           useFinanceStore.getState().addTransaction({
-            amount:      feeWholePounds,
+            amount:      bid.fee, // pence
             category:    'transfer_fee',
             description: `Transfer: ${biddingPlayer.name} → ${bid.biddingClubName}`,
             weekNumber,
@@ -521,7 +522,7 @@ export function processWeeklyTick(): WeeklyTick {
             type:    'system',
             week:    weekNumber,
             subject: `${biddingPlayer.name} sold`,
-            body:    `Your DOF accepted a £${feeWholePounds.toLocaleString()} bid from ${bid.biddingClubName} for ${biddingPlayer.name} (${biddingPlayer.position}, Age ${biddingPlayer.age}). Manager's view: ${opinion.reasoning}`,
+            body:    `Your DOF accepted a ${renderMoney(bid.fee)} bid from ${bid.biddingClubName} for ${biddingPlayer.name} (${biddingPlayer.position}, Age ${biddingPlayer.age}). Manager's view: ${opinion.reasoning}`,
             isRead:  false,
             metadata: {
               systemType:            'dof_transfer',
@@ -576,8 +577,8 @@ export function processWeeklyTick(): WeeklyTick {
   // Decrement all active injury timers (clears expired injuries automatically)
   tickInjuries();
 
-  // ── 6c. Monthly development snapshot (every 4 weeks) ──────────────────────────
-  if (weekNumber % 4 === 0) {
+  // ── 6c. Development snapshot — frequency controlled by facilityMaintenanceFrequencyWeeks ──
+  if (weekNumber % (config.facilityMaintenanceFrequencyWeeks ?? 4) === 0) {
     useSquadStore.getState().recordDevelopmentSnapshots(weekNumber);
   }
 
@@ -835,6 +836,55 @@ export function processWeeklyTick(): WeeklyTick {
   // Decay runs after benefits have been applied, so this week's condition is used in full
   useFacilityStore.getState().decayCondition();
 
+  // ── 8b-i. Periodic facility maintenance reminder ──────────────────────────────
+  // Fires every facilityMaintenanceFrequencyWeeks weeks when any built facility
+  // has dropped below 60% condition. Deduped by week so it only sends once.
+  if (weekNumber % (config.facilityMaintenanceFrequencyWeeks ?? 4) === 0) {
+    const { templates: maintTemplates, levels: maintLevels, conditions: maintConditions } = useFacilityStore.getState();
+    const degraded = maintTemplates
+      .filter((t) => (maintLevels[t.slug] ?? 0) > 0 && (maintConditions[t.slug] ?? 100) < 60)
+      .map((t) => t.label);
+
+    if (degraded.length > 0) {
+      const alreadySent = inboxMessages.some((m) => m.id === `facility-maint-wk${weekNumber}`);
+      if (!alreadySent) {
+        addMessage({
+          id: `facility-maint-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Facility Maintenance Required',
+          body: `${degraded.join(', ')} ${degraded.length === 1 ? 'is' : 'are'} in poor condition. Repair from the Facilities screen to maintain performance.`,
+          isRead: false,
+          metadata: { systemType: 'facility_maintenance', facilities: degraded },
+        });
+      }
+    }
+  }
+
+  // ── 8b-ii. Periodic system status notification ────────────────────────────────
+  // Fires every systemNotificationFrequencyWeeks weeks. Guards against duplicates
+  // by week so re-runs within the same week are no-ops.
+  if (weekNumber % (config.systemNotificationFrequencyWeeks ?? 8) === 0) {
+    const alreadySent = inboxMessages.some((m) => m.id === `system-status-wk${weekNumber}`);
+    if (!alreadySent) {
+      const degradedCount = facilityTemplates
+        .filter((t) => (levels[t.slug] ?? 0) > 0 && (conditions[t.slug] ?? 100) < 80)
+        .length;
+      const squadSize = players.length;
+      const balance = club.balance; // pence
+
+      addMessage({
+        id: `system-status-wk${weekNumber}`,
+        type: 'system',
+        week: weekNumber,
+        subject: 'Club Status Update',
+        body: `Week ${weekNumber} summary: ${squadSize} players in squad, balance ${renderMoney(Math.abs(balance))}${balance < 0 ? ' (deficit)' : ''}${degradedCount > 0 ? `, ${degradedCount} facilit${degradedCount === 1 ? 'y' : 'ies'} need attention` : ''}.`,
+        isRead: false,
+        metadata: { systemType: 'system_status', weekNumber, squadSize, balance, degradedCount },
+      });
+    }
+  }
+
   // ── 8c. Facility manager auto-repair ─────────────────────────────────────────
   // If a facility_manager is on staff and balance covers the cost, automatically
   // repair all degraded facilities (condition < 100) at end of the weekly tick.
@@ -857,7 +907,7 @@ export function processWeeklyTick(): WeeklyTick {
         useFacilityStore.getState().resetCondition(template.slug);
         repairedFacilities.push({ name: template.label, cost: costPence }); // pence, for formatCurrencyWhole
         addTransaction({
-          amount: -Math.round(costPence / 100), // whole pounds for ledger
+          amount: -costPence, // pence for ledger
           category: 'upkeep',
           description: `Auto-repair: ${template.label}`,
           weekNumber: nextWeek,

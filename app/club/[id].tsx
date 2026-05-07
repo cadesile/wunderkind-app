@@ -12,7 +12,7 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useFinanceStore } from '@/stores/financeStore';
-import { formatCurrencyCompact } from '@/utils/currency';
+import { Money } from '@/components/ui/Money';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer } from '@/types/world';
 
@@ -99,6 +99,7 @@ export default function ClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
   const club    = useWorldStore((s) => s.clubs[id]);
+  const league  = useWorldStore((s) => s.leagues.find((l) => l.clubIds.includes(id)));
   const isInitialized = useWorldStore((s) => s.isInitialized);
   const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const inboxMessages = useInboxStore((s) => s.messages);
@@ -217,7 +218,12 @@ export default function ClubDetailScreen() {
         }}>
           <VT323Text size={14} color={WK.yellow}>T{club.tier}</VT323Text>
         </View>
-        <PixelText size={9} style={{ flex: 1 }} numberOfLines={1}>{club.name}</PixelText>
+        <View style={{ flex: 1 }}>
+          <PixelText size={9} numberOfLines={1}>{club.name}</PixelText>
+          {league ? (
+            <BodyText size={10} dim numberOfLines={1}>{league.name.toUpperCase()}</BodyText>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: 40 }}>
@@ -442,7 +448,7 @@ export default function ClubDetailScreen() {
                 <View style={{ alignItems: 'flex-end' }}>
                   <PixelText size={6} color={WK.dim}>WK {t.week}</PixelText>
                   {t.fee > 0 && (
-                    <VT323Text size={14} color={WK.yellow}>{formatCurrencyCompact(t.fee)}</VT323Text>
+                    <Money pence={t.fee} style="compact" size={14} variant="vt323" color={WK.yellow} />
                   )}
                 </View>
               </View>

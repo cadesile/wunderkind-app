@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronDown, ChevronRight } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
-import { LeagueTable } from './LeagueTable';
 import type { LeagueSnapshot } from '@/types/api';
 import type { Fixture } from '@/stores/fixtureStore';
 import type { WorldLeague, WorldClub } from '@/types/world';
@@ -26,7 +24,6 @@ export function LeagueBrowser({
   worldLeagues,
   worldClubs,
 }: LeagueBrowserProps) {
-  const [expandedLeagueId, setExpandedLeagueId] = useState<string | null>(null);
   const router = useRouter();
 
   if (league === null) {
@@ -54,25 +51,9 @@ export function LeagueBrowser({
         clubIds:        [],
       }];
 
-  const toggleLeague = (id: string) => {
-    setExpandedLeagueId((prev) => (prev === id ? null : id));
-  };
-
-  const handleClubPress = (clubId: string) => {
-    if (clubId === ampClubId) {
-      router.push('/(tabs)/squad');
-    } else {
-      // NPC club IDs come from worldStore, which is populated from POST /api/initialize.
-      // The sync league snapshot clubs are a subset of that same world pack, so every
-      // club ID reachable here should exist in worldStore.clubs.
-      router.push(`/club/${clubId}`);
-    }
-  };
-
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
       {displayLeagues.map((lg) => {
-        const isExpanded  = expandedLeagueId === lg.id;
         const isAmpLeague = lg.id === league.id;
 
         const npcClubs: WorldClub[] = lg.clubIds
@@ -82,13 +63,10 @@ export function LeagueBrowser({
         // league.clubs holds only NPC clubs — add 1 to include the AMP club itself
         const clubCount = isAmpLeague ? league.clubs.length + 1 : npcClubs.length;
 
-        // Filter fixtures to this league only
-        const leagueFixtures = fixtures.filter((f) => f.leagueId === lg.id);
-
         return (
           <View key={lg.id} style={{ marginBottom: 4 }}>
             <Pressable
-              onPress={() => toggleLeague(lg.id)}
+              onPress={() => router.push(`/league/${lg.id}`)}
               style={[
                 {
                   flexDirection: 'row',
@@ -135,38 +113,8 @@ export function LeagueBrowser({
                 </View>
               )}
 
-              {isExpanded
-                ? <ChevronDown size={16} color={WK.dim} />
-                : <ChevronRight size={16} color={WK.dim} />
-              }
+              <ChevronRight size={16} color={WK.dim} />
             </Pressable>
-
-            {isExpanded && (
-              <View style={{
-                borderWidth: 2,
-                borderTopWidth: 0,
-                borderColor: isAmpLeague ? WK.yellow : WK.border,
-                minHeight: 200,
-              }}>
-                {isAmpLeague ? (
-                  <LeagueTable
-                    fixtures={leagueFixtures}
-                    clubs={league.clubs}
-                    ampClubId={ampClubId}
-                    ampName={ampName}
-                    promotionSpots={league.promotionSpots}
-                    onClubPress={handleClubPress}
-                  />
-                ) : (
-                  <LeagueTable
-                    fixtures={leagueFixtures}
-                    clubs={npcClubs}
-                    promotionSpots={lg.promotionSpots}
-                    onClubPress={handleClubPress}
-                  />
-                )}
-              </View>
-            )}
           </View>
         );
       })}

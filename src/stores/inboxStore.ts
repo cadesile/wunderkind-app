@@ -9,7 +9,7 @@ export interface InboxMessage {
   id: string;
   type: InboxMessageType;
   week: number;
-  createdAt: string;
+  createdAt?: string;
   subject: string;
   body: string;
   isRead: boolean;

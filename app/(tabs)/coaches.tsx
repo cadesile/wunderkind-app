@@ -131,15 +131,15 @@ export default function CoachesScreen() {
   }
 
   function signCoach(coach: MarketCoach) {
-    // salary is in pence; balance is in whole pounds — convert before comparing/deducting
-    const signingFeePounds = Math.round((coach.salary * 4) / 100);
-    if ((club.balance ?? 0) < signingFeePounds) {
-      setSignError(`INSUFFICIENT FUNDS — need £${signingFeePounds.toLocaleString()}`);
+    // salary is in pence; balance is in pence
+    const signingFeePence = coach.salary * 4;
+    if ((club.balance ?? 0) < signingFeePence) {
+      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(signingFeePence / 100).toLocaleString()}`);
       return;
     }
     setSignError(null);
     useFinanceStore.getState().addTransaction({
-      amount:      -signingFeePounds,
+      amount:      -signingFeePence,
       category:    'staff_signing',
       description: `Signed ${coach.firstName} ${coach.lastName}`,
       weekNumber,

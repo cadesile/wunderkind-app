@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FAB_CLEARANCE } from './_layout';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
@@ -18,6 +18,9 @@ import { LeagueTable } from '@/components/competitions/LeagueTable';
 import { FixtureList } from '@/components/competitions/FixtureList';
 import { LeagueBrowser } from '@/components/competitions/LeagueBrowser';
 import { SeasonHistory } from '@/components/competitions/SeasonHistory';
+import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
+import { useMatchResultStore } from '@/stores/matchResultStore';
+import type { Fixture } from '@/stores/fixtureStore';
 import type { LeaderboardEntry } from '@/types/api';
 
 // ─── Leaderboard helpers (ported from world.tsx) ────────────────────────────
@@ -59,7 +62,13 @@ type CompTab = typeof COMP_TABS[number];
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function CompetitionsScreen() {
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<CompTab>('LEAGUE');
+  useEffect(() => {
+    if (tabParam && COMP_TABS.includes(tabParam as CompTab)) {
+      setActiveTab(tabParam as CompTab);
+    }
+  }, [tabParam]);
   const router = useRouter();
 
   function handleClubPress(clubId: string) {
@@ -74,9 +83,23 @@ export default function CompetitionsScreen() {
   const clubs           = useLeagueStore((s) => s.clubs);
   const fixtures        = useFixtureStore((s) => s.fixtures);
   const currentMatchday = useFixtureStore((s) => s.currentMatchday);
-  const worldLeagues = useWorldStore((s) => s.leagues);
-  const worldClubs   = useWorldStore((s) => s.clubs);
-  const ampSquad     = useSquadStore((s) => s.players);
+  const worldLeagues    = useWorldStore((s) => s.leagues);
+  const worldClubs      = useWorldStore((s) => s.clubs);
+  const ampSquad        = useSquadStore((s) => s.players);
+  const matchResults    = useMatchResultStore((s) => s.results);
+
+  const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
+
+  const clubNameMap = useMemo(() => {
+    const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
+    map.set(ampClubId, ampName);
+    return map;
+  }, [clubs, ampClubId, ampName]);
+
+  const overlayData = useMemo(() => {
+    if (!selectedFixture) return null;
+    return buildMatchResultData(selectedFixture, ampClubId, ampName, clubNameMap, matchResults);
+  }, [selectedFixture, ampClubId, ampName, clubNameMap, matchResults]);
 
   return (
     <View style={{ flex: 1, backgroundColor: WK.greenDark }}>
@@ -141,6 +164,7 @@ export default function CompetitionsScreen() {
           ampStadiumName={ampStadiumName}
           currentMatchday={currentMatchday}
           onClubPress={handleClubPress}
+          onFixturePress={setSelectedFixture}
         />
       )}
 
@@ -157,6 +181,12 @@ export default function CompetitionsScreen() {
 
       {activeTab === 'RANKINGS' && <RankingsPane />}
       {activeTab === 'HISTORY' && <SeasonHistory />}
+
+      <MatchResultOverlay
+        visible={selectedFixture !== null}
+        data={overlayData}
+        onClose={() => setSelectedFixture(null)}
+      />
     </View>
   );
 }

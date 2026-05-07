@@ -17,7 +17,8 @@ import { useClubStore } from '@/stores/clubStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { moraleLabel } from '@/utils/morale';
 import { MoraleBar } from '@/components/ui/MoraleBar';
-import { formatCurrencyWhole, penceToPounds } from '@/utils/currency';
+import { Money } from '@/components/ui/Money';
+import { renderMoney, penceToPounds } from '@/utils/currency';
 import { AssignMissionOverlay } from '@/components/AssignMissionOverlay';
 
 const RANGE_LABEL: Record<string, string> = {
@@ -37,6 +38,9 @@ export default function ScoutDetailScreen() {
   const [releaseDialogVisible, setReleaseDialogVisible] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
 
+  const dof = useCoachStore((s) => s.coaches.find((c) => c.role === 'director_of_football'));
+  const dofAutoScouts = dof?.dofAutoAssignScouts ?? false;
+
   function confirmRelease() {
     if (!scout) return;
     const penaltyPence = Math.floor(scout.salary * 26 * 0.25);
@@ -46,7 +50,7 @@ export default function ScoutDetailScreen() {
       setReleaseDialogVisible(false);
       return;
     }
-    addBalance(-penaltyPounds * 100);
+    addBalance(-penaltyPence);
     useFinanceStore.getState().addTransaction({
       amount: -penaltyPence,
       category: 'contract_termination',
@@ -64,9 +68,6 @@ export default function ScoutDetailScreen() {
       </SafeAreaView>
     );
   }
-
-  const dof = useCoachStore((s) => s.coaches.find((c) => c.role === 'director_of_football'));
-  const dofAutoScouts = dof?.dofAutoAssignScouts ?? false;
 
   const morale = scout.morale ?? 70;
   const isOnMission = scout.activeMission?.status === 'active';
@@ -136,7 +137,10 @@ export default function ScoutDetailScreen() {
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
               <PixelText size={14} variant="vt323" dim>WEEKLY SALARY</PixelText>
-              <PixelText size={18} variant="vt323" color={WK.tealLight}>{formatCurrencyWhole(scout.salary)}/wk</PixelText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Money pence={scout.salary} size={18} variant="vt323" color={WK.tealLight} />
+                <PixelText size={14} variant="vt323" color={WK.tealLight} dim>/wk</PixelText>
+              </View>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
               <PixelText size={14} variant="vt323" dim>MORALE</PixelText>
@@ -242,7 +246,7 @@ export default function ScoutDetailScreen() {
       <PixelDialog
         visible={releaseDialogVisible}
         title="Release Scout?"
-        message={scout ? `Release ${scout.name}?\n\nEarly termination fee: £${Math.round(scout.salary * 26 * 0.25 / 100).toLocaleString()}\n(25% of 26 remaining weeks)` : ''}
+        message={scout ? <>Release {scout.name}?{'\n\n'}Early termination fee: <Money pence={Math.floor(scout.salary * 26 * 0.25)} />{'\n'}(25% of 26 remaining weeks)</> : ''}
         onClose={() => setReleaseDialogVisible(false)}
         onConfirm={confirmRelease}
         confirmLabel="RELEASE"

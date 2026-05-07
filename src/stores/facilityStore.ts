@@ -14,10 +14,10 @@ import type { ClubTier } from '@/types/club';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Upgrade cost in whole pounds from currentLevel → next level */
+/** Upgrade cost in pence from currentLevel → next level */
 export function facilityUpgradeCost(template: FacilityTemplate, currentLevel: number): number {
   if (currentLevel >= template.maxLevel) return Infinity;
-  return Math.round(((currentLevel + 1) * template.baseCost) / 100);
+  return Math.round((currentLevel + 1) * template.baseCost);
 }
 
 /** Weekly upkeep cost in pence for a facility at a given level */
@@ -163,7 +163,7 @@ export const useFacilityStore = create<FacilityState>()(
         const { club } = require('@/stores/clubStore').useClubStore.getState();
         const { addTransaction } = require('@/stores/financeStore').useFinanceStore.getState();
         addTransaction({
-          amount:      -Math.round(costPence / 100),
+          amount:      -costPence,
           category:    'upkeep',
           description: `Repaired ${template.label}`,
           weekNumber:  club.weekNumber ?? 1,

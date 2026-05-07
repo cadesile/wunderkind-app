@@ -17,6 +17,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { Relationship } from '@/types/player';
 import { moraleLabel } from '@/utils/morale';
 import { MoraleBar } from '@/components/ui/MoraleBar';
+import { Money } from '@/components/ui/Money';
 import { penceToPounds } from '@/utils/currency';
 
 function moraleColor(morale: number): string {
@@ -58,7 +59,7 @@ export default function CoachDetailScreen() {
       setReleaseDialogVisible(false);
       return;
     }
-    addBalance(-penaltyPounds * 100);
+    addBalance(-penaltyPence);
     useFinanceStore.getState().addTransaction({
       amount: -penaltyPence,
       category: 'contract_termination',
@@ -129,7 +130,10 @@ export default function CoachDetailScreen() {
               </View>
               <View>
                 <PixelText size={6} dim>SALARY</PixelText>
-                <PixelText size={9} color={WK.tealLight}>£{Math.round(coach.salary / 100)}/wk</PixelText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Money pence={coach.salary} size={9} color={WK.tealLight} />
+                  <PixelText size={7} color={WK.tealLight} dim>/wk</PixelText>
+                </View>
               </View>
             </View>
           </View>
@@ -204,7 +208,7 @@ export default function CoachDetailScreen() {
       <PixelDialog
         visible={releaseDialogVisible}
         title="Release Coach?"
-        message={coach ? `Release ${coach.name}?\n\nEarly termination fee: £${Math.round(coach.salary * 26 * 0.25 / 100).toLocaleString()}\n(25% of 26 remaining weeks)` : ''}
+        message={coach ? <>Release {coach.name}?{'\n\n'}Early termination fee: <Money pence={Math.floor(coach.salary * 26 * 0.25)} />{'\n'}(25% of 26 remaining weeks)</> : ''}
         onClose={() => setReleaseDialogVisible(false)}
         onConfirm={confirmRelease}
         confirmLabel="RELEASE"

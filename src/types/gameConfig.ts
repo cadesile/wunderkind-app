@@ -183,6 +183,18 @@ export interface GameConfig {
    */
   playingStyleInfluence: Record<string, string[]>;
 
+  // ── Notification frequencies ──────────────────────────────────────────────
+  /**
+   * How often (in game weeks) to check facility conditions and send a
+   * maintenance reminder when any built facility is degraded. Default: 4
+   */
+  facilityMaintenanceFrequencyWeeks: number;
+  /**
+   * How often (in game weeks) to send periodic system-level notifications
+   * (e.g. development digests, club health summaries). Default: 8
+   */
+  systemNotificationFrequencyWeeks: number;
+
   // ── Developer / Debug ────────────────────────────────────────────────
   /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
   debugLoggingEnabled: boolean;
@@ -292,6 +304,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   nonMatchFacilityIncomePercent: 0,
 
   playingStyleInfluence: {},
+
+  facilityMaintenanceFrequencyWeeks: 4,
+  systemNotificationFrequencyWeeks: 8,
 
   debugLoggingEnabled: false,
 

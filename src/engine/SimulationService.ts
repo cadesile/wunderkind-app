@@ -10,8 +10,10 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
 import { useInboxStore } from '@/stores/inboxStore';
+import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useAttendanceStore } from '@/stores/attendanceStore';
 import { useManagerRecordStore } from '@/stores/managerRecordStore';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
@@ -36,6 +38,8 @@ import {
 //
 // Processes narrative story ticks and match simulations entirely on-device.
 
+import { useGameConfigStore } from '@/stores/gameConfigStore';
+
 class SimulationService {
 
   /** Call once per week tick to process effects and potentially fire a story event. */
@@ -57,7 +61,8 @@ class SimulationService {
     const { startSimulation, endSimulation } = useTickProgressStore.getState();
     const { fixtures, currentMatchday, recordResult } = useFixtureStore.getState();
     const { clubs: worldClubs } = useWorldStore.getState();
-    const { club: userClub, gameConfig } = useClubStore.getState();
+    const { club: userClub } = useClubStore.getState();
+    const { config: gameConfig } = useGameConfigStore.getState();
     const { players: userSquad } = useSquadStore.getState();
 
     startSimulation();
@@ -67,7 +72,6 @@ class SimulationService {
       (f) => f.round === currentMatchday && f.result === null
     );
 
-    const { useGameConfigStore } = require('@/stores/gameConfigStore');
     const tacticalMatrix = gameConfig?.tacticalMatrix ?? {};
     const styleInfluence = (useGameConfigStore.getState().config?.playingStyleInfluence) ?? {};
 
@@ -79,25 +83,68 @@ class SimulationService {
           console.log('currentFixtures',currentFixtures);
 
     const npcAppearanceEntries: Array<{ playerId: string; clubId: string; season: string; appearance: MatchAppearance }> = [];
-    const npcSeason = `Season ${Math.ceil((userClub.weekNumber ?? 1) / 38)}`;
 
     for (let i = 0; i < currentFixtures.length; i += batchSize) {
       const chunk = currentFixtures.slice(i, i + batchSize);
       
       for (const fixture of chunk) {
-          console.log('fixture',fixture);
+        const seasonKey = `Season ${fixture.season}`;
         const homeTeam = this.getSimTeam(fixture.homeClubId, worldClubs, userClub, userSquad);
         const awayTeam = this.getSimTeam(fixture.awayClubId, worldClubs, userClub, userSquad);
 
         if (homeTeam && awayTeam) {
           const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix, styleInfluence);
-          console.log('home',homeTeam);
-          //TODO add result object to "recordResult"
+          
+          const playedAt = new Date().toISOString();
+
           recordResult(fixture.id, {
             homeGoals: result.homeScore,
             awayGoals: result.awayScore,
-            playedAt: new Date().toISOString(),
+            playedAt,
           });
+
+          // ── Persist full match result for all fixtures (AMP and NPC) ──────
+          const POS_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+          const serializePerf = (perf: typeof result.homePerformance) =>
+            [...perf.players]
+              .sort((a, b) => (POS_ORDER[a.player.position] ?? 9) - (POS_ORDER[b.player.position] ?? 9))
+              .map((pp) => ({
+                id:       pp.player.id,
+                name:     pp.player.name,
+                position: pp.player.position,
+                rating:   pp.rating,
+                goals:    pp.goal,
+                assists:  pp.assist,
+              }));
+
+          const homePlayers = serializePerf(result.homePerformance);
+          const awayPlayers = serializePerf(result.awayPerformance);
+
+          useMatchResultStore.getState().addResult({
+            fixtureId:      fixture.id,
+            season:         fixture.season,
+            homeClubId:     fixture.homeClubId,
+            awayClubId:     fixture.awayClubId,
+            homeGoals:      result.homeScore,
+            awayGoals:      result.awayScore,
+            homeAvgRating:  result.homePerformance.averageRating,
+            awayAvgRating:  result.awayPerformance.averageRating,
+            homePlayers,
+            awayPlayers,
+            playedAt,
+          });
+
+          // ── Write per-player season stats for all fixtures ─────────────────
+          {
+            const { recordMatchStats } = useLeagueStatsStore.getState();
+            const { leagueId, season } = fixture;
+            for (const pp of homePlayers) {
+              recordMatchStats(pp.id, fixture.homeClubId, leagueId, season, pp.goals, pp.assists, pp.rating);
+            }
+            for (const pp of awayPlayers) {
+              recordMatchStats(pp.id, fixture.awayClubId, leagueId, season, pp.goals, pp.assists, pp.rating);
+            }
+          }
 
           // ── Record result against each club's manager ──────────────────────
           {
@@ -143,7 +190,7 @@ class SimulationService {
               npcAppearanceEntries.push({
                 playerId: pp.player.id,
                 clubId,
-                season: npcSeason,
+                season: seasonKey,
                 appearance: {
                   opponentId,
                   result: matchOutcome,
@@ -176,12 +223,11 @@ class SimulationService {
               ampGoals > oppGoals ? 'win' : ampGoals < oppGoals ? 'loss' : 'draw';
             const scoreline = `${ampGoals}-${oppGoals}`;
             const opponentId = ampIsHome ? fixture.awayClubId : fixture.homeClubId;
-            const season = `Season ${Math.ceil((userClub.weekNumber ?? 1) / 38)}`;
             const ampPerformance = ampIsHome ? result.homePerformance : result.awayPerformance;
             const ampSquadIds = new Set(userSquad.map((p) => p.id));
             ampPerformance.players.forEach((pp) => {
               if (!ampSquadIds.has(pp.player.id)) return;
-              recordAppearance(pp.player.id, season, userClub.id, {
+              recordAppearance(pp.player.id, seasonKey, userClub.id, {
                 opponentId,
                 result: matchResult,
                 scoreline,
@@ -210,18 +256,6 @@ class SimulationService {
             });
 
             // Serialize performance data for the inbox detail card
-            const POS_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
-            const serializePerf = (perf: typeof result.homePerformance) =>
-              [...perf.players]
-                .sort((a, b) => (POS_ORDER[a.player.position] ?? 9) - (POS_ORDER[b.player.position] ?? 9))
-                .map((pp) => ({
-                  id: pp.player.id,
-                  name: pp.player.name,
-                  position: pp.player.position,
-                  rating: pp.rating,
-                  goals: pp.goal,
-                  assists: pp.assist,
-                }));
 
             useInboxStore.getState().addMessage({
               id: uuidv7(),
@@ -231,6 +265,7 @@ class SimulationService {
               body: `${homeName} ${result.homeScore} – ${result.awayScore} ${awayName}\nMatchday ${fixture.round}`,
               isRead: false,
               metadata: {
+                fixtureId: fixture.id,
                 homeTeamName: homeName,
                 awayTeamName: awayName,
                 homeScore: result.homeScore,

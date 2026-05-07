@@ -355,8 +355,9 @@ export default function TabLayout() {
 
       // Player season stats — only players with ≥1 appearance
       const { players: squadPlayers } = useSquadStore.getState();
+      const seasonKey = `Season ${currentSeason}`;
       const playerStats: SyncPlayerStat[] = squadPlayers.flatMap((p) => {
-        const seasonApps = p.appearances?.[String(currentSeason)]?.[ampClubId] ?? [];
+        const seasonApps = p.appearances?.[seasonKey]?.[ampClubId] ?? [];
         if (seasonApps.length === 0) return [];
         const goals   = seasonApps.reduce((s, a) => s + a.goals,   0);
         const assists = seasonApps.reduce((s, a) => s + a.assists, 0);
@@ -515,7 +516,7 @@ export default function TabLayout() {
 
         const { addTransaction } = useFinanceStore.getState();
         addTransaction({
-          amount: -Math.round(severancePence / 100), // ledger in whole pounds
+          amount: -severancePence, // pence
           category: 'wages',
           description: `Severance — ${player.name}`,
           weekNumber: club.weekNumber,

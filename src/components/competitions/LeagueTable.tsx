@@ -3,6 +3,7 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 import { computeStandings } from '@/utils/standingsCalculator';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import type { Fixture } from '@/stores/fixtureStore';
 import type { WorldClub } from '@/types/world';
 import type { Player } from '@/types/player';
@@ -66,46 +67,55 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
 
   const rows = useMemo(() => computeStandings(currentFixtures, clubs, ampClubId), [currentFixtures, clubs, ampClubId]);
 
-  // Season key used to look up appearances — must match what SimulationService stores
-  const season = `Season ${currentSeasonNumber}`;
+  // Derive the league ID from current fixtures for leagueStatsStore queries
+  const leagueId = useMemo(() =>
+    currentFixtures.length > 0 ? currentFixtures[0].leagueId : null,
+    [currentFixtures],
+  );
 
-  // ── Collect player stats from appearances ───────────────────────────────────
+  const lsRecords = useLeagueStatsStore((s) => s.records);
+
+  // ── Collect player stats from leagueStatsStore ──────────────────────────────
   const playerStats = useMemo((): StatEntry[] => {
+    if (!leagueId) return [];
+
+    // Build quick lookup maps for name/position resolution
+    const ampSquadMap = new Map<string, Player>(ampSquad?.map((p) => [p.id, p]) ?? []);
+
+    const relevant = Object.values(lsRecords).filter(
+      (r) => r.leagueId === leagueId && r.season === currentSeasonNumber,
+    );
+
+    // Aggregate per player (a player may have multiple club records if transferred mid-season)
+    const byPlayer = new Map<string, { goals: number; assists: number; clubId: string }>();
+    for (const r of relevant) {
+      const prev = byPlayer.get(r.playerId);
+      if (prev) {
+        byPlayer.set(r.playerId, { goals: prev.goals + r.goals, assists: prev.assists + r.assists, clubId: r.clubId });
+      } else {
+        byPlayer.set(r.playerId, { goals: r.goals, assists: r.assists, clubId: r.clubId });
+      }
+    }
+
     const entries: StatEntry[] = [];
-    clubs.forEach(({ id: clubId }) => {
-      if (clubId === ampClubId) return;
-      const wc = worldClubs?.[clubId];
-      if (!wc) return;
-      const clubName = clubNameMap.get(clubId) ?? clubId;
-      wc.players.forEach((p) => {
-        const clubApps = p.appearances?.[season]?.[clubId] ?? [];
-        const goals = clubApps.reduce((s, a) => s + (a.goals ?? 0), 0);
-        const assists = clubApps.reduce((s, a) => s + (a.assists ?? 0), 0);
-        if (goals > 0 || assists > 0) {
-          entries.push({
-            id: p.id,
-            name: `${p.firstName} ${p.lastName}`,
-            clubName,
-            position: p.position === 'ATT' ? 'FWD' : p.position,
-            goals,
-            assists,
-          });
-        }
-      });
-    });
-    if (ampClubId && ampSquad) {
-      const ampClubName = clubNameMap.get(ampClubId) ?? 'Your Club';
-      ampSquad.forEach((p) => {
-        const clubApps = p.appearances?.[season]?.[ampClubId] ?? [];
-        const goals = clubApps.reduce((s, a) => s + (a.goals ?? 0), 0);
-        const assists = clubApps.reduce((s, a) => s + (a.assists ?? 0), 0);
-        if (goals > 0 || assists > 0) {
-          entries.push({ id: p.id, name: p.name, clubName: ampClubName, position: p.position, goals, assists });
-        }
-      });
+    for (const [playerId, stats] of byPlayer) {
+      if (stats.goals === 0 && stats.assists === 0) continue;
+      const clubName = clubNameMap.get(stats.clubId) ?? stats.clubId;
+
+      const ampPlayer = ampSquadMap.get(playerId);
+      if (ampPlayer) {
+        entries.push({ id: playerId, name: ampPlayer.name, clubName, position: ampPlayer.position, goals: stats.goals, assists: stats.assists });
+        continue;
+      }
+
+      const wc = worldClubs?.[stats.clubId];
+      const npcPlayer = wc?.players.find((p) => p.id === playerId);
+      if (npcPlayer) {
+        entries.push({ id: playerId, name: `${npcPlayer.firstName} ${npcPlayer.lastName}`, clubName, position: npcPlayer.position === 'ATT' ? 'FWD' : npcPlayer.position, goals: stats.goals, assists: stats.assists });
+      }
     }
     return entries;
-  }, [clubs, worldClubs, ampSquad, ampClubId, season, clubNameMap]);
+  }, [lsRecords, leagueId, currentSeasonNumber, ampSquad, worldClubs, clubNameMap]);
 
   const topScorers = useMemo(() =>
     [...playerStats].sort((a, b) => b.goals - a.goals).filter((p) => p.goals > 0).slice(0, 4),
