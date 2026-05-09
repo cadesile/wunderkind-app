@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
+import { loadPlayerAppearances } from '@/utils/appearanceStorage';
 import type { PlayerAppearances } from '@/types/player';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -196,8 +197,11 @@ export default function AppearancesHistoryScreen() {
     return worldClubs[clubId]?.name ?? clubId;
   }, [ampClubId, ampClubName, worldClubs]);
 
-  const appearances: PlayerAppearances | undefined =
-    player && 'appearances' in player ? player.appearances : undefined;
+  const [appearances, setAppearances] = useState<PlayerAppearances | undefined>(undefined);
+  useEffect(() => {
+    if (!id) return;
+    loadPlayerAppearances(id).then(setAppearances).catch(() => setAppearances({}));
+  }, [id]);
 
   const groups = useMemo(
     () => (appearances ? buildGroups(appearances, clubNameFor) : []),

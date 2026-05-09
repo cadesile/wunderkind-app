@@ -17,6 +17,8 @@ import type { ApiGuardian } from '@/types/api';
 import type { Guardian } from '@/types/guardian';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { getFirstSaturdayOfJune } from '@/utils/dateUtils';
 import { randomBaseMorale } from '@/utils/morale';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import type { Player, Position } from '@/types/player';
@@ -29,6 +31,7 @@ import { TIER_REPUTATION_BASELINE } from '@/types/club';
 import { initializeWorld } from '@/api/endpoints/initialize';
 import { useWorldStore } from '@/stores/worldStore';
 import { useScoutStore } from '@/stores/scoutStore';
+import { useFanStore } from '@/stores/fanStore';
 import { syncQueue } from '@/api/syncQueue';
 import type { WorldPlayer, WorldStaff, WorldScout } from '@/types/world';
 
@@ -187,7 +190,7 @@ function worldStaffToCoach(ws: WorldStaff, weekNumber: number): Coach {
     nationality: ws.nationality ?? '',
     joinedWeek: weekNumber,
     morale: randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
-    specialisms: undefined,
+    specialisms: Array.isArray(ws.specialisms) ? undefined : ws.specialisms as import('@/types/coach').CoachSpecialisms | undefined,
     relationships: [],
   };
 }
@@ -418,6 +421,13 @@ export function useAuthFlow(): AuthFlowResult {
 
       // Store NPC world in worldStore
       await setFromWorldPack(initResp.worldPack);
+
+      // Seed the calendar to the first Saturday of June in the current real-world year
+      useCalendarStore.getState().setGameDate(getFirstSaturdayOfJune(new Date().getFullYear()));
+
+      // Initialise fan engagement state for every club in the world pack
+      const allWorldClubs = initResp.worldPack.leagues.flatMap((l) => l.clubs);
+      useFanStore.getState().initialiseFans(allWorldClubs, starterConfig);
 
       // Map AMP starter entities to local types
       players = ampStarter.players.map((wp) => worldPlayerToPlayer(wp, weekNumber));

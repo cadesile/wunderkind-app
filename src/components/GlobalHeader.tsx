@@ -11,7 +11,8 @@ import { FacilityType } from '@/types/facility';
 import { PixelText, BodyText } from './ui/PixelText';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
-import { getGameDateDisplay } from '@/utils/gameDate';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { formatGameDate } from '@/utils/dateUtils';
 import { WK } from '@/constants/theme';
 import { CLUB_COUNTRIES } from '@/utils/nationality';
 
@@ -36,8 +37,8 @@ export function GlobalHeader() {
     )
   );
 
-  const weekNumber = club.weekNumber ?? 1;
-  const dateStr = getGameDateDisplay(weekNumber);
+  const gameDate = useCalendarStore((s) => s.gameDate);
+  const dateStr = formatGameDate(new Date(gameDate));
   const countryFlag = club.country
     ? CLUB_COUNTRIES.find((c) => c.code === club.country)?.flag ?? null
     : null;

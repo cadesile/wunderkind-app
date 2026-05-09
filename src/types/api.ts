@@ -30,6 +30,15 @@ export interface StarterConfig {
    * Format: { "EN": { "1": { "min": 75, "max": 100 } } }
    */
   leagueAbilityRanges?: Record<string, Record<number, { min: number; max: number }>>;
+  /**
+   * Fan count ranges per league tier (string key = tier number, e.g. "1").
+   * Used at world init to assign a starting fan count to each club.
+   */
+  fanBaseRanges?: Record<string, { min: number; max: number }>;
+  /** Fan count increase percentage applied when a club is promoted at season end. */
+  fanBasePromotionIncrease?: number;
+  /** Fan count decrease percentage applied when a club is relegated at season end. */
+  fanBaseRelegationDecrease?: number;
 }
 
 // ─── Club Status ───────────────────────────────────────────────────────────
@@ -314,6 +323,55 @@ export interface SyncAchievement {
   weekNumber:  number;
 }
 
+// ─── Debug log (attached to SyncRequest only when debugLoggingEnabled) ──────────
+
+export interface SyncStorageEntry {
+  /** AsyncStorage key */
+  key: string;
+  /** Size rounded to 1 decimal place */
+  kb: number;
+}
+
+export interface SyncFsDirectoryEntry {
+  /** Directory name relative to documentDirectory, e.g. "fixture-archive" */
+  dir: string;
+  /** Number of files in this directory */
+  fileCount: number;
+  /** Total size of all files in KB, rounded to 1 decimal place */
+  totalKb: number;
+}
+
+export interface SyncDebugLog {
+  /** ISO 8601 — when the log snapshot was captured */
+  capturedAt: string;
+  /** 'ios' | 'android' | 'web' */
+  platform: string;
+  /** How long the full weekly tick took, milliseconds */
+  tickDurationMs: number;
+  storage: {
+    /** SQLite / AsyncStorage metrics */
+    sqlite: {
+      /** Sum of all AsyncStorage values, KB */
+      totalKb: number;
+      /** Total number of AsyncStorage keys */
+      keyCount: number;
+      /** Top 20 keys by size, descending */
+      topKeys: SyncStorageEntry[];
+      /** Count of league-stats-store:t* keys */
+      leagueStatsKeyCount: number;
+      /** Count of player_app:* keys */
+      playerAppKeyCount: number;
+    };
+    /** Device file system metrics (expo-file-system, documentDirectory) */
+    fileSystem: {
+      /** Combined size of all scanned files, KB */
+      totalKb: number;
+      /** Per-directory breakdown */
+      directories: SyncFsDirectoryEntry[];
+    };
+  };
+}
+
 export interface SyncRequest {
   weekNumber: number;
   clientTimestamp: string;        // ISO 8601
@@ -359,6 +417,11 @@ export interface SyncRequest {
   matchResults: SyncMatchResult[];
   /** Season-to-date stats for every player with ≥1 appearance */
   playerStats: SyncPlayerStat[];
+  /**
+   * Debug diagnostics — only present when `gameConfig.debugLoggingEnabled === true`.
+   * Never sent in production builds.
+   */
+  log?: SyncDebugLog;
 }
 
 export interface SyncAcceptedResponse {

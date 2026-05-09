@@ -31,7 +31,10 @@
       "Bash(npx eas:*)",
       "Bash(npx expo:*)",
       "Bash(npx jest:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(nvm use:*)",
+      "WebFetch(domain:docs.swmansion.com)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

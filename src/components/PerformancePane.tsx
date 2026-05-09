@@ -1,23 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSquadStore } from '@/stores/squadStore';
-import { useClubStore } from '@/stores/clubStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
-import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { SortableTable } from '@/components/ui/SortableTable';
+import type { ColumnDef } from '@/components/ui/SortableTable';
+import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap } from '@/utils/haptics';
 import type { Player } from '@/types/player';
 
 const FAB_CLEARANCE = 80;
 
-export type PerfSortKey = 'name' | 'games' | 'goals' | 'assists' | 'avgRating';
-
 type PlayerStats = {
+  id: string;
   player: Player;
   games: number;
   goals: number;
@@ -43,11 +43,7 @@ function shortName(name: string): string {
 
 export function PerformancePane() {
   const allPlayers = useSquadStore((s) => s.players);
-  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const router = useRouter();
-
-  const [sortKey, setSortKey] = useState<PerfSortKey>('goals');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
 
@@ -84,7 +80,7 @@ export function PerformancePane() {
       const startOvr = startSnapshot?.overallRating ?? player.overallRating;
       const improvement = player.overallRating - startOvr;
 
-      return { player, games, goals, assists, avgRating, allTimeGoals, allTimeAssists, startOvr, currentOvr: player.overallRating, improvement };
+      return { id: player.id, player, games, goals, assists, avgRating, allTimeGoals, allTimeAssists, startOvr, currentOvr: player.overallRating, improvement };
     });
   }, [activePlayers, lsRecords, currentSeasonNumber, seasonStartWeek]);
 
@@ -96,24 +92,55 @@ export function PerformancePane() {
   const totalImprovement   = useMemo(() => playerStats.reduce((sum, s) => sum + Math.max(0, s.improvement), 0), [playerStats]);
   const mostImproved       = useMemo(() => [...playerStats].filter((s) => s.improvement > 0).sort((a, b) => b.improvement - a.improvement)[0] ?? null, [playerStats]);
 
-  const sortedPerformers = useMemo(() => {
-    return [...seasonPerformers].sort((a, b) => {
-      let av: number | string = 0, bv: number | string = 0;
-      if (sortKey === 'name')      { av = a.player.name; bv = b.player.name; }
-      else if (sortKey === 'games')     { av = a.games;     bv = b.games; }
-      else if (sortKey === 'goals')     { av = a.goals;     bv = b.goals; }
-      else if (sortKey === 'assists')   { av = a.assists;   bv = b.assists; }
-      else if (sortKey === 'avgRating') { av = a.avgRating; bv = b.avgRating; }
-      if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
-      return sortDir === 'asc' ? av - (bv as number) : (bv as number) - av;
-    });
-  }, [seasonPerformers, sortKey, sortDir]);
-
-  function handleSort(key: PerfSortKey) {
-    hapticTap();
-    if (sortKey === key) setSortDir((d) => d === 'desc' ? 'asc' : 'desc');
-    else { setSortKey(key); setSortDir('desc'); }
-  }
+  const PERF_COLS: ColumnDef<PlayerStats>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'NAME',
+      flex: 2.5,
+      sortValue: (s) => s.player.name,
+      render: (s) => <BodyText size={12} upper numberOfLines={1} style={{ flex: 1 }}>{shortName(s.player.name)}</BodyText>,
+    },
+    {
+      key: 'nationality',
+      label: 'NAT',
+      flex: 0.9,
+      align: 'center',
+      sortValue: (s) => s.player.nationality,
+      render: (s) => <FlagText nationality={s.player.nationality} size={12} />,
+    },
+    {
+      key: 'games',
+      label: 'GP',
+      flex: 0.7,
+      align: 'center',
+      sortValue: (s) => s.games,
+      render: (s) => <PixelText size={7}>{s.games}</PixelText>,
+    },
+    {
+      key: 'goals',
+      label: 'G',
+      flex: 0.7,
+      align: 'center',
+      sortValue: (s) => s.goals,
+      render: (s) => <PixelText size={7} color={s.goals > 0 ? WK.yellow : WK.dim}>{s.goals}</PixelText>,
+    },
+    {
+      key: 'assists',
+      label: 'A',
+      flex: 0.7,
+      align: 'center',
+      sortValue: (s) => s.assists,
+      render: (s) => <PixelText size={7} color={s.assists > 0 ? WK.tealLight : WK.dim}>{s.assists}</PixelText>,
+    },
+    {
+      key: 'avgRating',
+      label: 'RTG',
+      flex: 1,
+      align: 'center',
+      sortValue: (s) => s.avgRating,
+      render: (s) => <PixelText size={7} color={WK.text}>{s.avgRating > 0 ? s.avgRating.toFixed(1) : '—'}</PixelText>,
+    },
+  ], []);
 
   function renderLeaderPanel(
     label: string,
@@ -158,25 +185,6 @@ export function PerformancePane() {
     );
   }
 
-  function SortHeader({ label, col, flex, width }: { label: string; col: PerfSortKey; flex?: number; width?: number }) {
-    const active = sortKey === col;
-    const arrow = sortDir === 'desc' ? ' v' : ' ^';
-    return (
-      <Pressable
-        onPress={() => handleSort(col)}
-        hitSlop={8}
-        style={[
-          { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-          flex != null ? { flex, minWidth: 0 } : { width, flexShrink: 0 },
-        ]}
-      >
-        <PixelText size={6} color={active ? WK.yellow : WK.dim} numberOfLines={1}>
-          {label}{active ? arrow : ''}
-        </PixelText>
-      </Pressable>
-    );
-  }
-
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
       <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
@@ -197,46 +205,14 @@ export function PerformancePane() {
 
       <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
         <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>SEASON PERFORMANCE</PixelText>
-        <View style={{ flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: WK.border, marginBottom: 4, alignItems: 'center' }}>
-          <SortHeader label="NAME" col="name" flex={2.5} />
-          <View style={{ width: 22, justifyContent: 'center', alignItems: 'center', paddingVertical: 6, flexShrink: 0 }}>
-            <PixelText size={6} color={WK.dim}>NAT</PixelText>
-          </View>
-          <SortHeader label="GP"  col="games"     width={28} />
-          <SortHeader label="G"   col="goals"     width={24} />
-          <SortHeader label="A"   col="assists"   width={24} />
-          <SortHeader label="RTG" col="avgRating" width={36} />
-        </View>
-
-        {sortedPerformers.length === 0 ? (
-          <BodyText size={11} dim style={{ textAlign: 'center', marginTop: 16 }}>
-            NO MATCH DATA — PLAY A FIXTURE
-          </BodyText>
-        ) : (
-          sortedPerformers.map((s) => (
-            <Pressable
-              key={s.player.id}
-              onPress={() => { hapticTap(); router.push(`/player/${s.player.id}`); }}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 7,
-                borderBottomWidth: 1,
-                borderBottomColor: WK.border + '44',
-                backgroundColor: pressed ? WK.tealDark : 'transparent',
-              })}
-            >
-              <BodyText size={12} upper numberOfLines={1} style={{ flex: 2.5, minWidth: 0 }}>{shortName(s.player.name)}</BodyText>
-              <View style={{ width: 22, alignItems: 'center', flexShrink: 0 }}>
-                <FlagText nationality={s.player.nationality} size={12} />
-              </View>
-              <PixelText size={7} style={{ width: 28, textAlign: 'center', flexShrink: 0 }}>{s.games}</PixelText>
-              <PixelText size={7} color={s.goals > 0 ? WK.yellow : WK.dim} style={{ width: 24, textAlign: 'center', flexShrink: 0 }}>{s.goals}</PixelText>
-              <PixelText size={7} color={s.assists > 0 ? WK.tealLight : WK.dim} style={{ width: 24, textAlign: 'center', flexShrink: 0 }}>{s.assists}</PixelText>
-              <PixelText size={7} color={WK.text} style={{ width: 36, textAlign: 'center', flexShrink: 0 }}>{s.avgRating > 0 ? s.avgRating.toFixed(1) : '—'}</PixelText>
-            </Pressable>
-          ))
-        )}
+        <SortableTable
+          columns={PERF_COLS}
+          data={seasonPerformers}
+          defaultSortKey="goals"
+          defaultSortDir="desc"
+          onRowPress={(s) => { hapticTap(); router.push(`/player/${s.player.id}`); }}
+          emptyMessage="NO MATCH DATA YET"
+        />
       </View>
 
       <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>

@@ -87,15 +87,15 @@ function FacilityCard({
   template,
   level,
   condition,
-  balance,
+  balancePence,
 }: {
   template: FacilityTemplate;
   level: number;
   condition: number;
-  balance: number;
+  balancePence: number;
 }) {
   const { upgradeLevel, repairFacility } = useFacilityStore();
-  const { addBalance, club } = useClubStore();
+  const { club } = useClubStore();
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [repairModalVisible, setRepairModalVisible] = useState(false);
 
@@ -104,8 +104,8 @@ function FacilityCard({
   const nextMaintenance = calculateFacilityUpkeep(template, level + 1);
   const repairCost      = repairFacilityCost(level, condition, template.baseCost);
 
-  const canAffordUpgrade = balance >= upgradeCost;
-  const canAffordRepair  = balance >= repairCost;
+  const canAffordUpgrade = balancePence >= upgradeCost;
+  const canAffordRepair  = balancePence >= repairCost;
   const atMax      = level >= template.maxLevel;
   const levelPct   = (level / template.maxLevel) * 100;
   const needsRepair = level > 0 && condition < 100;
@@ -113,7 +113,6 @@ function FacilityCard({
   function confirmUpgrade() {
     setUpgradeModalVisible(false);
     upgradeLevel(template.slug);
-    addBalance(-upgradeCost * 100);
     useFinanceStore.getState().addTransaction({
       amount:      -upgradeCost,
       category:    'facility_upgrade',
@@ -254,7 +253,7 @@ function FacilityCard({
                   <BodyText size={13} color={WK.red}>
                     INSUFFICIENT FUNDS — need
                   </BodyText>
-                  <Money pence={repairCost * 100} color={WK.red} size={13} />
+                  <Money pence={repairCost} color={WK.red} size={13} />
                 </View>
               ) : (
                 <>
@@ -328,9 +327,21 @@ function HirePane({
   const clubTierKey = (club.reputationTier?.toLowerCase() ?? 'local') as ClubTier;
 
   const [showRoleFilter, setShowRoleFilter] = useState(false);
+  const [selectedTier, setSelectedTier]     = useState<string>('ALL');
   const [signError, setSignError]           = useState<string | null>(null);
-  const [tierPopup, setTierPopup]           = useState<string | null>(null);
+  const [tierPopup, setTierPopup]           = useState<{ item: HireItem; quote: string } | null>(null);
   const [capPopup, setCapPopup]             = useState<CapBlock | null>(null);
+
+  const TIER_REJECTION_QUOTES = [
+    "Sorry, I'm not interested in working at this level.",
+    "I appreciate the offer, but this club isn't where I see my career going.",
+    "I'm flattered, but I need a bigger stage to show what I can do.",
+    "My ambitions don't quite align with where you are right now.",
+  ];
+  function showTierPopup(item: HireItem) {
+    const quote = TIER_REJECTION_QUOTES[Math.floor(Math.random() * TIER_REJECTION_QUOTES.length)];
+    setTierPopup({ item, quote });
+  }
 
   function getCapBlock(role: string): CapBlock | null {
     const cap = getRoleCap(role, config);
@@ -352,23 +363,38 @@ function HirePane({
     return roles;
   }, [staffRoles]);
 
+  const [visibleCount, setVisibleCount] = useState(10);
+
+  // Normalize to 0–100: coaches use influence (1–20) × 5, scouts use successRate directly
+  function getAbility(item: HireItem): number {
+    return item.kind === 'coach'
+      ? (item.data as MarketCoach).influence * 5
+      : (item.data as MarketScout).successRate;
+  }
+
   const allItems: HireItem[] = [
     ...coaches.map((c) => ({ kind: 'coach' as const, data: c })),
     ...marketScouts.map((s) => ({ kind: 'scout' as const, data: s })),
   ];
 
-  const filtered =
+  const filtered = (
     selectedRole === 'ALL'
       ? allItems
-      : allItems.filter((item) => item.data.role === selectedRole);
+      : allItems.filter((item) => item.data.role === selectedRole)
+  ).filter((item) =>
+    selectedTier === 'ALL' || (item.data.tier ?? 'local') === selectedTier,
+  ).sort((a, b) => getAbility(b) - getAbility(a));
 
-  const visibleItems = filtered.map((item) => {
+  const allVisibleItems = filtered.map((item) => {
     const itemTierKey = (item.data.tier ?? 'local') as ClubTier;
     const tierRestricted = TIER_ORDER[itemTierKey] > TIER_ORDER[clubTierKey];
     const signingFeePounds = Math.round((item.data.salary * 4) / 100);
     const canAfford = (club.balance ?? 0) >= signingFeePounds;
     return { ...item, tierRestricted, canAfford, signingFeePounds };
   });
+
+  const visibleItems = allVisibleItems.slice(0, visibleCount);
+  const hasMore = allVisibleItems.length > visibleCount;
 
   function signCoach(mc: MarketCoach) {
     const block = getCapBlock(mc.role);
@@ -411,15 +437,24 @@ function HirePane({
         paddingHorizontal: 12, paddingVertical: 8,
         borderBottomWidth: 2, borderBottomColor: WK.border,
       }}>
-        <BodyText size={11} dim>{filtered.length} AVAILABLE</BodyText>
+        <BodyText size={11} dim>{allVisibleItems.length} AVAILABLE</BodyText>
         <Pressable
           onPress={() => { hapticTap(); setShowRoleFilter(true); }}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
-          <SlidersHorizontal size={14} color={selectedRole !== 'ALL' ? WK.yellow : WK.dim} />
-          <PixelText size={7} color={selectedRole !== 'ALL' ? WK.yellow : WK.dim}>
-            {selectedRole === 'ALL' ? 'FILTER' : formatStaffRole(selectedRole).toUpperCase()}
-          </PixelText>
+          {(() => {
+            const hasFilter = selectedRole !== 'ALL' || selectedTier !== 'ALL';
+            const label = [
+              selectedRole !== 'ALL' ? formatStaffRole(selectedRole).toUpperCase() : null,
+              selectedTier !== 'ALL' ? selectedTier.toUpperCase() : null,
+            ].filter(Boolean).join(' · ') || 'FILTER';
+            return (
+              <>
+                <SlidersHorizontal size={14} color={hasFilter ? WK.yellow : WK.dim} />
+                <PixelText size={7} color={hasFilter ? WK.yellow : WK.dim}>{label}</PixelText>
+              </>
+            );
+          })()}
         </Pressable>
       </View>
 
@@ -439,7 +474,7 @@ function HirePane({
             return (
               <Pressable
                 onPress={() => {
-                  if (tierRestricted) { setTierPopup('Tier Restriction: Upgrade your club to hire this staff member.'); return; }
+                  if (tierRestricted) { showTierPopup(item); return; }
                   signCoach(mc);
                 }}
                 style={[{
@@ -459,6 +494,21 @@ function HirePane({
                       <Money pence={mc.salary} dim size={11} />
                       <BodyText size={11} dim>/wk</BodyText>
                     </View>
+                    {mc.specialisms && Object.keys(mc.specialisms).length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+                        {Object.entries(mc.specialisms).map(([spec, strength]) => (
+                          <View key={spec} style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 3,
+                            paddingHorizontal: 5, paddingVertical: 2,
+                            backgroundColor: WK.tealDark,
+                            borderWidth: 1, borderColor: WK.tealLight,
+                          }}>
+                            <PixelText size={6} color={WK.tealLight}>{spec.toUpperCase()}</PixelText>
+                            <PixelText size={6} color={WK.yellow}>{strength}</PixelText>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <Badge label={`INF ${mc.influence}`} color="yellow" />
@@ -480,7 +530,7 @@ function HirePane({
           return (
             <Pressable
               onPress={() => {
-                if (tierRestricted) { setTierPopup('Tier Restriction: Upgrade your club to hire this scout.'); return; }
+                if (tierRestricted) { showTierPopup(item); return; }
                 signScout(ms);
               }}
               style={[{
@@ -514,23 +564,44 @@ function HirePane({
         ListEmptyComponent={
           <BodyText size={12} dim style={{ textAlign: 'center', marginTop: 32 }}>NO STAFF AVAILABLE</BodyText>
         }
+        ListFooterComponent={
+          hasMore ? (
+            <Pressable
+              onPress={() => { hapticTap(); setVisibleCount((n) => n + 10); }}
+              style={{
+                marginTop: 4,
+                marginBottom: 16,
+                paddingVertical: 12,
+                alignItems: 'center',
+                borderWidth: 2,
+                borderColor: WK.border,
+                backgroundColor: WK.tealMid,
+              }}
+            >
+              <PixelText size={8} color={WK.yellow}>LOAD MORE</PixelText>
+            </Pressable>
+          ) : null
+        }
       />
 
       <Modal visible={showRoleFilter} transparent animationType="fade" onRequestClose={() => setShowRoleFilter(false)}>
         <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }} onPress={() => setShowRoleFilter(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: WK.tealCard, borderTopWidth: 3, borderTopColor: WK.border, padding: 16, paddingBottom: 32 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                <PixelText size={9} upper>HIRE BY ROLE</PixelText>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+                <PixelText size={9} upper>FILTERS</PixelText>
                 <Pressable onPress={() => setShowRoleFilter(false)}>
                   <PixelText size={9} color={WK.dim}>✕</PixelText>
                 </Pressable>
               </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+
+              {/* Role */}
+              <BodyText size={11} dim style={{ marginBottom: 8 }}>ROLE</BodyText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                 {roleOptions.map((role) => (
                   <Pressable
                     key={role}
-                    onPress={() => { hapticTap(); setSelectedRole(role); setShowRoleFilter(false); }}
+                    onPress={() => { hapticTap(); setSelectedRole(role); setVisibleCount(10); }}
                     style={{
                       paddingHorizontal: 12, paddingVertical: 8,
                       backgroundColor: selectedRole === role ? WK.yellow : WK.tealMid,
@@ -544,6 +615,27 @@ function HirePane({
                   </Pressable>
                 ))}
               </View>
+
+              {/* Tier */}
+              <BodyText size={11} dim style={{ marginBottom: 8 }}>TIER</BodyText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {(['ALL', 'local', 'regional', 'national', 'elite'] as const).map((tier) => (
+                  <Pressable
+                    key={tier}
+                    onPress={() => { hapticTap(); setSelectedTier(tier); setVisibleCount(10); }}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 8,
+                      backgroundColor: selectedTier === tier ? WK.yellow : WK.tealMid,
+                      borderWidth: 2,
+                      borderColor: selectedTier === tier ? WK.yellow : WK.border,
+                    }}
+                  >
+                    <PixelText size={7} color={selectedTier === tier ? WK.border : WK.text}>
+                      {tier === 'ALL' ? 'ALL' : tier.toUpperCase()}
+                    </PixelText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           </Pressable>
         </Pressable>
@@ -552,9 +644,47 @@ function HirePane({
       {signError && (
         <PixelDialog visible title="SIGN FAILED" message={signError} onConfirm={() => setSignError(null)} onClose={() => setSignError(null)} />
       )}
-      {tierPopup && (
-        <PixelDialog visible title="TIER RESTRICTION" message={tierPopup} onConfirm={() => setTierPopup(null)} onClose={() => setTierPopup(null)} />
-      )}
+      {tierPopup && (() => {
+        const { item, quote } = tierPopup;
+        const isTierCoach = item.kind === 'coach';
+        const tierData    = item.data;
+        const tierAppearance = generateAppearance(tierData.id, isTierCoach ? 'COACH' : 'SCOUT', 35);
+        return (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setTierPopup(null)}>
+            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 24 }} onPress={() => setTierPopup(null)}>
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 20, ...pixelShadow }}>
+                  {/* Staff card */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <Avatar appearance={tierAppearance} role={isTierCoach ? 'COACH' : 'SCOUT'} size={52} />
+                    <View style={{ flex: 1 }}>
+                      <BodyText size={14} upper numberOfLines={1}>
+                        {isTierCoach
+                          ? `${(tierData as MarketCoach).firstName} ${(tierData as MarketCoach).lastName}`
+                          : `${(tierData as MarketScout).firstName} ${(tierData as MarketScout).lastName}`}
+                      </BodyText>
+                      <PixelText size={7} color={WK.tealLight} style={{ marginTop: 2 }}>
+                        {formatStaffRole(tierData.role).toUpperCase()}
+                      </PixelText>
+                      <FlagText nationality={tierData.nationality} size={11} style={{ marginTop: 4 }} />
+                    </View>
+                  </View>
+                  {/* Speech bubble */}
+                  <View style={{ backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.border, borderRadius: 0, padding: 12, marginBottom: 20 }}>
+                    <BodyText size={13} style={{ fontStyle: 'italic' }}>"{quote}"</BodyText>
+                  </View>
+                  <Pressable
+                    onPress={() => { hapticTap(); setTierPopup(null); }}
+                    style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: WK.tealMid, borderWidth: 2, borderColor: WK.border }}
+                  >
+                    <PixelText size={8}>DISMISS</PixelText>
+                  </Pressable>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        );
+      })()}
 
       {capPopup && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setCapPopup(null)}>
@@ -614,12 +744,6 @@ export default function FacilitiesScreen() {
     }
   }, [params.tab, params.role]);
 
-  const balance = penceToPounds(
-    typeof club.balance === 'number' && !isNaN(club.balance)
-      ? club.balance
-      : club.totalCareerEarnings * 100,
-  );
-
   const isCategory = (t: FacilitiesTab): t is FacilityCategory => t !== 'HIRE';
   const visibleTemplates = isCategory(activeTab)
     ? templates.filter((t) => t.category === activeTab)
@@ -674,7 +798,7 @@ export default function FacilitiesScreen() {
               template={template}
               level={levels[template.slug] ?? 0}
               condition={conditions[template.slug] ?? 100}
-              balance={balance}
+              balancePence={club.balance ?? 0}
             />
           ))}
 

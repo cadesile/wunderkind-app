@@ -32,6 +32,11 @@ export interface MatchResultRecord {
 interface MatchResultStoreState {
   results: Record<string, MatchResultRecord>;
   addResult: (record: MatchResultRecord) => void;
+  /**
+   * Bulk version of addResult — inserts all records in a single set() call.
+   * Use in SimulationService to avoid one AsyncStorage write per fixture.
+   */
+  batchAddResults: (records: MatchResultRecord[]) => void;
   /** Removes records from seasons more than 1 behind currentSeason (keeps current + previous). */
   pruneOldSeasons: (currentSeason: number) => void;
 }
@@ -44,6 +49,15 @@ export const useMatchResultStore = create<MatchResultStoreState>()(
       addResult: (record) =>
         set((s) => ({ results: { ...s.results, [record.fixtureId]: record } })),
 
+      batchAddResults: (records) => {
+        if (records.length === 0) return;
+        set((s) => {
+          const merged = { ...s.results };
+          for (const r of records) merged[r.fixtureId] = r;
+          return { results: merged };
+        });
+      },
+
       pruneOldSeasons: (currentSeason) =>
         set((s) => {
           const keep: Record<string, MatchResultRecord> = {};
@@ -53,6 +67,20 @@ export const useMatchResultStore = create<MatchResultStoreState>()(
           return { results: keep };
         }),
     }),
-    { name: 'match-result-store', storage: zustandStorage },
+    {
+      name: 'match-result-store',
+      storage: zustandStorage,
+      // Strip player arrays (large, redundant with leagueStatsStore) and cap total records.
+      partialize: (state) => {
+        const entries = Object.entries(state.results)
+          .sort(([, a], [, b]) => b.season - a.season || b.playedAt.localeCompare(a.playedAt))
+          .slice(0, 200);
+        return {
+          results: Object.fromEntries(
+            entries.map(([id, r]) => [id, { ...r, homePlayers: [], awayPlayers: [] }]),
+          ),
+        };
+      },
+    },
   ),
 );

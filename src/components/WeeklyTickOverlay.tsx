@@ -1,141 +1,149 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Animated } from 'react-native';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
+import { useClubStore } from '@/stores/clubStore';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { isJune } from '@/utils/dateUtils';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
 
-const PHASES = [
-  { label: 'RUNNING TRAINING SESSION',  pct: 13  },
-  { label: 'CHECKING FOR INJURIES',      pct: 25  },
-  { label: 'REVIEWING SQUAD BEHAVIOUR',  pct: 38  },
-  { label: 'CALCULATING FINANCES',       pct: 51  },
-  { label: 'DEVELOPING PLAYERS',         pct: 64  },
-  { label: 'ASSESSING SQUAD MORALE',     pct: 76  },
-  { label: 'CHECKING AGENT ACTIVITY',    pct: 89  },
-  { label: 'ADVANCING TO NEXT WEEK',     pct: 100 },
-];
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
-const PHASE_DURATION = 220; // ms per phase → ~1.76 s total
+const FALLBACK_LABEL = 'INITIALISING';
 
 export function WeeklyTickOverlay() {
   const isProcessing = useTickProgressStore((s) => s.isProcessing);
+  const storePhase   = useTickProgressStore((s) => s.phase);
+  const storePct     = useTickProgressStore((s) => s.phasePct);
+  const weekNumber   = useClubStore((s) => s.club.weekNumber ?? 1);
+  const gameDate     = useCalendarStore((s) => s.gameDate);
 
-  const [visible, setVisible]     = useState(false);
-  const [phaseIdx, setPhaseIdx]   = useState(0);
-  const [tickDone, setTickDone]   = useState(false);
+  const gameDateObj       = new Date(gameDate);
+  const windowOpen        = isJune(gameDateObj);
+  const julyFirst         = new Date(gameDateObj.getFullYear(), 6, 1);
+  const weeksLeftInJune   = windowOpen
+    ? Math.max(1, Math.ceil((julyFirst.getTime() - gameDateObj.getTime()) / MS_PER_WEEK))
+    : 0;
+
+  const [visible, setVisible]               = useState(false);
+  const [currentPhase, setCurrentPhase]     = useState(FALLBACK_LABEL);
+  const [completedPhases, setCompletedPhases] = useState<string[]>([]);
+  const [dots, setDots]                     = useState('.');
+  const prevPhaseRef = useRef('');
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const barAnim  = useRef(new Animated.Value(0)).current;
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Start / stop based on isProcessing ────────────────────────────────────
+  // ── Show / hide ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (isProcessing) {
-      // Reset and show
-      setPhaseIdx(0);
-      setTickDone(false);
+      setCompletedPhases([]);
+      setCurrentPhase(FALLBACK_LABEL);
+      prevPhaseRef.current = '';
+      setDots('.');
       setVisible(true);
       barAnim.setValue(0);
-
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }).start();
-
-      // Advance phase every PHASE_DURATION ms
-      let idx = 0;
-      intervalRef.current = setInterval(() => {
-        idx += 1;
-        if (idx >= PHASES.length) {
-          clearInterval(intervalRef.current!);
-          intervalRef.current = null;
-          setTickDone(true);
-          return;
-        }
-        setPhaseIdx(idx);
-      }, PHASE_DURATION);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
     } else {
-      // Tick finished — mark done so we can close once animation is also done
-      setTickDone(true);
+      // Snap bar to 100 %, hold briefly, then fade out
+      Animated.timing(barAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+      const t = setTimeout(() => {
+        Animated.timing(fadeAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(
+          ({ finished }) => { if (finished) setVisible(false); },
+        );
+      }, 600);
+      return () => clearTimeout(t);
     }
+  }, [isProcessing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isProcessing]);
-
-  // ── Animate progress bar whenever phaseIdx changes ────────────────────────
+  // ── Phase label updates ────────────────────────────────────────────────────
   useEffect(() => {
-    const target = PHASES[phaseIdx]?.pct ?? 100;
+    if (!storePhase) return;
+    const prev = prevPhaseRef.current;
+    if (prev && prev !== storePhase) {
+      setCompletedPhases((ps) => [...ps, prev]);
+    }
+    prevPhaseRef.current = storePhase;
+    setCurrentPhase(storePhase);
+    setDots('.');
+  }, [storePhase]);
+
+  // ── Bar animation ──────────────────────────────────────────────────────────
+  useEffect(() => {
     Animated.timing(barAnim, {
-      toValue: target / 100,
-      duration: PHASE_DURATION - 20,
+      toValue: storePct / 100,
+      duration: 280,
       useNativeDriver: false,
     }).start();
-  }, [phaseIdx]);
+  }, [storePct]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Hide overlay when both animation & tick are done ──────────────────────
+  // ── Dots animation ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!tickDone || isProcessing) return;
-
-    // Snap bar to 100 %
-    Animated.timing(barAnim, {
-      toValue: 1,
-      duration: 120,
-      useNativeDriver: false,
-    }).start();
-
-    // Hold at 100 % for 400 ms, then fade out
-    const holdTimer = setTimeout(() => {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setVisible(false);
-      });
-    }, 400);
-
-    return () => clearTimeout(holdTimer);
-  }, [tickDone, isProcessing]);
+    if (!visible) return;
+    const t = setInterval(() => setDots((d) => (d.length >= 3 ? '.' : d + '.')), 420);
+    return () => clearInterval(t);
+  }, [visible]);
 
   if (!visible) return null;
 
-  const phase = PHASES[phaseIdx];
+  const displayPct = Math.round(storePct);
 
   return (
     <Animated.View
       style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        top: 0, left: 0, right: 0, bottom: 0,
         zIndex: 999,
-        backgroundColor: 'rgba(13, 46, 40, 0.96)',
+        backgroundColor: 'rgba(13, 46, 40, 0.97)',
         justifyContent: 'center',
         alignItems: 'center',
         opacity: fadeAnim,
       }}
     >
-      {/* Title */}
-      <PixelText size={9} color={WK.yellow} style={{ marginBottom: 28, textAlign: 'center' }}>
-        PROCESSING WEEK
-      </PixelText>
-
-      {/* Phase label */}
-      <View style={{ height: 32, justifyContent: 'center', marginBottom: 20, paddingHorizontal: 24 }}>
-        <PixelText size={7} color={WK.text} style={{ textAlign: 'center', lineHeight: 14 }}>
-          {phase?.label ?? 'ADVANCING TO NEXT WEEK'}
+      {/* ── Week badge ────────────────────────────────────────────────────── */}
+      <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        <PixelText size={7} color={WK.dim} style={{ marginBottom: 6 }}>
+          PROCESSING
+        </PixelText>
+        <View style={{
+          backgroundColor: WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.yellow,
+          paddingHorizontal: 20,
+          paddingVertical: 10,
+        }}>
+          <PixelText size={14} color={WK.yellow}>
+            WEEK {weekNumber}
+          </PixelText>
+        </View>
+        <PixelText size={6} color={WK.tealLight} style={{ marginTop: 6 }}>
+          → ADVANCING TO WEEK {weekNumber + 1}
         </PixelText>
       </View>
 
-      {/* Progress bar */}
+      {/* ── Phase log ─────────────────────────────────────────────────────── */}
+      <View style={{ width: 288, marginBottom: 20 }}>
+        {completedPhases.slice(-4).map((label, i) => (
+          <View
+            key={i}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}
+          >
+            <PixelText size={6} color={'#4CAF50'}>✓</PixelText>
+            <PixelText size={6} color={WK.dim}>{label}</PixelText>
+          </View>
+        ))}
+        {/* Current phase */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+          <PixelText size={6} color={WK.yellow}>▶</PixelText>
+          <PixelText size={6} color={WK.text}>{currentPhase}{dots}</PixelText>
+        </View>
+      </View>
+
+      {/* ── Progress bar ──────────────────────────────────────────────────── */}
       <View
         style={{
-          width: 260,
-          height: 18,
+          width: 288,
+          height: 14,
           backgroundColor: WK.tealDark,
           borderWidth: 3,
           borderColor: WK.border,
@@ -144,9 +152,7 @@ export function WeeklyTickOverlay() {
         <Animated.View
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            bottom: 0,
+            top: 0, left: 0, bottom: 0,
             backgroundColor: WK.yellow,
             width: barAnim.interpolate({
               inputRange:  [0, 1],
@@ -154,41 +160,46 @@ export function WeeklyTickOverlay() {
             }),
           }}
         />
+        {/* Segment ticks */}
+        {[25, 50, 75].map((tick) => (
+          <View
+            key={tick}
+            style={{
+              position: 'absolute',
+              top: 0, bottom: 0,
+              left: `${tick}%` as unknown as number,
+              width: 2,
+              backgroundColor: WK.border,
+              opacity: 0.5,
+            }}
+          />
+        ))}
       </View>
 
-      {/* Percentage label */}
-      <PixelText size={8} dim style={{ marginTop: 8 }}>
-        {`${phase?.pct ?? 100}%`}
+      {/* ── Pct label ─────────────────────────────────────────────────────── */}
+      <PixelText size={7} color={WK.dim} style={{ marginTop: 7 }}>
+        {displayPct}%
       </PixelText>
 
-      {/* Blinking dots */}
-      <BlinkingDots />
-    </Animated.View>
-  );
-}
-
-function BlinkingDots() {
-  const opacityAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacityAnim, { toValue: 0.2, duration: 500, useNativeDriver: true }),
-        Animated.timing(opacityAnim, { toValue: 1,   duration: 500, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
-  return (
-    <Animated.View style={{ flexDirection: 'row', gap: 6, marginTop: 28, opacity: opacityAnim }}>
-      {[0, 1, 2].map((i) => (
-        <View
-          key={i}
-          style={{ width: 8, height: 8, backgroundColor: WK.yellow, borderWidth: 1, borderColor: WK.border }}
-        />
-      ))}
+      {/* ── Transfer window indicator ─────────────────────────────────────── */}
+      {windowOpen && (
+        <View style={{ marginTop: 18, alignItems: 'center', gap: 6 }}>
+          <View style={{
+            backgroundColor: WK.yellow + '22',
+            borderWidth: 2,
+            borderColor: WK.yellow,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            alignItems: 'center',
+            gap: 4,
+          }}>
+            <PixelText size={7} color={WK.yellow}>TRANSFER WINDOW OPEN</PixelText>
+            <PixelText size={6} color={WK.tealLight}>
+              {`WEEKS REMAINING: ${weeksLeftInJune}`}
+            </PixelText>
+          </View>
+        </View>
+      )}
     </Animated.View>
   );
 }

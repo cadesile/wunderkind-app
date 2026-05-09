@@ -6,6 +6,8 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useLeagueStore, selectCurrentSeason } from '@/stores/leagueStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useFinanceStore } from '@/stores/financeStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { useEventStore } from '@/stores/eventStore';
 import { useLeagueHistoryStore } from '@/stores/leagueHistoryStore';
 import { concludeSeason } from '@/api/endpoints/season';
 import type { PyramidStanding, PyramidLeague } from '@/api/endpoints/season';
@@ -16,9 +18,12 @@ import type { GameConfig } from '@/types/gameConfig';
 import { uuidv7 } from '@/utils/uuidv7';
 import { penceToPounds } from '@/utils/currency';
 import { useFanStore } from '@/stores/fanStore';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import type { FanImpactTarget } from '@/types/fans';
 import { shouldRetire } from './retirementEngine';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
+import { pruneAppearancesBefore } from '@/utils/appearanceStorage';
+import { archiveFixtureSeason, pruneFixtureArchives } from '@/utils/fixtureArchive';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -214,7 +219,11 @@ export async function applySeasonResponse(
     });
   }
 
-  // 4. Replace all fixtures with server-generated schedule for the new season.
+  // 4. Archive completed season fixtures to file system, then replace with new schedule.
+  const completedFixtures = useFixtureStore.getState().fixtures;
+  const completedSeason = nextSeason - 1;
+  await archiveFixtureSeason(completedSeason, completedFixtures);
+  await pruneFixtureArchives(5);
   useFixtureStore.getState().clearSeason();
   for (const l of responseLeagues) {
     useFixtureStore.getState().loadFromServerSchedule(l.id, nextSeason, l.fixtures);
@@ -526,6 +535,138 @@ export function awardSeasonFanEvents(snapshot: SeasonTransitionSnapshot): void {
   }
 }
 
+// ─── Season-end fan engagement ────────────────────────────────────────────────
+
+/**
+ * Apply season-end fan engagement processing:
+ *   PART 1 — Promotion/relegation fan base changes for all clubs (AMP and NPC).
+ *   PART 2 — Shirt sales income credited to AMP club balance.
+ *   PART 3 — Gentle sentiment decay to prevent values locking at extremes.
+ */
+export function applySeasonFanEngagement(
+  snapshot: SeasonTransitionSnapshot,
+  pyramidLeagues: PyramidLeague[],
+): void {
+  const fanStore      = useFanStore.getState();
+  const { config }    = useGameConfigStore.getState();
+  const ampClubId     = useClubStore.getState().club.id;
+  const { addTransaction } = useFinanceStore.getState();
+  const { addMessage }     = useInboxStore.getState();
+
+  const promotionIncrease  = config.fanBasePromotionIncrease;
+  const relegationDecrease = config.fanBaseRelegationDecrease;
+
+  // Build a promotion/relegation lookup from all league standings.
+  const movementMap = new Map<string, { promoted: boolean; relegated: boolean }>();
+  for (const league of pyramidLeagues) {
+    for (const standing of league.standings) {
+      movementMap.set(standing.clubId, {
+        promoted:  standing.promoted,
+        relegated: standing.relegated,
+      });
+    }
+  }
+  // AMP club: use snapshot values — they are the authoritative source.
+  movementMap.set(ampClubId, {
+    promoted:  snapshot.promoted,
+    relegated: snapshot.relegated,
+  });
+
+  // ── PART 1 — Fan base changes ─────────────────────────────────────────────
+  for (const fan of fanStore.fans) {
+    const movement = movementMap.get(fan.clubId);
+
+    if (movement?.promoted) {
+      const newFanCount = Math.round(fan.fanCount * (1 + promotionIncrease));
+      fanStore.updateFanCount(fan.clubId, newFanCount);
+      fanStore.updateSentiment(fan.clubId, 15);
+      fanStore.updateMorale(fan.clubId, 20);
+    } else if (movement?.relegated) {
+      const newFanCount = Math.round(fan.fanCount * (1 - relegationDecrease));
+      fanStore.updateFanCount(fan.clubId, newFanCount);
+      fanStore.updateSentiment(fan.clubId, -10);
+      fanStore.updateMorale(fan.clubId, -25);
+    } else {
+      // Minor sentiment drift toward 50 for clubs that stayed in the same tier
+      if (fan.sentiment > 50) {
+        fanStore.updateSentiment(fan.clubId, -1);
+      } else if (fan.sentiment < 50) {
+        fanStore.updateSentiment(fan.clubId, 1);
+      }
+    }
+  }
+
+  // ── PART 2 — Shirt sales income (AMP club only) ───────────────────────────
+  // Re-read after Part 1 mutations so fanCount and morale are current.
+  const ampFan = useFanStore.getState().getFanState(ampClubId);
+  if (ampFan) {
+    // TODO(Frontend P5): replace with club-specific shirtPrice from pricing config.
+    const SHIRT_PRICE_PENCE = 4500; // £45 default
+    const shirtSalesIncome  = Math.round(ampFan.fanCount * (ampFan.morale / 100)) * SHIRT_PRICE_PENCE;
+
+    addTransaction({
+      amount:      shirtSalesIncome,
+      category:    'matchday_income',
+      description: 'Season shirt sales',
+      weekNumber:  snapshot.weekNumber,
+    });
+
+    const amountPounds = Math.round(shirtSalesIncome / 100);
+    const shirtTemplate = useEventStore.getState().getTemplateBySlug('fan_shirt_sales_income');
+    const amountFormatted = `£${amountPounds.toLocaleString()}`;
+    addMessage({
+      id:      `shirt-sales-s${snapshot.currentSeason}`,
+      type:    'system',
+      week:    snapshot.weekNumber,
+      subject: shirtTemplate?.title ?? 'Season Shirt Sales Revenue',
+      body:    shirtTemplate?.bodyTemplate.replace('{amount}', amountFormatted)
+        ?? `Season shirt sales revenue of ${amountFormatted} has been credited to your balance.`,
+      isRead:  false,
+      metadata: { systemType: 'shirt_sales', amount: shirtSalesIncome, templateSlug: 'fan_shirt_sales_income' },
+    });
+
+    // FAN_PROMOTION_BOOST — fires when AMP club is promoted
+    if (snapshot.promoted) {
+      const promoTemplate = useEventStore.getState().getTemplateBySlug('fan_promotion_boost');
+      addMessage({
+        id:      `fan-promotion-boost-s${snapshot.currentSeason}`,
+        type:    'system',
+        week:    snapshot.weekNumber,
+        subject: promoTemplate?.title ?? 'Fanbase Energised by Promotion',
+        body:    promoTemplate?.bodyTemplate ?? 'Promotion has sent the fanbase into a frenzy! Fan numbers are up.',
+        isRead:  false,
+        metadata: { systemType: 'fan_promotion_boost', templateSlug: 'fan_promotion_boost' },
+      });
+    }
+
+    // FAN_RELEGATION_DROP — fires when AMP club is relegated
+    if (snapshot.relegated) {
+      const relegTemplate = useEventStore.getState().getTemplateBySlug('fan_relegation_drop');
+      addMessage({
+        id:      `fan-relegation-drop-s${snapshot.currentSeason}`,
+        type:    'system',
+        week:    snapshot.weekNumber,
+        subject: relegTemplate?.title ?? 'Fanbase Hit by Relegation',
+        body:    relegTemplate?.bodyTemplate ?? 'Relegation has hit the fanbase hard. Supporters are disheartened.',
+        isRead:  false,
+        metadata: { systemType: 'fan_relegation_drop', templateSlug: 'fan_relegation_drop' },
+      });
+    }
+  }
+
+  // ── PART 3 — Sentiment decay ──────────────────────────────────────────────
+  // Re-read fans after Parts 1 and 2 mutations.
+  const currentFans = useFanStore.getState().fans;
+  for (const fan of currentFans) {
+    if (fan.sentiment > 60) {
+      useFanStore.getState().updateSentiment(fan.clubId, -2);
+    } else if (fan.sentiment < 40) {
+      useFanStore.getState().updateSentiment(fan.clubId, 2);
+    }
+    // 40–60: no decay
+  }
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
 /**
@@ -578,9 +719,18 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
 
   awardSeasonTrophies(snapshot, pyramidLeagues, responseLeagues);
   awardSeasonFanEvents(snapshot);
+  applySeasonFanEngagement(snapshot, pyramidLeagues);
 
-  // Prune match result records older than the previous season
+  // Prune records older than the previous season to keep store blobs bounded
   useMatchResultStore.getState().pruneOldSeasons(nextSeason);
+  useLeagueStatsStore.getState().pruneOldSeasons(nextSeason);
+
+  // Prune player appearance AsyncStorage keys older than last season
+  // (player_app:{playerId}:{clubId}:{season} accumulate for all 1440 world players)
+  await pruneAppearancesBefore(nextSeason - 1);
+
+  // Prune fixture archives older than 5 seasons (archive already written in applySeasonResponse)
+  await pruneFixtureArchives(5);
 
   // Advance the persistent season counter
   useLeagueStore.getState().incrementSeason();

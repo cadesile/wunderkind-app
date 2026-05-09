@@ -83,6 +83,13 @@ export const useNarrativeStore = create<NarrativeState>()(
 
       clearAll: () => set({ messages: [] }),
     }),
-    { name: 'narrative-store', storage: zustandStorage },
+    {
+      name: 'narrative-store',
+      storage: zustandStorage,
+      // Keep only the 150 most recent messages — older ones are no longer actionable.
+      partialize: (state) => ({
+        messages: state.messages.slice(0, 150),
+      }),
+    },
   ),
 );

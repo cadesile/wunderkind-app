@@ -61,12 +61,6 @@ interface SquadState {
    */
   recordDevelopmentSnapshots: (weekNumber: number) => void;
   /**
-   * Records a single match appearance against a player.
-   * @param season  Display key e.g. "Season 1"
-   * @param clubId  The AMP club id (so the player's appearances are bucketed per club)
-   */
-  recordAppearance: (playerId: string, season: string, clubId: string, appearance: MatchAppearance) => void;
-  /**
    * Release a player back to the market pool. Removes from local squad immediately
    * (fat-client model) and fires a best-effort backend call to set club = null.
    */
@@ -225,26 +219,6 @@ export const useSquadStore = create<SquadState>()(
           }),
         })),
 
-      recordAppearance: (playerId, season, clubId, appearance) =>
-        set((state) => ({
-          players: state.players.map((p) => {
-            if (p.id !== playerId) return p;
-            const prev = p.appearances ?? {};
-            const seasonBucket = prev[season] ?? {};
-            const clubBucket = seasonBucket[clubId] ?? [];
-            return {
-              ...p,
-              appearances: {
-                ...prev,
-                [season]: {
-                  ...seasonBucket,
-                  [clubId]: [...clubBucket, appearance],
-                },
-              },
-            };
-          }),
-        })),
-
       releasePlayer: async (playerId) => {
         const player = get().players.find((p) => p.id === playerId);
         if (!player) return { success: false, error: 'Player not found' };
@@ -283,6 +257,17 @@ export const useSquadStore = create<SquadState>()(
         return { success: true, playerName };
       },
     }),
-    { name: 'squad-store', storage: zustandStorage },
+    {
+      name: 'squad-store',
+      storage: zustandStorage,
+      // appearances: moved to per-player/club/season AsyncStorage keys (appearanceStorage.ts).
+      // developmentLog: cap to last 20 entries — chart only needs recent history.
+      partialize: (state) => ({
+        players: state.players.map(({ appearances: _apps, ...p }) => ({
+          ...p,
+          developmentLog: p.developmentLog?.slice(-20),
+        })),
+      }),
+    },
   ),
 );

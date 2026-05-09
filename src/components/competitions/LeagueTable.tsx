@@ -16,6 +16,8 @@ export interface LeagueTableProps {
   ampClubId?: string;
   ampName?: string;
   promotionSpots?: number | null;
+  /** Number of bottom positions that are in the relegation zone (= promotionSpots of the league one tier below). */
+  relegationSpots?: number | null;
   onClubPress?: (clubId: string) => void;
   worldClubs?: Record<string, WorldClub>;
   ampSquad?: Player[];
@@ -46,7 +48,7 @@ const FORM_COLOR: Record<'W' | 'D' | 'L', string> = {
   L: WK.red,
 };
 
-export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots, onClubPress, worldClubs, ampSquad }: LeagueTableProps) {
+export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots, relegationSpots, onClubPress, worldClubs, ampSquad }: LeagueTableProps) {
   const clubNameMap = useMemo(() => {
     const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
     if (ampClubId && ampName) map.set(ampClubId, ampName);
@@ -182,6 +184,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
           const pos = index + 1;
           const isAmp = !!ampClubId && row.clubId === ampClubId;
           const isPromotion = promotionSpots != null && pos <= promotionSpots;
+          const isRelegation = relegationSpots != null && relegationSpots > 0 && pos > rows.length - relegationSpots;
           const name = clubNameMap.get(row.clubId) ?? row.clubId;
 
           return (
@@ -200,8 +203,8 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
                   paddingHorizontal: 10,
                   paddingVertical: 10,
                   backgroundColor: isAmp ? WK.tealCard : 'transparent',
-                  borderLeftWidth: isPromotion ? 3 : 0,
-                  borderLeftColor: PROMOTION_GREEN,
+                  borderLeftWidth: (isPromotion || isRelegation) ? 3 : 0,
+                  borderLeftColor: isRelegation ? WK.red : PROMOTION_GREEN,
                   borderBottomWidth: 1,
                   borderBottomColor: WK.border,
                   borderTopWidth: isAmp ? 2 : 0,

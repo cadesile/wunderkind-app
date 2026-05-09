@@ -18,6 +18,7 @@ import { useClubStore } from './clubStore';
 import { useGuardianStore } from './guardianStore';
 import { getCoachPerception, getHeadCoach } from '@/engine/CoachPerception';
 import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
+import { useLeagueStore } from './leagueStore';
 import { updateCoachRelationship } from '@/engine/RelationshipService';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { randomBaseMorale } from '@/utils/morale';
@@ -367,6 +368,7 @@ export const useMarketStore = create<MarketState>()(
             netProceeds: 0,
             type: 'signing',
             week: weekNumber,
+            season: useLeagueStore.getState().currentSeason,
           });
         }
 
@@ -464,15 +466,15 @@ export const useMarketStore = create<MarketState>()(
     {
       name: 'market-store',
       storage: zustandStorage,
-      // Only persist data; isLoading/error are transient session state
+      // Players/coaches/scouts/agents are server data — re-fetched on app start.
+      // Persisting them costs ~1.4 MB per write and causes SQLITE_FULL.
+      // Only persist:
+      // Only persist sponsors/investors — player/coach/scout data is rebuilt fresh
+      // from the server on every app start, so there's no need to persist it.
       partialize: (state) => ({
-        players: state.players,
-        coaches: state.coaches,
-        marketScouts: state.marketScouts,
-        agents: state.agents,
+        lastFetchedAt: null, // always force re-fetch on restart
         sponsors: state.sponsors,
         investors: state.investors,
-        lastFetchedAt: state.lastFetchedAt,
       }),
     }
   )

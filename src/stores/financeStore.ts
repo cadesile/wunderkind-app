@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
 import { uuidv7 } from '@/utils/uuidv7';
 import { useClubStore } from '@/stores/clubStore';
-import type { FinancialTransaction, FinancialCategory, TransferRecord } from '@/types/finance';
+import type { FinancialTransaction, FinancialCategory, TransferRecord, NpcTransferEntry } from '@/types/finance';
 
 /** Rolling window: ~52 weeks × 7 days */
 const MAX_TRANSACTIONS = 364;
@@ -12,6 +12,8 @@ const ROLLING_WEEKS = 52;
 interface FinanceState {
   transactions: FinancialTransaction[];
   transfers: TransferRecord[];
+  /** NPC-to-NPC transfer log — capped at 50 most recent, used by the transfer ticker. */
+  npcTransfers: NpcTransferEntry[];
 
   /** Record a new transaction. ID and timestamp are assigned automatically. */
   addTransaction: (tx: Omit<FinancialTransaction, 'id' | 'timestamp'>) => void;
@@ -30,6 +32,9 @@ interface FinanceState {
 
   /** Record a completed player transfer (agent-assisted or direct sale). */
   addTransfer: (record: Omit<TransferRecord, 'id'>) => void;
+
+  /** Prepend a batch of NPC transfer entries (newest-first). Capped at 50. */
+  addNpcTransfers: (entries: NpcTransferEntry[]) => void;
 }
 
 export const useFinanceStore = create<FinanceState>()(
@@ -37,6 +42,7 @@ export const useFinanceStore = create<FinanceState>()(
     (set, get) => ({
       transactions: [],
       transfers: [],
+      npcTransfers: [],
 
       addTransaction: (tx) => {
         const newTx: FinancialTransaction = {
@@ -77,7 +83,20 @@ export const useFinanceStore = create<FinanceState>()(
         set((state) => ({
           transfers: [{ ...record, id: uuidv7() }, ...state.transfers],
         })),
+
+      addNpcTransfers: (entries) =>
+        set((state) => ({
+          npcTransfers: [...entries, ...state.npcTransfers].slice(0, 50),
+        })),
     }),
-    { name: 'finance-store', storage: zustandStorage },
+    {
+      name: 'finance-store',
+      storage: zustandStorage,
+      partialize: (state) => ({
+        transactions: state.transactions,
+        transfers:    state.transfers.slice(0, 100),
+        npcTransfers: state.npcTransfers,
+      }),
+    },
   ),
 );

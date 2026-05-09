@@ -10,6 +10,8 @@ export interface PlayerSeasonStats {
   clubId: string;
   leagueId: string;
   season: number;
+  /** League tier (1 = top flight). Used to partition AsyncStorage keys by tier+season. */
+  tier: number;
   goals: number;
   assists: number;
   appearances: number;

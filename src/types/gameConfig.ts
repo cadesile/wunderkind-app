@@ -167,6 +167,18 @@ export interface GameConfig {
    */
   retirementChance: number;
 
+  // ── Fan base season changes ───────────────────────────────────────────────────
+  /**
+   * Fan count multiplier increase applied at season end when a club is promoted.
+   * e.g. 0.10 = 10% increase. Default: 0.10
+   */
+  fanBasePromotionIncrease: number;
+  /**
+   * Fan count multiplier decrease applied at season end when a club is relegated.
+   * e.g. 0.05 = 5% decrease. Default: 0.05
+   */
+  fanBaseRelegationDecrease: number;
+
   // ── Facility income ───────────────────────────────────────────────────────
   /**
    * Percentage of full facility income earned on weeks without a home match.
@@ -194,6 +206,25 @@ export interface GameConfig {
    * (e.g. development digests, club health summaries). Default: 8
    */
   systemNotificationFrequencyWeeks: number;
+
+  // ── Manager Sacking ───────────────────────────────────────────────────────
+  /**
+   * Win ratio (0–1) below which the chairman considers sacking the manager.
+   * Evaluated after managerSackingMinGames have been played. Default: 0.3
+   */
+  managerSackingWinRatioTrigger: number;
+  /**
+   * Win ratio (0–1) the manager must sustain to recover from a sacking threat.
+   * Default: 0.4
+   */
+  managerSackingWinRatioRecovery: number;
+  /** Minimum games played before sacking logic is evaluated. Default: 10 */
+  managerSackingMinGames: number;
+  /**
+   * Weekly fan attendance penalty (absolute count) while a sacking threat is active.
+   * Default: 200
+   */
+  managerSackingAttendancePenaltyPerWeek: number;
 
   // ── Developer / Debug ────────────────────────────────────────────────
   /** When true, the in-app debug log panel cog icon is visible in the tab bar. Default: false */
@@ -301,12 +332,20 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   retirementMaxAge: 38,
   retirementChance: 0.35,
 
+  fanBasePromotionIncrease: 0.10,
+  fanBaseRelegationDecrease: 0.05,
+
   nonMatchFacilityIncomePercent: 0,
 
   playingStyleInfluence: {},
 
   facilityMaintenanceFrequencyWeeks: 4,
   systemNotificationFrequencyWeeks: 8,
+
+  managerSackingWinRatioTrigger: 0.3,
+  managerSackingWinRatioRecovery: 0.4,
+  managerSackingMinGames: 10,
+  managerSackingAttendancePenaltyPerWeek: 200,
 
   debugLoggingEnabled: false,
 

@@ -38,6 +38,11 @@ interface FixtureActions {
    */
   loadFromServerSchedule: (leagueId: string, season: number, schedule: [string, string][][]) => void;
   recordResult: (fixtureId: string, result: Omit<FixtureResult, 'synced'>) => void;
+  /**
+   * Bulk version of recordResult — updates all provided fixture results in a single set() call.
+   * Use in SimulationService to collapse 40+ individual AsyncStorage writes per matchday into one.
+   */
+  batchRecordResults: (entries: Array<{ fixtureId: string; result: Omit<FixtureResult, 'synced'> }>) => void;
   advanceMatchday: () => void;
   markSynced: (fixtureIds: string[]) => void;
   clearSeason: () => void;
@@ -138,6 +143,17 @@ export const useFixtureStore = create<FixtureStore>()(
           ),
         })),
 
+      batchRecordResults: (entries) => {
+        if (entries.length === 0) return;
+        const resultMap = new Map(entries.map((e) => [e.fixtureId, e.result]));
+        set((state) => ({
+          fixtures: state.fixtures.map((f) => {
+            const r = resultMap.get(f.id);
+            return r ? { ...f, result: { ...r, synced: false } } : f;
+          }),
+        }));
+      },
+
       advanceMatchday: () =>
         set((state) => ({ currentMatchday: state.currentMatchday + 1 })),
 
@@ -160,6 +176,16 @@ export const useFixtureStore = create<FixtureStore>()(
     {
       name: 'fixture-store',
       storage: zustandStorage,
+      // Only persist the current season's fixtures. Older seasons are dead weight —
+      // the UI only displays the live schedule and won't go back in time.
+      partialize: (state) => {
+        const seasons = state.fixtures.map((f) => f.season);
+        const maxSeason = seasons.length > 0 ? Math.max(...seasons) : 0;
+        return {
+          currentMatchday: state.currentMatchday,
+          fixtures: state.fixtures.filter((f) => f.season === maxSeason),
+        };
+      },
     }
   )
 );

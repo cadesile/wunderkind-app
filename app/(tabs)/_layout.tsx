@@ -23,17 +23,23 @@ import { useAltercationStore } from '@/stores/altercationStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useLeagueStore } from '@/stores/leagueStore';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { computeStandings } from '@/utils/standingsCalculator';
 import type { SyncTransfer, SyncLedgerEntry, SyncMatchResult, SyncPlayerStat, SyncSigning } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { WeeklyTickOverlay } from '@/components/WeeklyTickOverlay';
+import { logStorageSizes, emergencyPruneIfOverLimit, collectDebugLog } from '@/utils/storageDiagnostics';
 import { SeasonEndOverlay } from '@/components/SeasonEndOverlay';
+import { TimeSkipAnimation } from '@/components/ui/TimeSkipAnimation';
+import { TransferWindowTicker } from '@/components/TransferWindowTicker';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap, hapticPress, hapticConfirm, hapticWarning } from '@/utils/haptics';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
 import { useNavStore } from '@/stores/navStore';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { isTransferWindowOpen } from '@/utils/dateUtils';
 
 type NavTabDef = {
   name: string;
@@ -212,10 +218,12 @@ export default function TabLayout() {
 
   const startTick = useTickProgressStore((s) => s.startTick);
   const endTick   = useTickProgressStore((s) => s.endTick);
+  const setPhase  = useTickProgressStore((s) => s.setPhase);
 
   const [showAltercationDialog, setShowAltercationDialog] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
-  const [showSeasonEnd, setShowSeasonEnd] = useState(false);
+  const [showSeasonEnd,  setShowSeasonEnd]  = useState(false);
+  const [showTimeSkip,   setShowTimeSkip]   = useState(false);
 
   // Reactive season-complete detection — subscribes to fixture state directly so
   // the overlay fires the moment the last result is recorded, before any button press.
@@ -227,6 +235,9 @@ export default function TabLayout() {
     () => isWorldReady && fixtures.length > 0 && fixtures.every((f) => f.result !== null),
     [isWorldReady, fixtures],
   );
+
+  // Run emergency storage prune on mount (no-op unless total > 3 MB)
+  useEffect(() => { emergencyPruneIfOverLimit(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isSeasonComplete && !showSeasonEnd) {
@@ -245,9 +256,22 @@ export default function TabLayout() {
   // ── Week advance logic ───────────────────────────────────────────────────────
 
   async function doAdvanceWeek() {
+    const tickStartMs = Date.now();
     startTick();
     try {
       // Yield to the render thread so the overlay paints before the tick runs
+      await new Promise<void>((r) => setTimeout(r, 16));
+
+      // ── Pre-tick phases (async, lets bar animate before blocking sync call) ──
+      setPhase('LOADING SQUAD DATA', 8);
+      await new Promise<void>((r) => setTimeout(r, 130));
+      setPhase('PREPARING MATCH ENGINE', 18);
+      await new Promise<void>((r) => setTimeout(r, 130));
+      setPhase('QUEUING WEEKLY EVENTS', 28);
+      await new Promise<void>((r) => setTimeout(r, 80));
+
+      // ── Synchronous tick (blocks JS thread; bar holds at 28 %) ───────────────
+      setPhase('PROCESSING WEEKLY TICK', 35);
       await new Promise<void>((r) => setTimeout(r, 16));
 
       const result = processWeeklyTick();
@@ -353,18 +377,21 @@ export default function TabLayout() {
         };
       });
 
-      // Player season stats — only players with ≥1 appearance
+      // Player season stats — read from leagueStatsStore (aggregate, no player.appearances needed)
       const { players: squadPlayers } = useSquadStore.getState();
-      const seasonKey = `Season ${currentSeason}`;
+      const { records: lsRecords } = useLeagueStatsStore.getState();
+      const leagueId = currentLeague?.id ?? '';
       const playerStats: SyncPlayerStat[] = squadPlayers.flatMap((p) => {
-        const seasonApps = p.appearances?.[seasonKey]?.[ampClubId] ?? [];
-        if (seasonApps.length === 0) return [];
-        const goals   = seasonApps.reduce((s, a) => s + a.goals,   0);
-        const assists = seasonApps.reduce((s, a) => s + a.assists, 0);
-        const avgRating = Math.round(
-          (seasonApps.reduce((s, a) => s + a.rating, 0) / seasonApps.length) * 10,
-        ) / 10;
-        return [{ playerId: p.id, appearances: seasonApps.length, goals, assists, averageRating: avgRating }];
+        const key = `${p.id}:${ampClubId}:${leagueId}:${currentSeason}`;
+        const rec = lsRecords[key];
+        if (!rec || rec.appearances === 0) return [];
+        return [{
+          playerId:      p.id,
+          appearances:   rec.appearances,
+          goals:         rec.goals,
+          assists:       rec.assists,
+          averageRating: rec.averageRating,
+        }];
       });
 
       // Signings — DOF auto-signings fired as inbox messages this week.
@@ -391,6 +418,13 @@ export default function TabLayout() {
       const squadAvgOvr = activePlayers.length > 0
         ? Math.round(activePlayers.reduce((s, p) => s + (p.overallRating ?? 0), 0) / activePlayers.length)
         : 0;
+
+      setPhase('BUILDING SYNC PAYLOAD', 52);
+      await new Promise<void>((r) => setTimeout(r, 16));
+
+      // Attach debug log only when explicitly enabled — never sent in normal play
+      const debugEnabled = useGameConfigStore.getState().config.debugLoggingEnabled === true;
+      const log = debugEnabled ? await collectDebugLog(tickStartMs) : undefined;
 
       syncQueue.enqueue({
         weekNumber:          result.week,
@@ -421,26 +455,40 @@ export default function TabLayout() {
         seasonRecord,
         matchResults,
         playerStats,
+
+        ...(log !== undefined && { log }),
       });
+
+      setPhase('UPDATING SQUAD STATUS', 65);
+      await new Promise<void>((r) => setTimeout(r, 16));
 
       // Background game-config refresh — every 4 game weeks, fire-and-forget
       if (useGameConfigStore.getState().shouldRefetch(result.week)) {
         void fetchAndCacheGameConfig(result.week);
       }
 
-      // Batch simulate background fixtures — first match week is 5 (4-week pre-season buffer)
-      if (result.week >= 5) {
+      // Batch simulate background fixtures.
+      // week >= 5: 4-week pre-season buffer on first ever boot.
+      // !isTransferWindowOpen: June is transfer window only — fixtures begin in July each season.
+      if (result.week >= 5 && !isTransferWindowOpen(useCalendarStore.getState().gameDate)) {
+        setPhase('SIMULATING MATCH RESULTS', 75);
+        await new Promise<void>((r) => setTimeout(r, 16));
         void simulationService.runBatchSimulation();
       }
 
       // ── Bi-weekly NPC transfer simulation ───────────────────────────────────
-      // Runs every 2 game weeks. Advance button stays locked (inside startTick/endTick).
-      if (result.week % 2 === 0) {
+      // Runs every 2 game weeks, but only during the transfer window (June).
+      if (result.week % 2 === 0 && isTransferWindowOpen(useCalendarStore.getState().gameDate)) {
+        setPhase('PROCESSING TRANSFER WINDOW', 84);
+        await new Promise<void>((r) => setTimeout(r, 16));
         const { clubs } = useWorldStore.getState();
         try {
           const { squadSizeMin, squadSizeMax, leaguePlayerAbilityRanges } = useGameConfigStore.getState().config;
           const digest = await processNPCTransfers(result.week, clubs, squadSizeMin, squadSizeMax, leaguePlayerAbilityRanges);
           if (digest.transfers.length > 0) {
+            useFinanceStore.getState().addNpcTransfers(
+              digest.transfers.map((t) => ({ ...t, week: result.week, season: useLeagueStore.getState().currentSeason })),
+            );
             useInboxStore.getState().addMessage({
               id:      uuidv7(),
               type:    'system',
@@ -459,8 +507,13 @@ export default function TabLayout() {
         }
       }
 
+      setPhase('ADVANCING TO NEXT WEEK', 95);
+      await new Promise<void>((r) => setTimeout(r, 220));
+
     } finally {
       endTick();
+      // Log storage sizes after every tick to help diagnose SQLITE_FULL issues
+      logStorageSizes();
     }
   }
 
@@ -553,6 +606,7 @@ export default function TabLayout() {
   return (
     <View style={{ flex: 1 }}>
       <GlobalHeader />
+      <TransferWindowTicker />
 
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} />}
@@ -582,7 +636,17 @@ export default function TabLayout() {
       {/* Season end overlay — shown when all fixtures have results */}
       <SeasonEndOverlay
         visible={showSeasonEnd}
-        onComplete={() => setShowSeasonEnd(false)}
+        onComplete={() => setShowTimeSkip(true)}
+      />
+
+      {/* Time skip animation — plays after CONCLUDE SEASON, then dismisses both */}
+      <TimeSkipAnimation
+        visible={showTimeSkip}
+        onComplete={() => {
+          setShowTimeSkip(false);
+          setShowSeasonEnd(false);
+          router.push('/');
+        }}
       />
 
       {/* Hard-block altercation dialog — forces AMP to release one player before advancing */}

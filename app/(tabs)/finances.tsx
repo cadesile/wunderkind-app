@@ -279,8 +279,8 @@ function InvestorsPane() {
                 <BodyText size={12} color={WK.green}>{100 - equityTaken}%</BodyText>
               </View>
               <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border, flexDirection: 'row' }}>
-                <View style={{ height: '100%', width: `${100 - equityTaken}%`, backgroundColor: WK.green }} />
-                <View style={{ height: '100%', flex: 1, backgroundColor: WK.orange }} />
+                <View style={{ flex: 100 - equityTaken, backgroundColor: WK.green }} />
+                <View style={{ flex: equityTaken, backgroundColor: WK.orange }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
                 <BodyText size={11} dim>CLUB</BodyText>
@@ -449,7 +449,7 @@ function SponsorsPane() {
                 </View>
                 <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
                   <View style={{
-                    height: '100%',
+                    position: 'absolute', top: 0, left: 0, bottom: 0,
                     width: `${Math.min(100, progressPct)}%`,
                     backgroundColor: weeksRemaining <= 8 ? WK.orange : WK.tealLight,
                   }} />
@@ -466,8 +466,13 @@ function SponsorsPane() {
 // ─── Loans pane ───────────────────────────────────────────────────────────────
 
 function LoanCard({ loan }: { loan: Loan }) {
-  const weeksTotal = Math.round(loan.amount * (1 + loan.interestRate) / loan.weeklyRepayment);
-  const pct = Math.round((1 - loan.weeksRemaining / weeksTotal) * 100);
+  const weeksTotal = loan.weeklyRepayment > 0
+    ? Math.round(loan.amount * (1 + loan.interestRate) / loan.weeklyRepayment)
+    : 0;
+  const rawPct = weeksTotal > 0
+    ? Math.round((1 - loan.weeksRemaining / weeksTotal) * 100)
+    : 0;
+  const pct = Math.min(100, Math.max(0, rawPct));
 
   return (
     <View style={{
@@ -483,9 +488,9 @@ function LoanCard({ loan }: { loan: Loan }) {
       <FinanceRow label="WEEKS REMAINING" value={String(loan.weeksRemaining)} />
       <View style={{ marginTop: 8 }}>
         <View style={{ height: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-          <View style={{ height: '100%', width: `${pct}%`, backgroundColor: WK.tealLight }} />
+          <View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${pct}%`, backgroundColor: WK.tealLight }} />
         </View>
-        <BodyText size={12} dim style={{ marginTop: 4 }}>{pct}% REPAID</BodyText>
+        <BodyText size={12} dim style={{ marginTop: 4 }}>{`${pct}% REPAID`}</BodyText>
       </View>
     </View>
   );

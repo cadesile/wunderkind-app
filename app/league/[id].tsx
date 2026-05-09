@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { View, SectionList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,6 +14,11 @@ import { useFixtureStore, type Fixture } from '@/stores/fixtureStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
 import { useMatchResultStore } from '@/stores/matchResultStore';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
+import {
+  loadArchivedFixtureSeason,
+  listArchivedFixtureSeasons,
+} from '@/utils/fixtureArchive';
 import type { WorldClub } from '@/types/world';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -94,12 +99,14 @@ function TablePane({
   clubNameMap,
   ampClubId,
   promotionSpots,
+  relegationSpots,
   onClubPress,
 }: {
   standings: ReturnType<typeof computeStandings>;
   clubNameMap: Map<string, string>;
   ampClubId: string | undefined;
   promotionSpots: number | null;
+  relegationSpots: number | null;
   onClubPress: (clubId: string) => void;
 }) {
   if (standings.length === 0) {
@@ -139,6 +146,7 @@ function TablePane({
         const pos        = index + 1;
         const isAmp      = !!ampClubId && row.clubId === ampClubId;
         const isPromo    = promotionSpots != null && pos <= promotionSpots;
+        const isRelegate = relegationSpots != null && relegationSpots > 0 && pos > standings.length - relegationSpots;
         const name       = clubNameMap.get(row.clubId) ?? row.clubId;
 
         return (
@@ -149,8 +157,8 @@ function TablePane({
               paddingHorizontal: 10,
               paddingVertical: 10,
               backgroundColor: isAmp ? WK.tealCard : 'transparent',
-              borderLeftWidth: isPromo ? 3 : 0,
-              borderLeftColor: PROMOTION_GREEN,
+              borderLeftWidth: (isPromo || isRelegate) ? 3 : 0,
+              borderLeftColor: isRelegate ? WK.red : PROMOTION_GREEN,
               borderBottomWidth: 1,
               borderBottomColor: WK.border,
               borderTopWidth:    isAmp ? 2 : 0,
@@ -528,13 +536,39 @@ export default function LeagueDashboardScreen() {
 
   const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
 
+  // Season browsing — null means "current season" (from store)
+  const [archivedSeasons, setArchivedSeasons] = useState<number[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [archivedFixtures, setArchivedFixtures] = useState<Fixture[] | null>(null);
+
   const worldLeagues    = useWorldStore((s) => s.leagues);
   const worldClubs      = useWorldStore((s) => s.clubs);
   const ampLeagueId     = useWorldStore((s) => s.ampLeagueId);
-  const allFixtures     = useFixtureStore((s) => s.fixtures);
+  const storeFixtures   = useFixtureStore((s) => s.fixtures);
   const ampClub         = useClubStore((s) => s.club);
   const ampSquad        = useSquadStore((s) => s.players);
   const matchResults    = useMatchResultStore((s) => s.results);
+
+  // Load available archived seasons for this league on mount
+  useEffect(() => {
+    listArchivedFixtureSeasons().then((seasons) => setArchivedSeasons(seasons));
+  }, []);
+
+  // When user picks a past season, load its fixtures from the archive file
+  useEffect(() => {
+    if (selectedSeason === null) {
+      setArchivedFixtures(null);
+      return;
+    }
+    loadArchivedFixtureSeason(selectedSeason).then((fixtures) => {
+      setArchivedFixtures(fixtures);
+    });
+  }, [selectedSeason]);
+
+  // Use archived fixtures for past seasons, store fixtures for current
+  const allFixtures = selectedSeason !== null && archivedFixtures !== null
+    ? archivedFixtures
+    : storeFixtures;
 
   const league       = worldLeagues.find((l) => l.id === id);
   const isAmpLeague  = ampLeagueId === id;
@@ -545,11 +579,20 @@ export default function LeagueDashboardScreen() {
       .filter((c): c is WorldClub => c !== undefined);
   }, [league?.clubIds, worldClubs]);
 
+  // Data-driven AMP detection: AMP is in this league if they appear in any fixture,
+  // regardless of whether ampLeagueId has been set (handles race conditions on init).
+  const ampInLeague = useMemo(() =>
+    isAmpLeague || allFixtures.some(
+      (f) => f.leagueId === id && (f.homeClubId === ampClub.id || f.awayClubId === ampClub.id),
+    ),
+    [isAmpLeague, allFixtures, id, ampClub.id],
+  );
+
   const allClubs = useMemo(() => {
     const npc = leagueWorldClubs.map((c) => ({ id: c.id, name: c.name }));
-    if (isAmpLeague) return [...npc, { id: ampClub.id, name: ampClub.name }];
+    if (ampInLeague) return [...npc, { id: ampClub.id, name: ampClub.name }];
     return npc;
-  }, [leagueWorldClubs, isAmpLeague, ampClub.id, ampClub.name]);
+  }, [leagueWorldClubs, ampInLeague, ampClub.id, ampClub.name]);
 
   const clubNameMap = useMemo(
     () => new Map<string, string>(allClubs.map((c) => [c.id, c.name])),
@@ -576,50 +619,62 @@ export default function LeagueDashboardScreen() {
   }, [allFixtures, id]);
 
   const currentSeasonNumber = useMemo(() => {
+    if (selectedSeason !== null) return selectedSeason;
     if (leagueFixtures.length === 0) return 1;
     return Math.max(...leagueFixtures.map((f) => f.season));
-  }, [leagueFixtures]);
+  }, [selectedSeason, leagueFixtures]);
 
-  const seasonKey = `Season ${currentSeasonNumber}`;
+  const lsRecords = useLeagueStatsStore((s) => s.records);
+
+  const relegationSpots = useMemo(() => {
+    if (!league) return null;
+    const leagueBelow = worldLeagues.find(
+      (l) => l.country === league.country && l.tier === league.tier + 1,
+    );
+    return leagueBelow?.promotionSpots ?? null;
+  }, [worldLeagues, league]);
 
   const standings = useMemo(() =>
-    computeStandings(leagueFixtures, allClubs, isAmpLeague ? ampClub.id : undefined),
-    [leagueFixtures, allClubs, isAmpLeague, ampClub.id],
+    computeStandings(leagueFixtures, allClubs, ampInLeague ? ampClub.id : undefined),
+    [leagueFixtures, allClubs, ampInLeague, ampClub.id],
   );
 
   const playerStats = useMemo<StatEntry[]>(() => {
-    const entries: StatEntry[] = [];
+    // Aggregate goals/assists per player from leagueStatsStore for this league + season
+    const byPlayer = new Map<string, { goals: number; assists: number }>();
+    for (const r of Object.values(lsRecords)) {
+      if (r.leagueId !== id || r.season !== currentSeasonNumber) continue;
+      const cur = byPlayer.get(r.playerId) ?? { goals: 0, assists: 0 };
+      byPlayer.set(r.playerId, { goals: cur.goals + r.goals, assists: cur.assists + r.assists });
+    }
+
+    // Build a name/position/club lookup from NPC world clubs + AMP squad
+    const playerMeta = new Map<string, { name: string; position: string; clubName: string }>();
     leagueWorldClubs.forEach((wc) => {
       const clubName = clubNameMap.get(wc.id) ?? wc.id;
       wc.players.forEach((p) => {
-        const apps    = p.appearances?.[seasonKey]?.[wc.id] ?? [];
-        const goals   = apps.reduce((s, a) => s + (a.goals   ?? 0), 0);
-        const assists = apps.reduce((s, a) => s + (a.assists  ?? 0), 0);
-        if (goals > 0 || assists > 0) {
-          entries.push({
-            id:       p.id,
-            name:     `${p.firstName} ${p.lastName}`,
-            clubName,
-            position: p.position === 'ATT' ? 'FWD' : p.position,
-            goals,
-            assists,
-          });
-        }
+        playerMeta.set(p.id, {
+          name:     `${p.firstName} ${p.lastName}`,
+          position: p.position === 'ATT' ? 'FWD' : p.position,
+          clubName,
+        });
       });
     });
-    if (isAmpLeague) {
-      const ampClubName = ampClub.name;
+    if (ampInLeague) {
       ampSquad.filter((p) => p.isActive).forEach((p) => {
-        const apps    = p.appearances?.[seasonKey]?.[ampClub.id] ?? [];
-        const goals   = apps.reduce((s, a) => s + (a.goals   ?? 0), 0);
-        const assists = apps.reduce((s, a) => s + (a.assists  ?? 0), 0);
-        if (goals > 0 || assists > 0) {
-          entries.push({ id: p.id, name: p.name, clubName: ampClubName, position: p.position, goals, assists });
-        }
+        playerMeta.set(p.id, { name: p.name, position: p.position, clubName: ampClub.name });
       });
     }
+
+    const entries: StatEntry[] = [];
+    for (const [playerId, stats] of byPlayer) {
+      if (stats.goals === 0 && stats.assists === 0) continue;
+      const meta = playerMeta.get(playerId);
+      if (!meta) continue;
+      entries.push({ id: playerId, ...meta, ...stats });
+    }
     return entries;
-  }, [leagueWorldClubs, ampSquad, isAmpLeague, ampClub.id, ampClub.name, seasonKey, clubNameMap]);
+  }, [lsRecords, id, currentSeasonNumber, leagueWorldClubs, ampSquad, ampInLeague, ampClub.name, clubNameMap]);
 
   const topScorers   = useMemo(() =>
     [...playerStats].sort((a, b) => b.goals   - a.goals  ).filter((p) => p.goals   > 0).slice(0, 10),
@@ -653,7 +708,7 @@ export default function LeagueDashboardScreen() {
     })
     .filter((r) => r.form.length > 0)
     .sort((a, b) => b.pts - a.pts);
-  }, [leagueFixtures, allClubs, ampClub.id, clubNameMap]);
+  }, [leagueFixtures, allClubs, ampInLeague, ampClub.id, clubNameMap]);
 
   const fixtureSections = useMemo<FixtureSection[]>(() => {
     const roundMap = new Map<number, Fixture[]>();
@@ -704,15 +759,49 @@ export default function LeagueDashboardScreen() {
           </BodyText>
         </View>
 
-        <View style={{
-          backgroundColor: WK.tealCard,
-          borderWidth: 2,
-          borderColor: WK.border,
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          flexShrink: 0,
-        }}>
-          <VT323Text size={20} color={WK.yellow}>T{league.tier}</VT323Text>
+        <View style={{ flexShrink: 0, alignItems: 'center', gap: 2 }}>
+          <View style={{
+            backgroundColor: WK.tealCard,
+            borderWidth: 2,
+            borderColor: WK.border,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+          }}>
+            <VT323Text size={20} color={WK.yellow}>T{league.tier}</VT323Text>
+          </View>
+
+          {/* Season navigator — only shown when past seasons are archived */}
+          {archivedSeasons.length > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                onPress={() => {
+                  const prev = archivedSeasons.filter((s) => s < currentSeasonNumber);
+                  if (prev.length > 0) setSelectedSeason(prev[prev.length - 1]);
+                }}
+                hitSlop={8}
+                disabled={archivedSeasons[0] >= currentSeasonNumber}
+              >
+                <BodyText size={10} color={archivedSeasons[0] < currentSeasonNumber ? WK.yellow : WK.dim}>
+                  {'<'}
+                </BodyText>
+              </Pressable>
+              <BodyText size={10} color={WK.text}>S{currentSeasonNumber}</BodyText>
+              <Pressable
+                onPress={() => {
+                  if (selectedSeason === null) return;
+                  const next = archivedSeasons.find((s) => s > selectedSeason);
+                  if (next !== undefined) setSelectedSeason(next);
+                  else setSelectedSeason(null); // back to live
+                }}
+                hitSlop={8}
+                disabled={selectedSeason === null}
+              >
+                <BodyText size={10} color={selectedSeason !== null ? WK.yellow : WK.dim}>
+                  {'>'}
+                </BodyText>
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
 
@@ -728,8 +817,9 @@ export default function LeagueDashboardScreen() {
         <TablePane
           standings={standings}
           clubNameMap={clubNameMap}
-          ampClubId={isAmpLeague ? ampClub.id : undefined}
+          ampClubId={ampInLeague ? ampClub.id : undefined}
           promotionSpots={league.promotionSpots}
+          relegationSpots={relegationSpots}
           onClubPress={(clubId) => {
             if (clubId === ampClub.id) router.push('/(tabs)/hub');
             else router.push(`/club/${clubId}`);

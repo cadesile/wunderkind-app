@@ -43,6 +43,17 @@ export interface FinancialTransaction {
   timestamp: string; // ISO 8601
 }
 
+/** A completed NPC-to-NPC transfer, recorded for the transfer ticker. */
+export interface NpcTransferEntry {
+  playerName: string;
+  fromClub: string;
+  toClub: string;
+  /** Gross fee in pence. */
+  fee: number;
+  week: number;
+  season?: number;
+}
+
 export interface TransferRecord {
   id: string;
   playerId: string;
@@ -62,5 +73,6 @@ export interface TransferRecord {
   /** Net proceeds (after agent commission) in pence */
   netProceeds: number;
   week: number;
+  season?: number;
   type: 'sale' | 'loan' | 'free_release' | 'agent_assisted' | 'signing';
 }

@@ -27,6 +27,9 @@ export function calculateMatchdayIncome(
   let subtotal = 0;
 
   for (const template of templates) {
+    // Stand income is calculated separately via calculateStandIncome
+    if (template.slug.endsWith('_stand')) continue;
+
     if (template.matchdayIncome === null || template.matchdayIncomeMultiplier === null) {
       continue;
     }
@@ -67,4 +70,48 @@ export function calculateMatchdayIncome(
 
   const total = subtotal * (1 + reputation / 100) * fanMultiplier;
   return Math.floor(total);
+}
+
+/**
+ * Combined stand income for a single home match.
+ *
+ * All *_stand facilities contribute to a shared seating capacity:
+ *   seatsPerLevel = Math.round(baseCost / 1000)
+ *   effectiveSeats = seatsPerLevel × level × (condition / 100)
+ *
+ * Expected attendance = effectiveCapacity × tierFillPct
+ * Income (pence)      = attendance × ticketPricePence
+ *
+ * Tier fill midpoints (mirrors SimulationService TIER_RANGES):
+ *   Local 35% | Regional 50% | National 70% | Elite 85%
+ */
+export function calculateStandIncome(
+  templates: FacilityTemplate[],
+  levels: FacilityLevels,
+  conditions: FacilityConditions,
+  reputationTier: string,
+  ticketPricePence: number,
+): number {
+  const TIER_FILL: Record<string, number> = {
+    Local:    0.35,
+    Regional: 0.50,
+    National: 0.70,
+    Elite:    0.85,
+  };
+  const fillPct = TIER_FILL[reputationTier] ?? 0.35;
+
+  let effectiveCapacity = 0;
+  for (const t of templates) {
+    if (!t.slug.endsWith('_stand')) continue;
+    const level = levels[t.slug] ?? 0;
+    if (level === 0) continue;
+    const condition = conditions[t.slug] ?? 100;
+    const seatsPerLevel = Math.round(t.baseCost / 1000);
+    effectiveCapacity += seatsPerLevel * level * (condition / 100);
+  }
+
+  if (effectiveCapacity === 0 || ticketPricePence <= 0) return 0;
+
+  const attendance = Math.round(effectiveCapacity * fillPct);
+  return attendance * ticketPricePence;
 }

@@ -41,6 +41,53 @@ export interface FacilityTemplate {
 // Used until the first successful sync delivers live templates from the backend.
 
 export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
+  // ── Stadium stands ──────────────────────────────────────────────────────────
+  // Income is NOT computed from matchdayIncome/matchdayIncomeMultiplier.
+  // Instead, all *_stand income is combined: attendance × ticketPrice.
+  // Capacity per level = Math.round(baseCost / 1000) seats.
+  {
+    slug:                    'main_stand',
+    label:                   'Main Stand',
+    description:             'The centrepiece of your ground. Brings in the bulk of your matchday income.',
+    category:                'STADIUM',
+    baseCost:                1_000_000,
+    weeklyUpkeepBase:        800,
+    matchdayIncome:          null,
+    matchdayIncomeMultiplier: null,
+    reputationBonus:         1.5,
+    maxLevel:                5,
+    decayBase:               1.5,
+    sortOrder:               7,
+  },
+  {
+    slug:                    'north_stand',
+    label:                   'North Stand',
+    description:             'A terraced end favoured by the most vocal supporters.',
+    category:                'STADIUM',
+    baseCost:                600_000,
+    weeklyUpkeepBase:        500,
+    matchdayIncome:          null,
+    matchdayIncomeMultiplier: null,
+    reputationBonus:         0.8,
+    maxLevel:                5,
+    decayBase:               1.5,
+    sortOrder:               8,
+  },
+  {
+    slug:                    'away_stand',
+    label:                   'Away Stand',
+    description:             'Designated section for visiting supporters. Required for higher league licences.',
+    category:                'STADIUM',
+    baseCost:                400_000,
+    weeklyUpkeepBase:        300,
+    matchdayIncome:          null,
+    matchdayIncomeMultiplier: null,
+    reputationBonus:         0.4,
+    maxLevel:                3,
+    decayBase:               1.5,
+    sortOrder:               9,
+  },
+  // ── Training ────────────────────────────────────────────────────────────────
   {
     slug:                    'technical_zone',
     label:                   'Technical Zone',

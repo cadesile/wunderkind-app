@@ -1,5 +1,15 @@
 export type FanTier = 'Angry' | 'Disappointed' | 'Neutral' | 'Happy' | 'Thrilled';
 
+/** Per-club fan engagement state. One entry per club (AMP and NPC). */
+export interface FanState {
+  clubId: string;
+  fanCount: number;
+  /** 0–100, slow-moving measure of long-term fan satisfaction */
+  sentiment: number;
+  /** 0–100, fast-moving reactive measure (match results, signings, etc.) */
+  morale: number;
+}
+
 export type FanImpactTarget = 'manager' | 'owner' | 'players';
 
 export type FanEventType = 

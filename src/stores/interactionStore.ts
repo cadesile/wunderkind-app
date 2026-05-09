@@ -100,6 +100,17 @@ export const useInteractionStore = create<InteractionState>()(
           ),
         })),
     }),
-    { name: 'interaction-store', storage: zustandStorage },
+    {
+      name: 'interaction-store',
+      storage: zustandStorage,
+      // Cap persisted arrays to prevent unbounded SQLite growth.
+      // records: newest 500 interactions; groupSessionLog: newest 100 sessions.
+      partialize: (state) => ({
+        records:             state.records.slice(0, 500),
+        cliques:             state.cliques,
+        dressingRoomHealth:  state.dressingRoomHealth,
+        groupSessionLog:     state.groupSessionLog.slice(0, 100),
+      }),
+    },
   ),
 );

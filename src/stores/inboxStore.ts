@@ -137,6 +137,17 @@ export const useInboxStore = create<InboxState>()(
     {
       name: 'inbox-store',
       storage: zustandStorage,
+      // Cap messages at 200; strip homePlayers/awayPlayers from match_result metadata —
+      // that player data is already in matchResultStore keyed by fixtureId (~1.1KB saved per message).
+      // Cap incidents at 100.
+      partialize: (state) => ({
+        messages: state.messages.slice(0, 200).map((m) => {
+          if (m.type !== 'match_result' || !m.metadata) return m;
+          const { homePlayers: _h, awayPlayers: _a, ...rest } = m.metadata as Record<string, unknown>;
+          return { ...m, metadata: rest };
+        }),
+        incidents: state.incidents.slice(0, 100),
+      }),
       // Migrate old GuardianMessage objects to InboxMessage on rehydration
       onRehydrateStorage: () => (state) => {
         if (!state) return;

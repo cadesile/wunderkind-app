@@ -13,7 +13,7 @@ import { computeFacilityEffects } from './facilityEffects';
 
 import { computePlayerDevelopment, computeCoachPerformanceScore } from './DevelopmentService';
 import { processScoutingTasks, processMissions, refreshMarketOffers, assignScoutToPlayer } from './ScoutingService';
-import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
+import { calculateMatchdayIncome, calculateStandIncome } from '@/utils/matchdayIncome';
 import { processMoraleAndRelationships } from './MoraleEngine';
 import { processSocialGraph } from './SocialGraphEngine';
 import { processGuardianTick } from './GuardianEngine';
@@ -32,6 +32,7 @@ import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFanStore } from '@/stores/fanStore';
+import { useEventStore } from '@/stores/eventStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLoanStore } from '@/stores/loanStore';
 import { useMarketStore } from '@/stores/marketStore';
@@ -48,6 +49,8 @@ import { TIER_OVR_CEILING, TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 import { getEffectiveTier } from '@/utils/tierGate';
 import { calculateClubValuation } from '@/hooks/useClubMetrics';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { isTransferWindowOpen } from '@/utils/dateUtils';
 
 type InjuryTier = {
   severity: 'minor' | 'moderate' | 'serious';
@@ -168,13 +171,129 @@ export function processWeeklyTick(): WeeklyTick {
   // ── 0b. Fan Base updates ──────────────────────────────────────────────────────
   {
     const fanStore = useFanStore.getState();
-    
+
     // Update fan favorite player
     const favoriteId = FanEngine.determineFanFavorite(allPlayers, weekNumber);
     fanStore.setFanFavoriteId(favoriteId);
-    
-    // Prune events older than 10 weeks
+
+    // Prune events older than 52 weeks
     fanStore.pruneEvents(weekNumber);
+
+    // ── 0b.i  Form impact from previous matchday (PART 1) ────────────────────
+    // Simulation runs after GameLoop, so last round's results are at currentMatchday - 1.
+    const { fixtures: allFixtures, currentMatchday } = useFixtureStore.getState();
+    const lastMatchday = currentMatchday - 1;
+    if (lastMatchday >= 0) {
+      const completedFixtures = allFixtures.filter(
+        (f) => f.round === lastMatchday && f.result !== null,
+      );
+      for (const f of completedFixtures) {
+        const r = f.result!;
+        const homeWon = r.homeGoals > r.awayGoals;
+        const awayWon = r.awayGoals > r.homeGoals;
+        const isDraw  = r.homeGoals === r.awayGoals;
+
+        if (homeWon) {
+          fanStore.updateMorale(f.homeClubId, 3);
+          fanStore.updateSentiment(f.homeClubId, 1);
+        } else if (isDraw) {
+          fanStore.updateMorale(f.homeClubId, -1);
+        } else {
+          fanStore.updateMorale(f.homeClubId, -3);
+          fanStore.updateSentiment(f.homeClubId, -1);
+        }
+
+        if (awayWon) {
+          fanStore.updateMorale(f.awayClubId, 3);
+          fanStore.updateSentiment(f.awayClubId, 1);
+        } else if (isDraw) {
+          fanStore.updateMorale(f.awayClubId, -1);
+        } else {
+          fanStore.updateMorale(f.awayClubId, -3);
+          fanStore.updateSentiment(f.awayClubId, -1);
+        }
+      }
+    }
+
+    // ── 0b.ii  Manager sacking demand (PART 3) ────────────────────────────────
+    const ampFixtures = allFixtures.filter(
+      (f) => (f.homeClubId === club.id || f.awayClubId === club.id) && f.result !== null,
+    );
+    const {
+      managerSackingMinGames,
+      managerSackingWinRatioTrigger,
+      managerSackingWinRatioRecovery,
+    } = config;
+
+    if (ampFixtures.length >= managerSackingMinGames) {
+      const wins = ampFixtures.filter((f) => {
+        const r = f.result!;
+        return (f.homeClubId === club.id && r.homeGoals > r.awayGoals)
+          || (f.awayClubId === club.id && r.awayGoals > r.homeGoals);
+      }).length;
+      const winRatio = wins / ampFixtures.length;
+
+      if (!fanStore.managerSackingDemandActive && winRatio < managerSackingWinRatioTrigger) {
+        fanStore.setManagerSackingDemand(true);
+        const alreadySent = inboxMessages.some(
+          (m) => m.metadata?.systemType === 'fan_sacking_demand',
+        );
+        if (!alreadySent) {
+          const demandTemplate = useEventStore.getState().getTemplateBySlug('fan_manager_sacking_demand');
+          const winRatePct = Math.round(winRatio * 100);
+          addMessage({
+            id: `fan-sacking-demand-wk${weekNumber}`,
+            type: 'system',
+            week: weekNumber,
+            subject: demandTemplate?.title ?? 'Fans Demand Change',
+            body: demandTemplate?.bodyTemplate.replace('{win_rate}', String(winRatePct))
+              ?? `Fans are calling for the manager to be sacked. With only a ${winRatePct}% win rate, supporters are running out of patience.`,
+            isRead: false,
+            metadata: { systemType: 'fan_sacking_demand', winRatio, templateSlug: 'fan_manager_sacking_demand' },
+          });
+        }
+      } else if (fanStore.managerSackingDemandActive && winRatio >= managerSackingWinRatioRecovery) {
+        fanStore.setManagerSackingDemand(false);
+        fanStore.resetAttendancePenalty();
+        const resolvedTemplate = useEventStore.getState().getTemplateBySlug('fan_manager_sacking_resolved');
+        addMessage({
+          id: `fan-sacking-resolved-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: resolvedTemplate?.title ?? 'Fan Pressure Eased',
+          body: resolvedTemplate?.bodyTemplate ?? 'Fans have calmed down following improved results.',
+          isRead: false,
+          metadata: { systemType: 'fan_sacking_resolved', templateSlug: 'fan_manager_sacking_resolved' },
+        });
+      }
+    }
+
+    // Per-tick penalties while sacking demand is active
+    if (fanStore.managerSackingDemandActive) {
+      fanStore.updateSentiment(club.id, -1);
+      fanStore.addAttendancePenalty(config.managerSackingAttendancePenaltyPerWeek);
+    }
+
+    // ── 0b.iii  Fan morale critical alert (PART 2 — FAN_MORALE_CRITICAL) ──────
+    // Fires at most once per season when AMP fan morale drops below 20.
+    const ampMorale = useFanStore.getState().getFanState(club.id)?.morale ?? 100;
+    if (ampMorale < 20) {
+      const critSeason = useLeagueStore.getState().league?.season ?? 0;
+      const critMsgId  = `fan-morale-critical-s${critSeason}`;
+      const alreadyFired = inboxMessages.some((m) => m.id === critMsgId);
+      if (!alreadyFired) {
+        const critTemplate = useEventStore.getState().getTemplateBySlug('fan_morale_critical');
+        addMessage({
+          id:      critMsgId,
+          type:    'system',
+          week:    weekNumber,
+          subject: critTemplate?.title ?? 'Fan Morale Critical',
+          body:    critTemplate?.bodyTemplate ?? 'Fan morale has reached a critical low. Something must change.',
+          isRead:  false,
+          metadata: { systemType: 'fan_morale_critical', templateSlug: 'fan_morale_critical' },
+        });
+      }
+    }
   }
 
   // ── 1. XP Formula ────────────────────────────────────────────────────────────
@@ -255,6 +374,7 @@ export function processWeeklyTick(): WeeklyTick {
           netProceeds: 0,
           type: 'free_release',
           week: weekNumber,
+          season: useLeagueStore.getState().currentSeason,
         });
         addMessage({
           id: `contract-expired-${player.id}-wk${weekNumber}`,
@@ -341,9 +461,29 @@ export function processWeeklyTick(): WeeklyTick {
   );
   const nonMatchPct = config.nonMatchFacilityIncomePercent ?? 0;
   const facilityIncomeMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
-  const facilityIncomePence = Math.round(
-    calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation) * facilityIncomeMultiplier,
+
+  // PART 2 — Attendance modifier: scale matchday income by fan morale on home-match weeks
+  const { getFanState, managerSackingAttendancePenalty } = useFanStore.getState();
+  const ampFanState = getFanState(club.id);
+  const fanMoraleMultiplier = hasHomeMatch ? (ampFanState?.morale ?? 60) / 100 : 1;
+  const rawFacilityIncome = Math.round(
+    calculateMatchdayIncome(facilityTemplates, levels, conditions, club.reputation)
+      * facilityIncomeMultiplier
+      * fanMoraleMultiplier,
   );
+
+  // Stand income: attendance × ticket price — home matches only
+  const { ticketPrice } = useFacilityStore.getState();
+  const rawStandIncome = hasHomeMatch
+    ? Math.round(
+        calculateStandIncome(facilityTemplates, levels, conditions, club.reputationTier, ticketPrice)
+          * fanMoraleMultiplier,
+      )
+    : 0;
+
+  // Deduct accumulated sacking-demand attendance penalty on home-match weeks
+  const penaltyDeduction = hasHomeMatch ? managerSackingAttendancePenalty : 0;
+  const facilityIncomePence = Math.max(0, rawFacilityIncome + rawStandIncome - penaltyDeduction);
 
   // ── Ledger: record categorised transactions ────────────────────────────────
   // addTransaction is the source of truth — it drives addBalance automatically.
@@ -379,7 +519,9 @@ export function processWeeklyTick(): WeeklyTick {
   const facilityDesc = hasHomeMatch
     ? `Week ${nextWeek} facility income (matchday)`
     : `Week ${nextWeek} facility income (${nonMatchPct}% non-matchday)`;
-  addTransaction({ amount: facilityIncomePenceVal, category: 'matchday_income', description: facilityDesc, weekNumber: nextWeek });
+  if (facilityIncomePenceVal > 0) {
+    addTransaction({ amount: facilityIncomePenceVal, category: 'matchday_income', description: facilityDesc, weekNumber: nextWeek });
+  }
 
   clearOldTransactions();
 
@@ -406,7 +548,8 @@ export function processWeeklyTick(): WeeklyTick {
   }
 
   // ── NPC club bids on AMP players ──────────────────────────────────────────────
-  {
+  // Transfer window is June only — skip entirely outside that month.
+  if (isTransferWindowOpen(useCalendarStore.getState().gameDate)) {
     const { messages } = useInboxStore.getState();
     const pendingOfferPlayerIds = new Set(
       messages
@@ -481,6 +624,7 @@ export function processWeeklyTick(): WeeklyTick {
             netProceeds:     bid.fee,
             type:            'sale',
             week:            weekNumber,
+            season:          useLeagueStore.getState().currentSeason,
           });
           useSquadStore.getState().removePlayer(bid.playerId);
 
@@ -561,18 +705,18 @@ export function processWeeklyTick(): WeeklyTick {
         });
       }
     }
-  }
 
-  // ── Expire stale transfer offers ──────────────────────────────────────────────
-  {
-    const { messages, respond } = useInboxStore.getState();
-    messages
-      .filter((m) => m.type === 'transfer_offer' && !m.response)
-      .filter((m) => (m.metadata?.expiresWeek as number ?? 0) <= weekNumber)
-      .forEach((m) => {
-        respond(m.id, 'rejected');
-      });
-  }
+    // ── Expire stale transfer offers (inside window guard) ────────────────────
+    {
+      const { messages, respond } = useInboxStore.getState();
+      messages
+        .filter((m) => m.type === 'transfer_offer' && !m.response)
+        .filter((m) => (m.metadata?.expiresWeek as number ?? 0) <= weekNumber)
+        .forEach((m) => {
+          respond(m.id, 'rejected');
+        });
+    }
+  } // end transfer window guard
 
   // Decrement all active injury timers (clears expired injuries automatically)
   tickInjuries();
@@ -703,6 +847,7 @@ export function processWeeklyTick(): WeeklyTick {
             netProceeds: 0,
             type: 'free_release',
             week: weekNumber,
+            season: useLeagueStore.getState().currentSeason,
           });
           addMessage({
             id: `ratio-exit-${lowestMoralePlayer.id}-wk${weekNumber}`,
@@ -935,6 +1080,7 @@ export function processWeeklyTick(): WeeklyTick {
   }
 
   incrementWeek();
+  useCalendarStore.getState().advanceGameDate();
 
   // ── 8c. Bi-weekly market pool refresh ─────────────────────────────────────────
   // Every 2 game weeks, replenish the market pool from the backend (fire-and-forget).

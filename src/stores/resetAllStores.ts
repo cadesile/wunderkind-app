@@ -12,6 +12,9 @@ import { useLeagueStore } from './leagueStore';
 import { useLeagueHistoryStore } from './leagueHistoryStore';
 import { useManagerRecordStore } from './managerRecordStore';
 import { useLeagueStatsStore } from './leagueStatsStore';
+import { useFanStore } from './fanStore';
+import { useCalendarStore } from './calendarStore';
+import { getFirstSaturdayOfJune } from '@/utils/dateUtils';
 
 /** Prefix used by worldStore for per-league club maps. */
 const WORLD_CLUBS_KEY_PREFIX = 'worldStore_clubs_';
@@ -50,6 +53,7 @@ const ALL_STORE_KEYS = [
   'event-chain-store',
   'manager-record-store',
   'league-stats-store',
+  'calendar-store',
 ];
 
 /**
@@ -78,6 +82,8 @@ export function resetInMemoryStores(): void {
   useLeagueHistoryStore.setState({ history: {} });
   useManagerRecordStore.getState().clearAll();
   useLeagueStatsStore.getState().resetStats();
+  useFanStore.getState().resetFans();
+  useCalendarStore.getState().setGameDate(getFirstSaturdayOfJune(new Date().getFullYear()));
 }
 
 /**

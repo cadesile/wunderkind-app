@@ -43,6 +43,15 @@ export const useLeagueHistoryStore = create<LeagueHistoryState>()(
         return records && records.length > 0 ? records[records.length - 1] : null;
       },
     }),
-    { name: 'league-history-store', storage: zustandStorage },
+    {
+      name: 'league-history-store',
+      storage: zustandStorage,
+      // Keep only the last 10 seasons per tier — older history is decorative.
+      partialize: (state) => ({
+        history: Object.fromEntries(
+          Object.entries(state.history).map(([tier, records]) => [tier, records.slice(-10)]),
+        ),
+      }),
+    },
   ),
 );

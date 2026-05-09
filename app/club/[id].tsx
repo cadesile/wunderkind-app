@@ -12,6 +12,7 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useFinanceStore } from '@/stores/financeStore';
+import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { Money } from '@/components/ui/Money';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer } from '@/types/world';
@@ -105,7 +106,11 @@ export default function ClubDetailScreen() {
   const inboxMessages = useInboxStore((s) => s.messages);
   const ampTransfers  = useFinanceStore((s) => s.transfers);
 
-  const season = `Season ${Math.ceil(weekNumber / 38)}`;
+  const currentSeason  = Math.ceil(weekNumber / 38);
+  const season = `Season ${currentSeason}`;
+  // Select raw records (stable reference) — never call computed methods as selectors,
+  // they return new array instances every render and trigger an infinite useSyncExternalStore loop.
+  const lsRecords = useLeagueStatsStore((s) => s.records);
 
   // ── NPC transfer history for this club ───────────────────────────────────────
   const npcTransfers = useMemo<NpcTransferEntry[]>(() => {
@@ -150,19 +155,29 @@ export default function ClubDetailScreen() {
     if (!club) return null;
 
     let topScorer: WorldPlayer | null = null;
-    let topScorerGoals = -1;
+    let topScorerGoals = 0;
     let topAssister: WorldPlayer | null = null;
-    let topAssisterAssists = -1;
+    let topAssisterAssists = 0;
     let topPlayer: WorldPlayer | null = null;
     let topOvr = -1;
+
+    // Build a season-filtered lookup of goals/assists per playerId for this club.
+    // Mirrors the same filter used by the league STATS tab (season === currentSeason)
+    // so the numbers are consistent between the two views.
+    const statsById = new Map<string, { goals: number; assists: number }>();
+    for (const r of Object.values(lsRecords)) {
+      if (r.clubId !== id || r.season !== currentSeason) continue;
+      const prev = statsById.get(r.playerId) ?? { goals: 0, assists: 0 };
+      statsById.set(r.playerId, { goals: prev.goals + r.goals, assists: prev.assists + r.assists });
+    }
 
     for (const p of club.players) {
       const ovr = calcOvr(p);
       if (ovr > topOvr) { topOvr = ovr; topPlayer = p; }
 
-      const apps = p.appearances?.[season]?.[club.id] ?? [];
-      const goals = apps.reduce((s, a) => s + (a.goals ?? 0), 0);
-      const assists = apps.reduce((s, a) => s + (a.assists ?? 0), 0);
+      const stats = statsById.get(p.id);
+      const goals   = stats?.goals   ?? 0;
+      const assists = stats?.assists ?? 0;
       if (goals > topScorerGoals) { topScorerGoals = goals; topScorer = p; }
       if (assists > topAssisterAssists) { topAssisterAssists = assists; topAssister = p; }
     }
@@ -171,7 +186,7 @@ export default function ClubDetailScreen() {
     const latestSigning = [...club.players].sort((a, b) => b.id.localeCompare(a.id))[0] ?? null;
 
     return { topScorer, topScorerGoals, topAssister, topAssisterAssists, topPlayer, topOvr, latestSigning };
-  }, [club, season]);
+  }, [club, season, lsRecords, id]);
 
   if (!club) {
     // isInitialized true but clubs still empty = loadClubs() still running

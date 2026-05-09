@@ -34,6 +34,8 @@ export interface WorldStaff {
   role: StaffRole;
   coachingAbility: number;
   nationality: string;
+  /** Attribute specialisms keyed by name (pace/technical/vision/power/stamina/heart), values 1–100. Backend sends [] when unset. */
+  specialisms?: Record<string, number> | [];
   /** Deterministic visual appearance generated client-side during initialization */
   appearance?: Appearance;
 }

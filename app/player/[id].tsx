@@ -1,8 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { PixelDialog } from '@/components/ui/PixelDialog';
-import { SwipeConfirm } from '@/components/ui/SwipeConfirm';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -24,8 +23,11 @@ import { AttributesRadar } from '@/components/radar/AttributesRadar';
 import { Money } from '@/components/ui/Money';
 import { WK, pixelShadow, traitColor } from '@/constants/theme';
 import { AttributeName, TraitName, PlayerAppearances } from '@/types/player';
+import { loadPlayerAppearances } from '@/utils/appearanceStorage';
 import { Guardian } from '@/types/guardian';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { isTransferWindowOpen, getNextTransferWindowDate } from '@/utils/dateUtils';
 import { moraleLabel } from '@/utils/morale';
 import { MoraleBar } from '@/components/ui/MoraleBar';
 import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
@@ -316,6 +318,10 @@ export default function PlayerDetailScreen() {
     [allGuardians, id],
   );
 
+  // Transfer window
+  const gameDate = useCalendarStore((s) => s.gameDate);
+  const transferWindowOpen = isTransferWindowOpen(gameDate);
+
   // Contract metrics
   const weeksRemaining = player
     ? Math.max(0, (player.enrollmentEndWeek ?? 0) - weekNumber)
@@ -343,9 +349,16 @@ export default function PlayerDetailScreen() {
     : 0;
   const canAffordExtension = clubBalance >= extensionCostPence;
 
+  const [playerAppearances, setPlayerAppearances] = useState<PlayerAppearances | undefined>(undefined);
+  useEffect(() => {
+    if (!id) return;
+    loadPlayerAppearances(id).then(setPlayerAppearances).catch(() => setPlayerAppearances({}));
+  }, [id]);
+
   const [attrsExpanded, setAttrsExpanded]   = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
   const [releaseResultDialog, setReleaseResultDialog] = useState<{ title: string; message: string } | null>(null);
+  const [showReleaseConfirm, setShowReleaseConfirm]   = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [lastAction, setLastAction] = useState<'SUPPORTED' | 'DISCIPLINED' | null>(null);
 
@@ -369,9 +382,9 @@ export default function PlayerDetailScreen() {
     [interactionRecords, id],
   );
 
-  const gameDate   = getGameDate(weekNumber);
-  const displayAge = player?.dateOfBirth
-    ? computePlayerAge(player.dateOfBirth, gameDate)
+  const gameDateObj = getGameDate(weekNumber);
+  const displayAge  = player?.dateOfBirth
+    ? computePlayerAge(player.dateOfBirth, gameDateObj)
     : (player?.age ?? '?');
 
   const radarSize = screenWidth - 32;
@@ -443,7 +456,7 @@ export default function PlayerDetailScreen() {
     if (!player) return;
     const result = await releasePlayer(player.id);
     if (result.success) {
-      router.replace('/squad');
+      router.replace('/(tabs)/hub?tab=SQUAD');
     } else {
       setReleaseResultDialog({ title: 'Error', message: result.error ?? 'Failed to release player.' });
     }
@@ -650,9 +663,9 @@ export default function PlayerDetailScreen() {
         )}
 
         {/* ── 5b. Appearances ──────────────────────────────────────────────────── */}
-        {player.appearances && currentClubId && (
+        {playerAppearances && currentClubId && (
           <AppearancesCard
-            appearances={player.appearances}
+            appearances={playerAppearances}
             currentClubId={currentClubId}
             currentClubName={currentClubName}
             onViewHistory={() => router.push(`/appearances/${id}`)}
@@ -927,18 +940,33 @@ export default function PlayerDetailScreen() {
               </View>
             )}
 
-            {/* ── 13. Release player — SwipeConfirm ───────────────────────────────── */}
-            <View style={{ borderWidth: 3, borderColor: WK.red, padding: 14, marginTop: 6 }}>
-              <PixelText size={8} color={WK.red} style={{ marginBottom: 8 }}>RELEASE PLAYER</PixelText>
-              <BodyText size={13} dim style={{ marginBottom: 14 }}>
-                Return {player.name} to the market pool. Swipe right to confirm — no transfer fee received.
-              </BodyText>
-              <SwipeConfirm
-                onAccept={() => {}}
-                onDecline={confirmRelease}
-                acceptLabel="KEEP"
-                declineLabel="RELEASE"
-              />
+            {/* ── 13. Release player ───────────────────────────────────────────── */}
+            <View style={{ borderWidth: 3, borderColor: transferWindowOpen ? WK.red : WK.border, padding: 14, marginTop: 6 }}>
+              <PixelText size={8} color={transferWindowOpen ? WK.red : WK.dim} style={{ marginBottom: 8 }}>RELEASE PLAYER</PixelText>
+              {transferWindowOpen ? (
+                <>
+                  <BodyText size={13} dim style={{ marginBottom: 14 }}>
+                    Return {player.name} to the market pool. No transfer fee received.
+                  </BodyText>
+                  <Pressable
+                    onPress={() => setShowReleaseConfirm(true)}
+                    style={{
+                      backgroundColor: WK.red,
+                      borderWidth: 3,
+                      borderColor: WK.border,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <PixelText size={8} color={WK.text}>RELEASE PLAYER</PixelText>
+                  </Pressable>
+                </>
+              ) : (
+                <View style={{ borderWidth: 2, borderColor: WK.border, padding: 10, alignItems: 'center', gap: 4 }}>
+                  <PixelText size={7} dim upper>TRANSFER WINDOW CLOSED</PixelText>
+                  <PixelText size={6} dim>{`Window reopens ${getNextTransferWindowDate(gameDate)}`}</PixelText>
+                </View>
+              )}
             </View>
           </>
         )}
@@ -1018,6 +1046,16 @@ export default function PlayerDetailScreen() {
         {...(canAffordExtension ? { onConfirm: handleExtend, confirmLabel: 'EXTEND' } : {})}
       />
 
+      {/* ── Release confirmation dialog ─────────────────────────────────────── */}
+      <PixelDialog
+        visible={showReleaseConfirm}
+        title="Release Player?"
+        message={`${player?.name} will be returned to the market pool. This cannot be undone and no transfer fee is received.`}
+        onClose={() => setShowReleaseConfirm(false)}
+        onConfirm={() => { setShowReleaseConfirm(false); confirmRelease(); }}
+        confirmLabel="RELEASE"
+      />
+
       {/* ── Release result dialog ───────────────────────────────────────────── */}
       <PixelDialog
         visible={!!releaseResultDialog}
@@ -1026,7 +1064,7 @@ export default function PlayerDetailScreen() {
         onClose={() => {
           const wasSuccess = releaseResultDialog?.title === 'Player Released';
           setReleaseResultDialog(null);
-          if (wasSuccess) router.back();
+          if (wasSuccess) router.replace('/(tabs)/hub?tab=SQUAD');
         }}
       />
     </SafeAreaView>

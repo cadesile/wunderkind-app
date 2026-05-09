@@ -246,7 +246,14 @@ export default function ScoutDetailScreen() {
       <PixelDialog
         visible={releaseDialogVisible}
         title="Release Scout?"
-        message={scout ? <>Release {scout.name}?{'\n\n'}Early termination fee: <Money pence={Math.floor(scout.salary * 26 * 0.25)} />{'\n'}(25% of 26 remaining weeks)</> : ''}
+        message={scout ? (
+          <View style={{ gap: 8 }}>
+            <PixelText size={7} dim>{`Release ${scout.name}?`}</PixelText>
+            <PixelText size={7} dim>Early termination fee:</PixelText>
+            <Money pence={Math.floor(scout.salary * 26 * 0.25)} size={12} />
+            <PixelText size={7} dim>(25% of 26 remaining weeks)</PixelText>
+          </View>
+        ) : ''}
         onClose={() => setReleaseDialogVisible(false)}
         onConfirm={confirmRelease}
         confirmLabel="RELEASE"

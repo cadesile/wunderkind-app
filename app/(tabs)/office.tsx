@@ -12,6 +12,10 @@ import { Button } from '@/components/ui/Button';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { useClubStore } from '@/stores/clubStore';
+import { useFanStore } from '@/stores/fanStore';
+import { useInboxStore } from '@/stores/inboxStore';
+import { uuidv7 } from '@/utils/uuidv7';
+import { PixelDialog } from '@/components/ui/PixelDialog';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { useManagerRecordStore } from '@/stores/managerRecordStore';
@@ -32,11 +36,10 @@ import type { BaseShape } from '@/components/ui/ClubBadge/types';
 import { Money } from '@/components/ui/Money';
 import { hapticTap } from '@/utils/haptics';
 import { ManagerSackingOverlay } from '@/components/ManagerSackingOverlay';
-import { penceToPounds } from '@/utils/currency';
 import type { StaffRole, Coach } from '@/types/coach';
 import FansScreen from '../office/fans';
 
-const OFFICE_TABS = ['CLUB', 'FANS', 'STADIUM', 'ATTENDANCE'] as const;
+const OFFICE_TABS = ['CLUB', 'FANS', 'STADIUM', 'ATTENDANCE', 'PRICING'] as const;
 type OfficeTab = typeof OFFICE_TABS[number];
 
 // ─── Facility helpers (shared with STADIUM pane) ──────────────────────────────
@@ -66,15 +69,15 @@ function FacilityCard({
   template,
   level,
   condition,
-  balance,
+  balancePence,
 }: {
   template: FacilityTemplate;
   level: number;
   condition: number;
-  balance: number;
+  balancePence: number;
 }) {
   const { upgradeLevel, repairFacility } = useFacilityStore();
-  const { addBalance, club } = useClubStore();
+  const { club } = useClubStore();
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [repairModalVisible, setRepairModalVisible] = useState(false);
 
@@ -83,8 +86,8 @@ function FacilityCard({
   const nextMaintenance = calculateFacilityUpkeep(template, level + 1);
   const repairCost      = repairFacilityCost(level, condition, template.baseCost);
 
-  const canAffordUpgrade = balance >= upgradeCost;
-  const canAffordRepair  = balance >= repairCost;
+  const canAffordUpgrade = balancePence >= upgradeCost;
+  const canAffordRepair  = balancePence >= repairCost;
   const atMax       = level >= template.maxLevel;
   const levelPct    = (level / template.maxLevel) * 100;
   const needsRepair = level > 0 && condition < 100;
@@ -92,7 +95,6 @@ function FacilityCard({
   function confirmUpgrade() {
     setUpgradeModalVisible(false);
     upgradeLevel(template.slug);
-    addBalance(-upgradeCost);
     useFinanceStore.getState().addTransaction({
       amount:      -upgradeCost,
       category:    'facility_upgrade',
@@ -233,14 +235,14 @@ function FacilityCard({
                   <BodyText size={13} color={WK.red}>
                     INSUFFICIENT FUNDS — need
                   </BodyText>
-                  <Money pence={repairCost * 100} color={WK.red} size={13} />
+                  <Money pence={repairCost} color={WK.red} size={13} />
                 </View>
               ) : (
                 <>
                   <BodyText size={13} dim style={{ marginBottom: 4 }}>CONDITION {Math.round(condition)}% → 100%</BodyText>
                   <View style={{ flexDirection: 'row', gap: 4, marginBottom: 20 }}>
                     <BodyText size={13} color={WK.orange}>COST:</BodyText>
-                    <Money pence={repairCost * 100} color={WK.orange} size={13} />
+                    <Money pence={repairCost} color={WK.orange} size={13} />
                   </View>
                 </>
               )}
@@ -1011,6 +1013,200 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
   );
 }
 
+// ─── Pricing pane ─────────────────────────────────────────────────────────────
+
+const DOF_BASE_PRICES: Record<string, { ticket: number; shirt: number; food: number }> = {
+  Local:    { ticket: 1500, shirt: 2500, food:  500 },
+  Regional: { ticket: 2000, shirt: 3500, food:  800 },
+  National: { ticket: 3000, shirt: 5000, food: 1200 },
+  Elite:    { ticket: 5000, shirt: 8000, food: 2000 },
+};
+
+function computeDofAdvice(
+  tier: string,
+  morale: number,
+): { ticket: number; shirt: number; food: number } {
+  const base = DOF_BASE_PRICES[tier] ?? DOF_BASE_PRICES['Local'];
+  const factor = morale > 70 ? 1.1 : morale < 40 ? 0.9 : 1.0;
+  return {
+    ticket: Math.round(base.ticket * factor),
+    shirt:  Math.round(base.shirt  * factor),
+    food:   Math.round(base.food   * factor),
+  };
+}
+
+function PriceInputCard({
+  label,
+  sublabel,
+  value,
+  onChange,
+  suggestedPence,
+}: {
+  label: string;
+  sublabel: string;
+  value: string;
+  onChange: (v: string) => void;
+  suggestedPence: number;
+}) {
+  const inputPence = (parseInt(value, 10) || 0) * 100;
+  const ratio = suggestedPence > 0 ? inputPence / suggestedPence : 1;
+  const borderColor = ratio > 1.2 ? WK.red : ratio < 0.8 ? WK.green : WK.border;
+
+  return (
+    <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor, padding: 12, marginBottom: 12, ...pixelShadow }}>
+      <PixelText size={7} color={WK.yellow} style={{ marginBottom: 2 }}>{label}</PixelText>
+      <BodyText size={11} dim style={{ marginBottom: 10 }}>{sublabel}</BodyText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <PixelText size={10} color={WK.text}>£</PixelText>
+        <TextInput
+          value={value}
+          onChangeText={(t) => onChange(t.replace(/[^0-9]/g, ''))}
+          keyboardType="numeric"
+          style={{
+            flex: 1,
+            backgroundColor: WK.tealDark,
+            borderWidth: 2,
+            borderColor: WK.border,
+            color: WK.text,
+            fontFamily: 'PressStart2P_400Regular',
+            fontSize: 14,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+          }}
+          placeholderTextColor={WK.dim}
+        />
+      </View>
+      <BodyText size={11} dim style={{ marginTop: 6 }}>{`DOF SUGGESTS  £${Math.round(suggestedPence / 100)}`}</BodyText>
+    </View>
+  );
+}
+
+function PricingPane() {
+  const club          = useClubStore((s) => s.club);
+  const updatePricing = useClubStore((s) => s.updatePricing);
+  const addMessage    = useInboxStore((s) => s.addMessage);
+  const morale        = useFanStore((s) => s.fans.find((f) => f.clubId === club.id)?.morale ?? 60);
+  const updateMorale  = useFanStore((s) => s.updateMorale);
+
+  const pricing = club.pricing ?? { ticketPrice: 2500, shirtPrice: 4500, foodDrinksPrice: 800 };
+
+  const [ticketInput, setTicketInput] = useState(String(Math.round(pricing.ticketPrice / 100)));
+  const [shirtInput,  setShirtInput]  = useState(String(Math.round(pricing.shirtPrice  / 100)));
+  const [foodInput,   setFoodInput]   = useState(String(Math.round(pricing.foodDrinksPrice / 100)));
+  const [showAdvice,  setShowAdvice]  = useState(false);
+  const [saved,       setSaved]       = useState(false);
+
+  const tier   = club.reputationTier ?? 'Local';
+  const advice = computeDofAdvice(tier, morale);
+
+  function handleSave() {
+    const ticketPence = Math.max(100, (parseInt(ticketInput, 10) || 0) * 100);
+    const shirtPence  = Math.max(100, (parseInt(shirtInput,  10) || 0) * 100);
+    const foodPence   = Math.max(100, (parseInt(foodInput,   10) || 0) * 100);
+
+    updatePricing({ ticketPrice: ticketPence, shirtPrice: shirtPence, foodDrinksPrice: foodPence });
+
+    const ticketRatio = ticketPence / advice.ticket;
+    let moraleDelta = 0;
+    let moraleNote  = 'Pricing looks reasonable — no fan morale change.';
+    if (ticketRatio > 1.2) {
+      moraleDelta = -5;
+      moraleNote  = 'Fans are unhappy with high ticket prices. Morale dropped.';
+    } else if (ticketRatio < 0.8) {
+      moraleDelta = 3;
+      moraleNote  = 'Affordable ticket prices have boosted fan morale!';
+    }
+
+    if (moraleDelta !== 0) {
+      updateMorale(club.id, moraleDelta);
+    }
+
+    addMessage({
+      id:      uuidv7(),
+      type:    'system',
+      week:    club.weekNumber,
+      subject: 'PRICING UPDATE',
+      body:    `Ticket £${Math.round(ticketPence / 100)}, Shirt £${Math.round(shirtPence / 100)}, Food £${Math.round(foodPence / 100)} per head. ${moraleNote}`,
+      isRead:  false,
+    });
+
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const adviceBody = [
+    `TIER: ${tier.toUpperCase()}`,
+    `FAN MORALE: ${morale}/100`,
+    '',
+    `TICKET   £${Math.round(advice.ticket / 100)}`,
+    `SHIRT    £${Math.round(advice.shirt  / 100)}`,
+    `FOOD     £${Math.round(advice.food   / 100)}`,
+    '',
+    'Above 120% = fan morale penalty (-5).',
+    'Below 80% = morale boost (+3).',
+  ].join('\n');
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
+      <Pressable
+        onPress={() => { hapticTap(); setShowAdvice(true); }}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: pressed ? WK.tealMid : WK.tealCard,
+          borderWidth: 3,
+          borderColor: WK.yellow,
+          padding: 14,
+          marginBottom: 16,
+          ...pixelShadow,
+        })}
+      >
+        <View style={{ gap: 4 }}>
+          <PixelText size={7} color={WK.yellow}>DOF PRICING ADVICE</PixelText>
+          <BodyText size={12} dim>Tap to see recommended prices</BodyText>
+        </View>
+        <PixelText size={12} color={WK.yellow}>?</PixelText>
+      </Pressable>
+
+      <PriceInputCard
+        label="MATCH DAY TICKET"
+        sublabel="Per head · Home matches"
+        value={ticketInput}
+        onChange={setTicketInput}
+        suggestedPence={advice.ticket}
+      />
+      <PriceInputCard
+        label="CLUB SHIRT"
+        sublabel="Merchandise · Per item"
+        value={shirtInput}
+        onChange={setShirtInput}
+        suggestedPence={advice.shirt}
+      />
+      <PriceInputCard
+        label="FOOD & DRINKS"
+        sublabel="Concession · Per head"
+        value={foodInput}
+        onChange={setFoodInput}
+        suggestedPence={advice.food}
+      />
+
+      <Button
+        label={saved ? 'SAVED!' : 'SAVE PRICES'}
+        variant={saved ? 'green' : 'yellow'}
+        onPress={handleSave}
+      />
+
+      <PixelDialog
+        visible={showAdvice}
+        title="DOF PRICING ADVICE"
+        message={adviceBody}
+        onClose={() => setShowAdvice(false)}
+      />
+    </ScrollView>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 const STAND_SLUGS = ['north_stand', 'south_stand', 'east_stand', 'west_stand'] as const;
@@ -1021,12 +1217,6 @@ export default function OfficeScreen() {
   const { templates, levels, conditions } = useFacilityStore();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-
-  const balance = penceToPounds(
-    typeof club.balance === 'number' && !isNaN(club.balance)
-      ? club.balance
-      : club.totalCareerEarnings * 100,
-  );
 
   const stadiumTemplates = templates.filter((t) => t.category === 'STADIUM');
 
@@ -1120,7 +1310,7 @@ export default function OfficeScreen() {
                 template={template}
                 level={levels[template.slug] ?? 0}
                 condition={conditions[template.slug] ?? 100}
-                balance={balance}
+                balancePence={club.balance ?? 0}
               />
             ))}
             {stadiumTemplates.length > 0 && (
@@ -1147,6 +1337,7 @@ export default function OfficeScreen() {
             <AttendanceLog />
           </ScrollView>
         )}
+        {activeTab === 'PRICING' && <PricingPane />}
       </View>
     </SafeAreaView>
   );

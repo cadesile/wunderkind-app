@@ -38,6 +38,8 @@ import { ManagerBrain } from '@/engine/ManagerBrain';
 import { worldTierToAppTier } from '@/engine/MarketEngine';
 import { TIER_ORDER, TIER_REPUTATION_BASELINE } from '@/types/club';
 import type { ClubTier } from '@/types/club';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { isTransferWindowOpen, getNextTransferWindowDate } from '@/utils/dateUtils';
 
 // ─── Type config ───────────────────────────────────────────────────────────────
 
@@ -265,6 +267,8 @@ function GuardianOverview({ guardianIds, worstGuardianId }: { guardianIds: strin
 
 function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: string }) {
   // ── ALL hooks here, unconditionally (Rules of Hooks) ────────────────────────
+  const gameDate = useCalendarStore((s) => s.gameDate);
+  const windowOpen = isTransferWindowOpen(gameDate);
   const player = useMarketStore((s) => s.players.find((p) => p.id === playerId));
   const inSquad = useSquadStore((s) => s.players.some((p) => p.id === playerId));
   const { signPlayer } = useMarketStore.getState();
@@ -472,8 +476,23 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
         </View>
       )}
 
-      <Button label="SIGN PLAYER" variant="yellow" fullWidth onPress={handleRecruit} />
-      <Button label="PASS" variant="teal" fullWidth onPress={handlePass} style={{ marginTop: 6 }} />
+      {windowOpen ? (
+        <>
+          <Button label="SIGN PLAYER" variant="yellow" fullWidth onPress={handleRecruit} />
+          <Button label="PASS" variant="teal" fullWidth onPress={handlePass} style={{ marginTop: 6 }} />
+        </>
+      ) : (
+        <View style={{
+          borderWidth: 2,
+          borderColor: WK.red,
+          padding: 10,
+          alignItems: 'center',
+          gap: 4,
+        }}>
+          <PixelText size={7} color={WK.red} upper>TRANSFER WINDOW CLOSED</PixelText>
+          <PixelText size={6} dim>{`Window reopens ${getNextTransferWindowDate(gameDate)}`}</PixelText>
+        </View>
+      )}
     </View>
   );
 }
@@ -488,6 +507,8 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
   const { respond, purgeForPlayer } = useInboxStore.getState();
   const { removePlayer } = useSquadStore.getState();
   const { addEarnings } = useClubStore.getState();
+  const gameDate = useCalendarStore((s) => s.gameDate);
+  const windowOpen = isTransferWindowOpen(gameDate);
 
   const [done, setDone] = useState(false);
 
@@ -700,7 +721,20 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
 
       {/* Actions */}
       <View style={{ marginTop: 12, gap: 8 }}>
-        <Button label="ACCEPT OFFER" variant="yellow" fullWidth onPress={handleAccept} />
+        {windowOpen ? (
+          <Button label="ACCEPT OFFER" variant="yellow" fullWidth onPress={handleAccept} />
+        ) : (
+          <View style={{
+            borderWidth: 2,
+            borderColor: WK.red,
+            padding: 10,
+            alignItems: 'center',
+            gap: 4,
+          }}>
+            <PixelText size={7} color={WK.red} upper>TRANSFER WINDOW CLOSED</PixelText>
+            <PixelText size={6} dim>{`Window reopens ${getNextTransferWindowDate(gameDate)}`}</PixelText>
+          </View>
+        )}
         <Button label="REJECT OFFER" variant="teal" fullWidth onPress={handleReject} />
       </View>
     </ScrollView>
@@ -1099,7 +1133,7 @@ function InboxMessageDetail({
       setInvestorId(message.entityId, investorMeta.equityPct, investorMeta.investmentAmount);
       // addTransaction drives addBalance automatically
       useFinanceStore.getState().addTransaction({
-        amount: Math.round(investorMeta.investmentAmount / 100), // pence → whole pounds
+        amount: investorMeta.investmentAmount, // pence — addTransaction/addBalance both operate in pence
         category: 'investment',
         description: `${investorMeta.investorName} — ${investorMeta.equityPct}% equity deal`,
         weekNumber: message.week,

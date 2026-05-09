@@ -33,9 +33,12 @@ interface FacilityState {
   templates: FacilityTemplate[];
   levels: FacilityLevels;
   conditions: FacilityConditions;
+  /** Ticket price in pence. Default 1500 (£15). Applied to all *_stand attendance income. */
+  ticketPrice: number;
 
   /** Called from sync handler when backend delivers updated templates */
   setTemplates: (templates: FacilityTemplate[]) => void;
+  setTicketPrice: (pence: number) => void;
 
   upgradeLevel: (slug: string) => boolean;
   /**
@@ -75,9 +78,10 @@ function defaultConditions(templates: FacilityTemplate[]): FacilityConditions {
 export const useFacilityStore = create<FacilityState>()(
   persist(
     (set, get) => ({
-      templates:  FALLBACK_FACILITY_TEMPLATES,
-      levels:     defaultLevels(FALLBACK_FACILITY_TEMPLATES),
-      conditions: defaultConditions(FALLBACK_FACILITY_TEMPLATES),
+      templates:   FALLBACK_FACILITY_TEMPLATES,
+      levels:      defaultLevels(FALLBACK_FACILITY_TEMPLATES),
+      conditions:  defaultConditions(FALLBACK_FACILITY_TEMPLATES),
+      ticketPrice: 1500, // pence (£15 default)
 
       setTemplates: (templates) => {
         if (templates.length === 0) return;
@@ -92,6 +96,8 @@ export const useFacilityStore = create<FacilityState>()(
           return { templates, levels, conditions };
         });
       },
+
+      setTicketPrice: (pence) => set({ ticketPrice: Math.max(0, Math.round(pence)) }),
 
       upgradeLevel: (slug) => {
         const { templates, levels } = get();

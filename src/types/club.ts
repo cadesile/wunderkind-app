@@ -97,6 +97,15 @@ export interface TrophyRecord {
   standings:     TrophyStandingEntry[];
 }
 
+export interface ClubPricing {
+  /** Matchday ticket price in pence. */
+  ticketPrice: number;
+  /** Club shirt / merchandise price in pence. */
+  shirtPrice: number;
+  /** Food & drinks concession price in pence. */
+  foodDrinksPrice: number;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -142,4 +151,6 @@ export interface Club {
   /** Club badge/crest shape selected by the AMP. Defaults to 'shield'. */
   badgeShape?: 'shield' | 'circle' | 'crest';
   trophies: TrophyRecord[];
+  /** Matchday and merchandise pricing set by the AMP. */
+  pricing?: ClubPricing;
 }

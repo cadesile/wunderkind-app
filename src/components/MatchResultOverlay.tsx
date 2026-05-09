@@ -1,4 +1,5 @@
 import { Modal, View, ScrollView, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PixelText } from '@/components/ui/PixelText';
 import { MatchResultContent, MatchResultContentData } from '@/components/MatchResultContent';
 import { WK } from '@/constants/theme';
@@ -53,6 +54,7 @@ interface MatchResultOverlayProps {
 }
 
 export function MatchResultOverlay({ visible, onClose, data }: MatchResultOverlayProps) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal
       visible={visible}
@@ -62,13 +64,14 @@ export function MatchResultOverlay({ visible, onClose, data }: MatchResultOverla
       onRequestClose={onClose}
     >
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)' }}>
-        {/* Header bar */}
+        {/* Header bar — paddingTop accounts for Android status bar */}
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 14,
-          paddingVertical: 12,
+          paddingTop: 12 + insets.top,
+          paddingBottom: 12,
           backgroundColor: WK.tealDark,
           borderBottomWidth: 3,
           borderBottomColor: WK.border,

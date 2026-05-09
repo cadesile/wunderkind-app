@@ -13,7 +13,12 @@ import { useInboxStore } from '@/stores/inboxStore';
 import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useAttendanceStore } from '@/stores/attendanceStore';
 import { useManagerRecordStore } from '@/stores/managerRecordStore';
+import type { ManagerOutcome } from '@/stores/managerRecordStore';
 import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
+import { useClubStatsStore } from '@/stores/clubStatsStore';
+import type { BulkStatsEntry } from '@/stores/leagueStatsStore';
+import type { ClubResultEntry } from '@/stores/clubStatsStore';
+import type { MatchResultRecord } from '@/stores/matchResultStore';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
@@ -39,6 +44,7 @@ import {
 // Processes narrative story ticks and match simulations entirely on-device.
 
 import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { batchAppendAppearances } from '@/utils/appearanceStorage';
 
 class SimulationService {
 
@@ -59,8 +65,10 @@ class SimulationService {
    */
   async runBatchSimulation(): Promise<void> {
     const { startSimulation, endSimulation } = useTickProgressStore.getState();
-    const { fixtures, currentMatchday, recordResult } = useFixtureStore.getState();
-    const { clubs: worldClubs } = useWorldStore.getState();
+    const { fixtures, currentMatchday } = useFixtureStore.getState();
+    const { clubs: worldClubs, leagues: worldLeagues } = useWorldStore.getState();
+    // Build a leagueId → tier lookup once; used when recording per-player stats
+    const leagueTierMap = new Map<string, number>(worldLeagues.map((l) => [l.id, l.tier]));
     const { club: userClub } = useClubStore.getState();
     const { config: gameConfig } = useGameConfigStore.getState();
     const { players: userSquad } = useSquadStore.getState();
@@ -75,32 +83,39 @@ class SimulationService {
     const tacticalMatrix = gameConfig?.tacticalMatrix ?? {};
     const styleInfluence = (useGameConfigStore.getState().config?.playingStyleInfluence) ?? {};
 
-    console.log('tacticalMatrix', tacticalMatrix);
-
-    // 2. Process in chunks
+    // 2. Process in chunks — collect all batch entries, flush ONCE at the end
     const batchSize = 10;
-          console.log('batchSize',batchSize);
-          console.log('currentFixtures',currentFixtures);
 
-    const npcAppearanceEntries: Array<{ playerId: string; clubId: string; season: string; appearance: MatchAppearance }> = [];
+    const appearanceEntries: Array<{ playerId: string; clubId: string; season: number; appearance: MatchAppearance }> = [];
+    const statsEntries: BulkStatsEntry[] = [];
+    const fixtureResultEntries: Array<{ fixtureId: string; result: { homeGoals: number; awayGoals: number; playedAt: string } }> = [];
+    const matchResultEntries: MatchResultRecord[] = [];
+    const clubResultEntries: ClubResultEntry[] = [];
+    const managerResultEntries: Array<{ managerId: string; name: string; outcome: ManagerOutcome }> = [];
 
     for (let i = 0; i < currentFixtures.length; i += batchSize) {
       const chunk = currentFixtures.slice(i, i + batchSize);
-      
+
       for (const fixture of chunk) {
-        const seasonKey = `Season ${fixture.season}`;
         const homeTeam = this.getSimTeam(fixture.homeClubId, worldClubs, userClub, userSquad);
         const awayTeam = this.getSimTeam(fixture.awayClubId, worldClubs, userClub, userSquad);
 
         if (homeTeam && awayTeam) {
           const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix, styleInfluence);
-          
           const playedAt = new Date().toISOString();
 
-          recordResult(fixture.id, {
-            homeGoals: result.homeScore,
-            awayGoals: result.awayScore,
-            playedAt,
+          // ── Collect fixture result (flushed in batch below) ────────────────
+          fixtureResultEntries.push({
+            fixtureId: fixture.id,
+            result: { homeGoals: result.homeScore, awayGoals: result.awayScore, playedAt },
+          });
+
+          // ── Collect club all-time record update ────────────────────────────
+          clubResultEntries.push({
+            homeClubId: fixture.homeClubId,
+            awayClubId: fixture.awayClubId,
+            homeGoals:  result.homeScore,
+            awayGoals:  result.awayScore,
           });
 
           // ── Persist full match result for all fixtures (AMP and NPC) ──────
@@ -120,7 +135,12 @@ class SimulationService {
           const homePlayers = serializePerf(result.homePerformance);
           const awayPlayers = serializePerf(result.awayPerformance);
 
-          useMatchResultStore.getState().addResult({
+          // Hoist AMP detection so it's available for stats + appearance gating below
+          const ampIsHome = fixture.homeClubId === userClub.id;
+          const ampIsAway = fixture.awayClubId === userClub.id;
+
+          // ── Collect match result record (flushed in batch below) ───────────
+          matchResultEntries.push({
             fixtureId:      fixture.id,
             season:         fixture.season,
             homeClubId:     fixture.homeClubId,
@@ -134,28 +154,25 @@ class SimulationService {
             playedAt,
           });
 
-          // ── Write per-player season stats for all fixtures ─────────────────
+          // ── Collect per-player season stats (all fixtures, all leagues) ────────
+          // Keyed by t{tier}_s{season} in AsyncStorage so each bucket stays small
+          // and old seasons can be dropped per-tier without touching other tiers.
           {
-            const { recordMatchStats } = useLeagueStatsStore.getState();
             const { leagueId, season } = fixture;
+            const tier = leagueTierMap.get(leagueId) ?? 1;
             for (const pp of homePlayers) {
-              recordMatchStats(pp.id, fixture.homeClubId, leagueId, season, pp.goals, pp.assists, pp.rating);
+              statsEntries.push({ playerId: pp.id, clubId: fixture.homeClubId, leagueId, season, tier, goals: pp.goals, assists: pp.assists, rating: pp.rating });
             }
             for (const pp of awayPlayers) {
-              recordMatchStats(pp.id, fixture.awayClubId, leagueId, season, pp.goals, pp.assists, pp.rating);
+              statsEntries.push({ playerId: pp.id, clubId: fixture.awayClubId, leagueId, season, tier, goals: pp.goals, assists: pp.assists, rating: pp.rating });
             }
           }
 
-          // ── Record result against each club's manager ──────────────────────
+          // ── Collect manager result (flushed in batch below) ───────────────
           {
-            const { recordResult: recordManagerResult } = useManagerRecordStore.getState();
             const { coaches: ampCoaches } = require('@/stores/coachStore').useCoachStore.getState();
-            const homeOutcome: 'win' | 'draw' | 'loss' =
-              result.homeScore > result.awayScore ? 'win' :
-              result.homeScore < result.awayScore ? 'loss' : 'draw';
-            const awayOutcome: 'win' | 'draw' | 'loss' =
-              result.awayScore > result.homeScore ? 'win' :
-              result.awayScore < result.homeScore ? 'loss' : 'draw';
+            const homeOutcome: ManagerOutcome = result.homeScore > result.awayScore ? 'win' : result.homeScore < result.awayScore ? 'loss' : 'draw';
+            const awayOutcome: ManagerOutcome = result.awayScore > result.homeScore ? 'win' : result.awayScore < result.homeScore ? 'loss' : 'draw';
 
             const getManagerIdAndName = (clubId: string): { id: string; name: string } | null => {
               if (clubId === userClub.id) {
@@ -169,48 +186,10 @@ class SimulationService {
 
             const homeMgr = getManagerIdAndName(fixture.homeClubId);
             const awayMgr = getManagerIdAndName(fixture.awayClubId);
-            if (homeMgr) recordManagerResult(homeMgr.id, homeMgr.name, homeOutcome);
-            if (awayMgr) recordManagerResult(awayMgr.id, awayMgr.name, awayOutcome);
+            if (homeMgr) managerResultEntries.push({ managerId: homeMgr.id, name: homeMgr.name, outcome: homeOutcome });
+            if (awayMgr) managerResultEntries.push({ managerId: awayMgr.id, name: awayMgr.name, outcome: awayOutcome });
           }
 
-          // ── Record appearances for NPC players ────────────────────────────
-          const fixtureHomeIsNpc = fixture.homeClubId !== userClub.id;
-          const fixtureAwayIsNpc = fixture.awayClubId !== userClub.id;
-          const collectNpcPerf = (
-            perf: typeof result.homePerformance,
-            clubId: string,
-            teamScore: number,
-            opponentScore: number,
-            opponentId: string,
-          ) => {
-            const matchOutcome: 'win' | 'loss' | 'draw' =
-              teamScore > opponentScore ? 'win' : teamScore < opponentScore ? 'loss' : 'draw';
-            const scoreline = `${teamScore}-${opponentScore}`;
-            perf.players.forEach((pp) => {
-              npcAppearanceEntries.push({
-                playerId: pp.player.id,
-                clubId,
-                season: seasonKey,
-                appearance: {
-                  opponentId,
-                  result: matchOutcome,
-                  scoreline,
-                  rating: pp.rating,
-                  goals: pp.goal,
-                  assists: pp.assist,
-                },
-              });
-            });
-          };
-          if (fixtureHomeIsNpc) {
-            collectNpcPerf(result.homePerformance, fixture.homeClubId, result.homeScore, result.awayScore, fixture.awayClubId);
-          }
-          if (fixtureAwayIsNpc) {
-            collectNpcPerf(result.awayPerformance, fixture.awayClubId, result.awayScore, result.homeScore, fixture.homeClubId);
-          }
-
-          const ampIsHome = fixture.homeClubId === userClub.id;
-          const ampIsAway = fixture.awayClubId === userClub.id;
           if (ampIsHome || ampIsAway) {
             const homeName = ampIsHome ? userClub.name : (worldClubs[fixture.homeClubId]?.name ?? 'Opponent');
             const awayName = ampIsAway ? userClub.name : (worldClubs[fixture.awayClubId]?.name ?? 'Opponent');
@@ -218,7 +197,6 @@ class SimulationService {
             const oppGoals = ampIsHome ? result.awayScore : result.homeScore;
 
             // ── Record appearances for AMP XI players ─────────────────────────
-            const { recordAppearance } = useSquadStore.getState();
             const matchResult: 'win' | 'loss' | 'draw' =
               ampGoals > oppGoals ? 'win' : ampGoals < oppGoals ? 'loss' : 'draw';
             const scoreline = `${ampGoals}-${oppGoals}`;
@@ -227,13 +205,18 @@ class SimulationService {
             const ampSquadIds = new Set(userSquad.map((p) => p.id));
             ampPerformance.players.forEach((pp) => {
               if (!ampSquadIds.has(pp.player.id)) return;
-              recordAppearance(pp.player.id, seasonKey, userClub.id, {
-                opponentId,
-                result: matchResult,
-                scoreline,
-                rating: pp.rating,
-                goals: pp.goal,
-                assists: pp.assist,
+              appearanceEntries.push({
+                playerId:   pp.player.id,
+                clubId:     userClub.id,
+                season:     fixture.season,
+                appearance: {
+                  opponentId,
+                  result:  matchResult,
+                  scoreline,
+                  rating:  pp.rating,
+                  goals:   pp.goal,
+                  assists: pp.assist,
+                },
               });
             });
             const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
@@ -329,10 +312,13 @@ class SimulationService {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // Flush all NPC appearance records in one batched write
-    if (npcAppearanceEntries.length > 0) {
-      await useWorldStore.getState().recordNpcAppearances(npcAppearanceEntries);
-    }
+    // ── Flush all collected data in single set() calls ─────────────────────
+    useFixtureStore.getState().batchRecordResults(fixtureResultEntries);
+    useMatchResultStore.getState().batchAddResults(matchResultEntries);
+    useLeagueStatsStore.getState().batchRecordMatchStats(statsEntries);
+    useClubStatsStore.getState().batchUpdateFromResults(clubResultEntries);
+    useManagerRecordStore.getState().batchRecordResults(managerResultEntries);
+    await batchAppendAppearances(appearanceEntries);
 
     endSimulation();
     useFixtureStore.getState().advanceMatchday();

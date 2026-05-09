@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Club, ReputationTier, ManagerPersonality, ManagerProfile, SponsorContract, TrophyRecord } from '@/types/club';
+import { Club, ClubPricing, ReputationTier, ManagerPersonality, ManagerProfile, SponsorContract, TrophyRecord } from '@/types/club';
 import { zustandStorage } from '@/utils/storage';
 import type { ClubStatusResponse, SyncAcceptedResponse } from '@/types/api';
 
@@ -61,6 +61,7 @@ interface ClubState {
   setClubColors: (primary: string, secondary: string) => void;
   setBadgeShape: (shape: NonNullable<Club['badgeShape']>) => void;
   addTrophy: (record: TrophyRecord) => void;
+  updatePricing: (pricing: Partial<ClubPricing>) => void;
 }
 
 export const DEFAULT_CLUB: Club = {
@@ -90,6 +91,11 @@ export const DEFAULT_CLUB: Club = {
   secondaryColor: '#FFC107',
   badgeShape: 'shield',
   trophies: [],
+  pricing: {
+    ticketPrice: 2500,
+    shirtPrice: 4500,
+    foodDrinksPrice: 800,
+  },
 };
 
 export const useClubStore = create<ClubState>()(
@@ -282,6 +288,19 @@ export const useClubStore = create<ClubState>()(
         set((state) => ({ club: { ...state.club, badgeShape: shape } })),
       addTrophy: (record) =>
         set((s) => ({ club: { ...s.club, trophies: [...s.club.trophies, record] } })),
+      updatePricing: (pricing) =>
+        set((state) => ({
+          club: {
+            ...state.club,
+            pricing: {
+              ticketPrice: 2500,
+              shirtPrice: 4500,
+              foodDrinksPrice: 800,
+              ...(state.club.pricing ?? {}),
+              ...pricing,
+            },
+          },
+        })),
     }),
     { name: 'club-store', storage: zustandStorage }
   )

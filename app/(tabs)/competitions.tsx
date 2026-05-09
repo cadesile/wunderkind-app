@@ -90,6 +90,14 @@ export default function CompetitionsScreen() {
 
   const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
 
+  const relegationSpots = useMemo(() => {
+    if (!league) return null;
+    const leagueBelow = worldLeagues.find(
+      (l) => l.country === league.country && l.tier === league.tier + 1,
+    );
+    return leagueBelow?.promotionSpots ?? null;
+  }, [worldLeagues, league]);
+
   const clubNameMap = useMemo(() => {
     const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
     map.set(ampClubId, ampName);
@@ -147,6 +155,7 @@ export default function CompetitionsScreen() {
             ampClubId={ampClubId}
             ampName={ampName}
             promotionSpots={league.promotionSpots}
+            relegationSpots={relegationSpots}
             worldClubs={worldClubs}
             ampSquad={ampSquad}
             onClubPress={handleClubPress}
@@ -252,7 +261,7 @@ function RankingsPane() {
       <RankingsHeader />
       {entries.map((entry) => (
         <RankingsRow
-          key={entry.clubName}
+          key={String(entry.rank)}
           entry={entry}
           isOwn={entry.clubName === clubName}
         />

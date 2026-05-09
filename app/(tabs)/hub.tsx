@@ -176,11 +176,11 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
             <Money pence={coach.salary} dim size={11} />
             <BodyText size={11} dim style={{ flexShrink: 0 }}>/wk</BodyText>
           </View>
-
+ 
           {/* Influence bar */}
-          <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border, marginBottom: 5 }}>
+          {/* <View style={{ height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border, marginBottom: 5 }}>
             <View style={{ height: '100%', width: `${(coach.influence / 20) * 100}%`, backgroundColor: traitColor(coach.influence) }} />
-          </View>
+          </View>  */}
 
           {/* Specialism chips */}
           {coach.specialisms && Object.keys(coach.specialisms).length > 0 && (
@@ -263,7 +263,7 @@ function ScoutRow({ scout }: { scout: Scout }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
               <BodyText size={14} upper numberOfLines={1} style={{ flex: 1 }}>{scout.name}</BodyText>
               {isOnMission && <Badge label="ACTIVE" color="yellow" />}
-              {!isOnMission && dofAutoScouts && <Badge label="DOF" color="green" />}
+              {!isOnMission && dofAutoScouts && <Badge label="DOF MANAGED" color="green" />}
             </View>
 
             <PixelText size={8} color={WK.tealLight} style={{ marginBottom: 3 }}>{RANGE_LABEL[scout.scoutingRange]} {formatStaffRole(scout.role).toUpperCase()}</PixelText>
@@ -613,7 +613,14 @@ function StaffPane() {
         <PixelDialog
           visible
           title="RELEASE STAFF"
-          message={<>Release {pendingFireCoach.coach.name}?{'\n\n'}Early termination fee: <Money pence={pendingFireCoach.penaltyPence} />{'\n'}(25% of 26 remaining weeks)</>}
+          message={(
+            <View style={{ gap: 8 }}>
+              <PixelText size={7} dim>{`Release ${pendingFireCoach.coach.name}?`}</PixelText>
+              <PixelText size={7} dim>Early termination fee:</PixelText>
+              <Money pence={pendingFireCoach.penaltyPence} size={12} />
+              <PixelText size={7} dim>(25% of 26 remaining weeks)</PixelText>
+            </View>
+          )}
           confirmLabel="RELEASE"
           confirmVariant="red"
           onConfirm={confirmFireCoach}
