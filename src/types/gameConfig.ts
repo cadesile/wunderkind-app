@@ -35,6 +35,27 @@ export function resolveAbilityRange(
     ?? { tier, min: 10, max: 60 };
 }
 
+// ─── Wage tiers ───────────────────────────────────────────────────────────────
+
+export interface WageMultiplierTier {
+  /** Upper ability bound (exclusive). null = catch-all for the highest tier. */
+  maxAbility: number | null;
+  playerMultiplier: number;
+  staffMultiplier: number;
+}
+
+/** Resolve the correct tier for a given ability value. */
+export function resolveWageTier(
+  tiers: WageMultiplierTier[],
+  ability: number,
+): WageMultiplierTier {
+  for (const tier of tiers) {
+    if (tier.maxAbility === null || ability < tier.maxAbility) return tier;
+  }
+  // Fallback: last tier (should always have a null catch-all)
+  return tiers[tiers.length - 1] ?? { maxAbility: null, playerMultiplier: 1.0, staffMultiplier: 1.0 };
+}
+
 // ─── GameConfig ───────────────────────────────────────────────────────────────
 
 export interface GameConfig {
@@ -68,6 +89,17 @@ export interface GameConfig {
    * Default: 1.0  (no adjustment)
    */
   playerWageMultiplier: number;
+
+  // ── Contract / wage tiers ─────────────────────────────────────────────────
+  /**
+   * Ability-banded wage multipliers used to calculate weekly wages and extension costs.
+   * weeklyWage (pence) = ability × rand(contractValueRandMin, contractValueRandMax) × playerMultiplier
+   */
+  wageMultiplierTiers: WageMultiplierTier[];
+  /** Lower bound (inclusive) of the random wage coefficient. Default: 1000 */
+  contractValueRandMin: number;
+  /** Upper bound (inclusive) of the random wage coefficient. Default: 2000 */
+  contractValueRandMax: number;
 
   // ── Engine constants ──────────────────────────────────────────────────────
   /** Base XP awarded per player per week before facility/coach multipliers. Default: 10 */
@@ -290,6 +322,15 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
 
   playerFeeMultiplier: 1000,
   playerWageMultiplier: 1.0,
+
+  wageMultiplierTiers: [
+    { maxAbility: 25,   playerMultiplier: 0.5, staffMultiplier: 0.6 },
+    { maxAbility: 50,   playerMultiplier: 1.0, staffMultiplier: 1.0 },
+    { maxAbility: 75,   playerMultiplier: 2.5, staffMultiplier: 2.0 },
+    { maxAbility: null, playerMultiplier: 5.0, staffMultiplier: 4.0 },
+  ],
+  contractValueRandMin: 1000,
+  contractValueRandMax: 2000,
 
   baseXP: 10,
   baseInjuryProbability: 0.05,

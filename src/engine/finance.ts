@@ -5,6 +5,31 @@ import { Coach } from '@/types/coach';
 import { FacilityTemplate, FacilityLevels } from '@/types/facility';
 import { Sponsor } from '@/types/market';
 import { calculateFacilityUpkeep } from '@/utils/facilityUpkeep';
+import { WageMultiplierTier, resolveWageTier } from '@/types/gameConfig';
+
+/**
+ * Calculates the total cost (in pence) to extend a player's contract.
+ *
+ * Formula:
+ *   weeklyWage (pence) = ability × randBetween(randMin, randMax) × playerMultiplier
+ *   extensionCost      = weeklyWage × contractLengthWeeks
+ *
+ * The random coefficient is re-rolled each time so the cost is always
+ * freshly computed from the player's current ability — old contractValue
+ * is not inherited.
+ */
+export function calculateExtensionCost(
+  ability: number,
+  contractLengthWeeks: number,
+  tiers: WageMultiplierTier[],
+  randMin: number,
+  randMax: number,
+): number {
+  const tier = resolveWageTier(tiers, ability);
+  const randCoeff = randMin + Math.floor(Math.random() * (randMax - randMin + 1));
+  const weeklyWagePence = Math.round(ability * randCoeff * tier.playerMultiplier);
+  return weeklyWagePence * contractLengthWeeks;
+}
 
 /**
  * Net sale price after deducting agent commission and investor equity.

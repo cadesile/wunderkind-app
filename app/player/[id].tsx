@@ -28,6 +28,7 @@ import { Guardian } from '@/types/guardian';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 import { useCalendarStore } from '@/stores/calendarStore';
 import { isTransferWindowOpen, getNextTransferWindowDate } from '@/utils/dateUtils';
+import { calculateExtensionCost } from '@/engine/finance';
 import { moraleLabel } from '@/utils/morale';
 import { MoraleBar } from '@/components/ui/MoraleBar';
 import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
@@ -238,9 +239,9 @@ function TransferHistorySection({
         backgroundColor: WK.tealDark,
       }}>
         <VT323Text size={14} color={WK.dim} style={{ flex: 1, minWidth: 0 }}>CLUB</VT323Text>
+        <VT323Text size={14} color={WK.dim} style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>APPS</VT323Text>
         <VT323Text size={14} color={WK.dim} style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>GOALS</VT323Text>
         <VT323Text size={14} color={WK.dim} style={{ width: 52, flexShrink: 0, textAlign: 'right' }}>ASSISTS</VT323Text>
-        {/* TODO: Transfer fee history requires a future task to store joinFee on player records */}
         <VT323Text size={14} color={WK.dim} style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>FEE</VT323Text>
       </View>
 
@@ -258,6 +259,13 @@ function TransferHistorySection({
           <BodyText size={12} numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
             {resolveClubName(entry.clubId)}
           </BodyText>
+          <VT323Text
+            size={18}
+            color={entry.appearances > 0 ? WK.text : WK.dim}
+            style={{ width: 44, flexShrink: 0, textAlign: 'right' }}
+          >
+            {entry.appearances}
+          </VT323Text>
           <VT323Text
             size={18}
             color={entry.goals > 0 ? WK.yellow : WK.dim}
@@ -289,7 +297,10 @@ export default function PlayerDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
 
   const { player, isNpc, clubColors, clubName: npcClubName } = useUnifiedPlayer(id ?? null);
-  const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
+  const debugEnabled          = useGameConfigStore((s) => s.config.debugLoggingEnabled);
+  const wageMultiplierTiers   = useGameConfigStore((s) => s.config.wageMultiplierTiers);
+  const contractValueRandMin  = useGameConfigStore((s) => s.config.contractValueRandMin);
+  const contractValueRandMax  = useGameConfigStore((s) => s.config.contractValueRandMax);
 
   const releasePlayer = useSquadStore((s) => s.releasePlayer);
   const extendContract = useSquadStore((s) => s.extendContract);
@@ -342,10 +353,15 @@ export default function PlayerDetailScreen() {
     contractPct >= 85 ? WK.red :
     contractPct >= 60 ? WK.orange : WK.tealLight;
 
-  // Contract extension cost: 5% of total 52-week contract value
-  // wage is pence/week → total value = 52 × wage pence → 5%
+  // Contract extension cost: ability × rand(randMin, randMax) × playerMultiplier × 52 weeks
   const extensionCostPence = player
-    ? Math.max(1, Math.round(52 * (player.wage ?? 0) * 0.05))
+    ? calculateExtensionCost(
+        player.ovr ?? player.currentAbility ?? 0,
+        52,
+        wageMultiplierTiers,
+        contractValueRandMin,
+        contractValueRandMax,
+      )
     : 0;
   const canAffordExtension = clubBalance >= extensionCostPence;
 
@@ -1039,7 +1055,7 @@ export default function PlayerDetailScreen() {
         title="Extend Enrollment?"
         message={
           canAffordExtension
-            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${Math.round(extensionCostPence / 100).toLocaleString()}. Fee is 5% of their total 52-week contract value.`
+            ? `Extend ${player?.name}'s enrollment by 52 weeks for £${Math.round(extensionCostPence / 100).toLocaleString()}.`
             : `You cannot afford this extension. You need £${Math.round(extensionCostPence / 100).toLocaleString()} but your balance is insufficient.`
         }
         onClose={() => setShowExtendDialog(false)}
