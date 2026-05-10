@@ -4,7 +4,11 @@ import { Stack } from 'expo-router';
 
 enableScreens();
 import { useEffect, useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { SQLiteProvider } from 'expo-sqlite';
+import { CREATE_SCHEMA } from '@/db/schema';
+import { setDatabase } from '@/db/client';
+import { queryClient } from '@/api/queryClient';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -31,13 +35,6 @@ import { Button } from '@/components/ui/Button';
 // Keep the native splash visible until AppNavigator signals it's ready
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 2, staleTime: 1000 * 60 * 5 },
-    // Sync is managed by syncQueue; other mutations (sign coach, etc.) get one retry
-    mutations: { retry: 1 },
-  },
-});
 
 function AppNavigator() {
   const [fontsLoaded, fontError] = useFonts({
@@ -182,11 +179,19 @@ function AppNavigator() {
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar style="light" />
-        <AppNavigator />
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <SQLiteProvider
+      databaseName="wk.db"
+      onInit={async (db) => {
+        await db.execAsync(CREATE_SCHEMA);
+        setDatabase(db);
+      }}
+    >
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar style="light" />
+          <AppNavigator />
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </SQLiteProvider>
   );
 }
