@@ -333,6 +333,9 @@ class SimulationService {
     queryClient.invalidateQueries({ queryKey: ['league-scorers'] });
     queryClient.invalidateQueries({ queryKey: ['league-assisters'] });
     queryClient.invalidateQueries({ queryKey: ['appearances'] });
+    queryClient.invalidateQueries({ queryKey: ['match-result'] });
+    queryClient.invalidateQueries({ queryKey: ['player-career'] });
+    queryClient.invalidateQueries({ queryKey: ['club-top-scorer'] });
 
     // ── Zustand in-memory updates (unchanged) ──────────────────────────────
     useFixtureStore.getState().applyResultsToMemory(fixtureResultEntries);
