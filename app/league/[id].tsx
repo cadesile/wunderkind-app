@@ -12,9 +12,9 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useFixtureStore, type Fixture } from '@/stores/fixtureStore';
 import { useSquadStore } from '@/stores/squadStore';
+import { useLeagueTopScorers } from '@/hooks/db/useLeagueTopScorers';
+import { useLeagueTopAssisters } from '@/hooks/db/useLeagueTopAssisters';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
-import { useMatchResultStore } from '@/stores/matchResultStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import {
   loadArchivedFixtureSeason,
   listArchivedFixtureSeasons,
@@ -547,7 +547,6 @@ export default function LeagueDashboardScreen() {
   const storeFixtures   = useFixtureStore((s) => s.fixtures);
   const ampClub         = useClubStore((s) => s.club);
   const ampSquad        = useSquadStore((s) => s.players);
-  const matchResults    = useMatchResultStore((s) => s.results);
 
   // Load available archived seasons for this league on mount
   useEffect(() => {
@@ -608,8 +607,8 @@ export default function LeagueDashboardScreen() {
 
   const overlayData = useMemo(() => {
     if (!selectedFixture) return null;
-    return buildMatchResultData(selectedFixture, ampClub.id, ampClub.name, clubNameMap, matchResults);
-  }, [selectedFixture, ampClub.id, ampClub.name, clubNameMap, matchResults]);
+    return buildMatchResultData(selectedFixture, ampClub.id, ampClub.name, clubNameMap, {});
+  }, [selectedFixture, ampClub.id, ampClub.name, clubNameMap]);
 
   const leagueFixtures = useMemo(() => {
     const all = allFixtures.filter((f) => f.leagueId === id);
@@ -624,7 +623,8 @@ export default function LeagueDashboardScreen() {
     return Math.max(...leagueFixtures.map((f) => f.season));
   }, [selectedSeason, leagueFixtures]);
 
-  const lsRecords = useLeagueStatsStore((s) => s.records);
+  const { data: rawTopScorers  = [] } = useLeagueTopScorers(id, currentSeasonNumber);
+  const { data: rawTopAssisters = [] } = useLeagueTopAssisters(id, currentSeasonNumber);
 
   const relegationSpots = useMemo(() => {
     if (!league) return null;
@@ -639,21 +639,13 @@ export default function LeagueDashboardScreen() {
     [leagueFixtures, allClubs, ampInLeague, ampClub.id],
   );
 
-  const playerStats = useMemo<StatEntry[]>(() => {
-    // Aggregate goals/assists per player from leagueStatsStore for this league + season
-    const byPlayer = new Map<string, { goals: number; assists: number }>();
-    for (const r of Object.values(lsRecords)) {
-      if (r.leagueId !== id || r.season !== currentSeasonNumber) continue;
-      const cur = byPlayer.get(r.playerId) ?? { goals: 0, assists: 0 };
-      byPlayer.set(r.playerId, { goals: cur.goals + r.goals, assists: cur.assists + r.assists });
-    }
-
-    // Build a name/position/club lookup from NPC world clubs + AMP squad
-    const playerMeta = new Map<string, { name: string; position: string; clubName: string }>();
+  // Build a name/position/club lookup from NPC world clubs + AMP squad
+  const playerMeta = useMemo(() => {
+    const map = new Map<string, { name: string; position: string; clubName: string }>();
     leagueWorldClubs.forEach((wc) => {
       const clubName = clubNameMap.get(wc.id) ?? wc.id;
       wc.players.forEach((p) => {
-        playerMeta.set(p.id, {
+        map.set(p.id, {
           name:     `${p.firstName} ${p.lastName}`,
           position: p.position === 'ATT' ? 'FWD' : p.position,
           clubName,
@@ -662,27 +654,38 @@ export default function LeagueDashboardScreen() {
     });
     if (ampInLeague) {
       ampSquad.filter((p) => p.isActive).forEach((p) => {
-        playerMeta.set(p.id, { name: p.name, position: p.position, clubName: ampClub.name });
+        map.set(p.id, { name: p.name, position: p.position, clubName: ampClub.name });
       });
     }
+    return map;
+  }, [leagueWorldClubs, ampSquad, ampInLeague, ampClub.name, clubNameMap]);
 
-    const entries: StatEntry[] = [];
-    for (const [playerId, stats] of byPlayer) {
-      if (stats.goals === 0 && stats.assists === 0) continue;
-      const meta = playerMeta.get(playerId);
-      if (!meta) continue;
-      entries.push({ id: playerId, ...meta, ...stats });
-    }
-    return entries;
-  }, [lsRecords, id, currentSeasonNumber, leagueWorldClubs, ampSquad, ampInLeague, ampClub.name, clubNameMap]);
-
-  const topScorers   = useMemo(() =>
-    [...playerStats].sort((a, b) => b.goals   - a.goals  ).filter((p) => p.goals   > 0).slice(0, 10),
-    [playerStats],
+  const topScorers = useMemo<StatEntry[]>(() =>
+    rawTopScorers
+      .filter((r) => r.goals > 0)
+      .slice(0, 10)
+      .map((r) => {
+        const meta = playerMeta.get(r.playerId);
+        return meta
+          ? { id: r.playerId, ...meta, goals: r.goals, assists: r.assists }
+          : null;
+      })
+      .filter((e): e is StatEntry => e !== null),
+    [rawTopScorers, playerMeta],
   );
-  const topAssisters = useMemo(() =>
-    [...playerStats].sort((a, b) => b.assists - a.assists).filter((p) => p.assists > 0).slice(0, 10),
-    [playerStats],
+
+  const topAssisters = useMemo<StatEntry[]>(() =>
+    rawTopAssisters
+      .filter((r) => r.assists > 0)
+      .slice(0, 10)
+      .map((r) => {
+        const meta = playerMeta.get(r.playerId);
+        return meta
+          ? { id: r.playerId, ...meta, goals: r.goals, assists: r.assists }
+          : null;
+      })
+      .filter((e): e is StatEntry => e !== null),
+    [rawTopAssisters, playerMeta],
   );
 
   const formTable = useMemo<FormEntry[]>(() => {

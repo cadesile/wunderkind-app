@@ -1,8 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
-import { useMatchResultStore } from '@/stores/matchResultStore';
 import type { SyncDebugLog, SyncFsDirectoryEntry } from '@/types/api';
 
 interface KeySizeEntry {
@@ -50,10 +48,6 @@ export async function emergencyPruneIfOverLimit(limitKb = 3000): Promise<void> {
     if (purgeKeys.length > 0) {
       await AsyncStorage.multiRemove(purgeKeys);
     }
-
-    // Reset in-memory state so Zustand re-hydrates from empty
-    useLeagueStatsStore.getState().resetStats();
-    useMatchResultStore.setState({ results: {} });
 
     console.warn(
       `[storageDiagnostics] Purged ${purgeKeys.length} keys (league-stats, match-results, ${purgeKeys.filter((k) => k.startsWith('player_app:')).length} appearance keys)`,

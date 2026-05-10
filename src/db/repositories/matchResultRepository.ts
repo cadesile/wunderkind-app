@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { MatchResultRecord, PlayerMatchStats } from '@/stores/matchResultStore';
+import type { MatchResultRecord, PlayerMatchStats } from '@/db/types';
 
 // ─── Raw DB Row ───────────────────────────────────────────────────────────────
 

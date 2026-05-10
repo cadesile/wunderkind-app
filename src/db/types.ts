@@ -2,8 +2,32 @@
 
 export type { MatchAppearance, PlayerAppearances } from '@/types/player';
 export type { Fixture, FixtureResult } from '@/stores/fixtureStore';
-export type { MatchResultRecord } from '@/stores/matchResultStore';
 export type { PlayerSeasonStats, PlayerCareerTotals } from '@/types/stats';
+
+// ─── Match result types (moved here from deleted matchResultStore) ─────────────
+
+export interface PlayerMatchStats {
+  id: string;
+  name: string;
+  position: string;
+  rating: number;
+  goals: number;
+  assists: number;
+}
+
+export interface MatchResultRecord {
+  fixtureId: string;
+  season: number;
+  homeClubId: string;
+  awayClubId: string;
+  homeGoals: number;
+  awayGoals: number;
+  homeAvgRating: number;
+  awayAvgRating: number;
+  homePlayers: PlayerMatchStats[];
+  awayPlayers: PlayerMatchStats[];
+  playedAt: string;
+}
 
 // ─── Repository input / output types ─────────────────────────────────────────
 

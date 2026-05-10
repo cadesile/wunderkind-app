@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -44,6 +45,7 @@ function shortName(name: string): string {
 export function PerformancePane() {
   const allPlayers = useSquadStore((s) => s.players);
   const router = useRouter();
+  const db = useSQLiteContext();
 
   const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
 
@@ -55,25 +57,43 @@ export function PerformancePane() {
 
   const seasonStartWeek = (currentSeasonNumber - 1) * 38 + 1; // Used for development snapshots
 
-  const lsRecords = useLeagueStatsStore((s) => s.records);
+  // Fetch all player stats for the squad from SQLite
+  const { data: allStatsRows = [] } = useQuery({
+    queryKey: ['squad-all-stats'],
+    queryFn: async () => {
+      type StatsRow = {
+        player_id: string;
+        season: number;
+        appearances: number;
+        goals: number;
+        assists: number;
+        avg_rating: number;
+      };
+      return db.getAllAsync<StatsRow>(
+        `SELECT player_id, season, SUM(appearances) as appearances,
+                SUM(goals) as goals, SUM(assists) as assists, AVG(avg_rating) as avg_rating
+         FROM player_season_stats GROUP BY player_id, season`,
+      );
+    },
+  });
 
   const playerStats = useMemo((): PlayerStats[] => {
     return activePlayers.map((player) => {
-      // Season stats from leagueStatsStore (all clubs/leagues this season)
-      const seasonRecords = Object.values(lsRecords).filter(
-        (r) => r.playerId === player.id && r.season === currentSeasonNumber,
+      // Season stats from SQLite (all clubs/leagues this season)
+      const seasonRows = allStatsRows.filter(
+        (r) => r.player_id === player.id && r.season === currentSeasonNumber,
       );
-      const games = seasonRecords.reduce((s, r) => s + r.appearances, 0);
-      const goals = seasonRecords.reduce((s, r) => s + r.goals, 0);
-      const assists = seasonRecords.reduce((s, r) => s + r.assists, 0);
+      const games = seasonRows.reduce((s, r) => s + r.appearances, 0);
+      const goals = seasonRows.reduce((s, r) => s + r.goals, 0);
+      const assists = seasonRows.reduce((s, r) => s + r.assists, 0);
       const avgRating = games > 0
-        ? seasonRecords.reduce((s, r) => s + r.averageRating * r.appearances, 0) / games
+        ? seasonRows.reduce((s, r) => s + r.avg_rating * r.appearances, 0) / games
         : 0;
 
-      // All-time stats from leagueStatsStore
-      const allTimeRecords = Object.values(lsRecords).filter((r) => r.playerId === player.id);
-      const allTimeGoals = allTimeRecords.reduce((s, r) => s + r.goals, 0);
-      const allTimeAssists = allTimeRecords.reduce((s, r) => s + r.assists, 0);
+      // All-time stats from SQLite
+      const allTimeRows = allStatsRows.filter((r) => r.player_id === player.id);
+      const allTimeGoals = allTimeRows.reduce((s, r) => s + r.goals, 0);
+      const allTimeAssists = allTimeRows.reduce((s, r) => s + r.assists, 0);
 
       const log = player.developmentLog ?? [];
       const startSnapshot = log.find((snap) => snap.weekNumber >= seasonStartWeek);
@@ -82,7 +102,7 @@ export function PerformancePane() {
 
       return { id: player.id, player, games, goals, assists, avgRating, allTimeGoals, allTimeAssists, startOvr, currentOvr: player.overallRating, improvement };
     });
-  }, [activePlayers, lsRecords, currentSeasonNumber, seasonStartWeek]);
+  }, [activePlayers, allStatsRows, currentSeasonNumber, seasonStartWeek]);
 
   const topScorerSeason    = useMemo(() => [...playerStats].filter((s) => s.goals > 0).sort((a, b) => b.goals - a.goals)[0] ?? null, [playerStats]);
   const topScorerAllTime   = useMemo(() => [...playerStats].filter((s) => s.allTimeGoals > 0).sort((a, b) => b.allTimeGoals - a.allTimeGoals)[0] ?? null, [playerStats]);

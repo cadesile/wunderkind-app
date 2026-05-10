@@ -13,14 +13,13 @@ import useClubMetrics from '@/hooks/useClubMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
-import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
+import { useSQLiteContext } from 'expo-sqlite';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
@@ -525,12 +524,24 @@ function LatestResultCard({ ampClubId, onPress }: { ampClubId: string; onPress?:
 
 function AmpSeasonStatCards({ ampClubId, players }: { ampClubId: string; players: Player[] }) {
   const fixtures = useFixtureStore((s) => s.fixtures);
-  const lsRecords = useLeagueStatsStore((s) => s.records);
+  const db = useSQLiteContext();
 
   const currentSeasonNumber = useMemo(() => {
     if (fixtures.length === 0) return 1;
     return Math.max(...fixtures.map((f) => f.season));
   }, [fixtures]);
+
+  type StatsRow = { player_id: string; goals: number; assists: number };
+  const { data: statsRows = [] } = useQuery({
+    queryKey: ['amp-season-stats', ampClubId, currentSeasonNumber],
+    queryFn: () => db.getAllAsync<StatsRow>(
+      `SELECT player_id, SUM(goals) as goals, SUM(assists) as assists
+       FROM player_season_stats
+       WHERE club_id = ? AND season = ?
+       GROUP BY player_id`,
+      [ampClubId, currentSeasonNumber],
+    ),
+  });
 
   const { topScorer, topGoals, topAssister, topAssists } = useMemo(() => {
     let topScorer: Player | null   = null;
@@ -538,17 +549,15 @@ function AmpSeasonStatCards({ ampClubId, players }: { ampClubId: string; players
     let topAssister: Player | null = null;
     let topAssists                 = -1;
 
-    for (const p of players.filter((p) => p.isActive)) {
-      const relevant = Object.values(lsRecords).filter(
-        (r) => r.playerId === p.id && r.season === currentSeasonNumber && r.clubId === ampClubId,
-      );
-      const goals   = relevant.reduce((s, r) => s + r.goals, 0);
-      const assists = relevant.reduce((s, r) => s + r.assists, 0);
-      if (goals   > topGoals)   { topGoals   = goals;   topScorer   = p; }
-      if (assists > topAssists) { topAssists = assists; topAssister = p; }
+    const activePlayers = players.filter((p) => p.isActive);
+    for (const row of statsRows) {
+      const player = activePlayers.find((p) => p.id === row.player_id);
+      if (!player) continue;
+      if (row.goals   > topGoals)   { topGoals   = row.goals;   topScorer   = player; }
+      if (row.assists > topAssists) { topAssists = row.assists; topAssister = player; }
     }
     return { topScorer, topGoals, topAssister, topAssists };
-  }, [players, lsRecords, currentSeasonNumber, ampClubId]);
+  }, [players, statsRows]);
 
   return (
     <View style={{ gap: 8 }}>
@@ -651,12 +660,10 @@ export function ClubDashboard() {
     [allFixtures, overlayFixtureId],
   );
 
-  const matchResults = useMatchResultStore((s) => s.results);
-
   const overlayData = useMemo(() => {
     if (!overlayFixture) return null;
-    return buildMatchResultData(overlayFixture, club.id, club.name, dashboardClubNameMap, matchResults);
-  }, [overlayFixture, club.id, club.name, dashboardClubNameMap, matchResults]);
+    return buildMatchResultData(overlayFixture, club.id, club.name, dashboardClubNameMap, {});
+  }, [overlayFixture, club.id, club.name, dashboardClubNameMap]);
 
   const crownJewelArchetype = crownJewel
     ? getArchetypeForPlayer(crownJewel, archetypes)

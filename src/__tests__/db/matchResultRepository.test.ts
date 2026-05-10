@@ -3,7 +3,7 @@ import {
   getByFixtureId,
   getSeasonResults,
 } from '@/db/repositories/matchResultRepository';
-import type { MatchResultRecord } from '@/stores/matchResultStore';
+import type { MatchResultRecord } from '@/db/types';
 
 function createMockDb() {
   return {

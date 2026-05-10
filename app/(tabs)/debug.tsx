@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, Pressable, FlatList } from 'react-native';
+import { View, ScrollView, Pressable, FlatList, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
+import * as SQLite from 'expo-sqlite';
 import { useDebugLogStore, DebugLogEntry, LogLevel } from '@/stores/debugLogStore';
 import { useNavStore } from '@/stores/navStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
@@ -176,6 +179,25 @@ export default function DebugScreen() {
   const [selected, setSelected] = useState<DebugLogEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const handleNuke = useCallback(() => {
+    Alert.alert(
+      'NUKE ALL DATA',
+      'This will permanently delete all game data on this device and restart from the beginning. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'NUKE',
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.clear();
+            await SQLite.deleteDatabaseAsync('wk.db');
+            await Updates.reloadAsync();
+          },
+        },
+      ],
+    );
+  }, []);
+
   const handleRefreshNarrative = useCallback(async () => {
     setRefreshing(true);
     await Promise.allSettled([
@@ -227,6 +249,18 @@ export default function DebugScreen() {
           }, pixelShadow]}
         >
           <PixelText size={8} color={WK.yellow}>{refreshing ? '...' : 'REFRESH'}</PixelText>
+        </Pressable>
+        <Pressable
+          onPress={handleNuke}
+          style={[{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: WK.red,
+            borderWidth: 2,
+            borderColor: WK.border,
+          }, pixelShadow]}
+        >
+          <PixelText size={8} color={WK.text}>NUKE</PixelText>
         </Pressable>
         <Pressable
           onPress={clear}

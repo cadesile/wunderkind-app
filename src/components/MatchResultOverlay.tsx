@@ -4,7 +4,7 @@ import { PixelText } from '@/components/ui/PixelText';
 import { MatchResultContent, MatchResultContentData } from '@/components/MatchResultContent';
 import { WK } from '@/constants/theme';
 import type { Fixture } from '@/stores/fixtureStore';
-import type { MatchResultRecord } from '@/stores/matchResultStore';
+import type { MatchResultRecord } from '@/db/types';
 
 // ─── Data builder ─────────────────────────────────────────────────────────────
 

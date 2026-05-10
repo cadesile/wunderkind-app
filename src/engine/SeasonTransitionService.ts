@@ -1,5 +1,4 @@
 import { useFixtureStore } from '@/stores/fixtureStore';
-import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useWorldStore } from '@/stores/worldStore';
@@ -18,11 +17,9 @@ import type { GameConfig } from '@/types/gameConfig';
 import { uuidv7 } from '@/utils/uuidv7';
 import { penceToPounds } from '@/utils/currency';
 import { useFanStore } from '@/stores/fanStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import type { FanImpactTarget } from '@/types/fans';
 import { shouldRetire } from './retirementEngine';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
-import { pruneAppearancesBefore } from '@/utils/appearanceStorage';
 import { archiveFixtureSeason, pruneFixtureArchives } from '@/utils/fixtureArchive';
 import { getDatabase } from '@/db/client';
 import { batchInsertFixtures } from '@/db/repositories/fixtureRepository';
@@ -729,14 +726,6 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
   awardSeasonTrophies(snapshot, pyramidLeagues, responseLeagues);
   awardSeasonFanEvents(snapshot);
   applySeasonFanEngagement(snapshot, pyramidLeagues);
-
-  // Prune records older than the previous season to keep store blobs bounded
-  useMatchResultStore.getState().pruneOldSeasons(nextSeason);
-  useLeagueStatsStore.getState().pruneOldSeasons(nextSeason);
-
-  // Prune player appearance AsyncStorage keys older than last season
-  // (player_app:{playerId}:{clubId}:{season} accumulate for all 1440 world players)
-  await pruneAppearancesBefore(nextSeason - 1);
 
   // Prune fixture archives older than 5 seasons (archive already written in applySeasonResponse)
   await pruneFixtureArchives(5);

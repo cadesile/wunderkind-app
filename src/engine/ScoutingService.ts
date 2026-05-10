@@ -13,7 +13,6 @@ import { MarketPlayer } from '@/types/market';
 import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
 import { CLUB_CODE_TO_NATIONALITY } from '@/utils/nationality';
-import { resolveAbilityRange } from '@/types/gameConfig';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -265,17 +264,13 @@ export function processMissions(): void {
         ? leagues.find((l) => l.id === ampLeagueId)?.tier ?? null
         : null;
 
-      const higherTierFreeAgents: MarketPlayer[] = (() => {
-        if (ampLeagueTier === null || ampLeagueTier <= 1) return [];
-        const targetTier = ampLeagueTier - 1;
-        const { leaguePlayerAbilityRanges } = useGameConfigStore.getState().config;
-        const country = club.country ?? '';
-        const range = resolveAbilityRange(leaguePlayerAbilityRanges, country, targetTier);
-        return useProspectPoolStore.getState().prospects
-          .filter((p) => !signedIds.has(p.id) && !marketIds.has(p.id))
-          .filter((p) => p.currentAbility >= range.min && p.currentAbility <= range.max)
-          .map((p) => ({ ...p, requiresTransferFee: false, transferFee: 0, currentOffer: 0 }));
-      })();
+      // Higher-tier free agents: free transfers from the prospect pool not already
+      // in squad or market. No ability range gate — that's a worldgen-only concern.
+      const higherTierFreeAgents: MarketPlayer[] = ampLeagueTier === null || ampLeagueTier <= 1
+        ? []
+        : useProspectPoolStore.getState().prospects
+            .filter((p) => !signedIds.has(p.id) && !marketIds.has(p.id))
+            .map((p) => ({ ...p, requiresTransferFee: false, transferFee: 0, currentOffer: 0 }));
 
       // Build allowed nationality set for this scout
       const availableRegions = getAvailableRegions(club.reputationTier, scout.scoutingRange);

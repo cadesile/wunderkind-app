@@ -1,9 +1,9 @@
 import { useWorldStore } from '@/stores/worldStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { buildLeagueStandings } from '@/engine/SeasonTransitionService';
+import type { PlayerSeasonStats } from '@/types/stats';
 
 export interface TierReview {
   tier: number;
@@ -22,11 +22,12 @@ export interface TierReview {
  * MUST be called BEFORE performSeasonTransition — the fixture store is cleared
  * during that call, which would make buildLeagueStandings return empty results.
  *
- * @param season  The just-completed season number.
+ * @param season       The just-completed season number.
+ * @param seasonStats  Optional pre-fetched player season stats from SQLite.
+ *                     If omitted the golden boot / assist leaderboards will be empty.
  */
-export function buildSeasonReviewData(season: number): TierReview[] {
+export function buildSeasonReviewData(season: number, seasonStats: PlayerSeasonStats[] = []): TierReview[] {
   const { leagues, clubs } = useWorldStore.getState();
-  const statsRecords        = useLeagueStatsStore.getState().records;
   const ampClub             = useClubStore.getState().club;
   const ampSquad            = useSquadStore.getState().players;
   // AMP's current league id (used to inject ampClubId into its league clubIds).
@@ -60,7 +61,7 @@ export function buildSeasonReviewData(season: number): TierReview[] {
 
   // Filter to the requested season and group by tier.
   const statsByTier = new Map<number, Array<{ playerId: string; clubId: string; goals: number; assists: number }>>();
-  for (const r of Object.values(statsRecords)) {
+  for (const r of seasonStats) {
     if (r.season !== season) continue;
     // Prefer the tier derived from worldStore leagues; fall back to the tier recorded on the stat.
     const tier = leagueTierMap.get(r.leagueId) ?? r.tier;

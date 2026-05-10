@@ -15,7 +15,7 @@ import { useManagerRecordStore } from '@/stores/managerRecordStore';
 import type { ManagerOutcome } from '@/stores/managerRecordStore';
 import { useClubStatsStore } from '@/stores/clubStatsStore';
 import type { ClubResultEntry } from '@/stores/clubStatsStore';
-import type { MatchResultRecord } from '@/stores/matchResultStore';
+import type { MatchResultRecord } from '@/db/types';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';

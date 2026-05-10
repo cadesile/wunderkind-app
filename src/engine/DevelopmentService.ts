@@ -58,9 +58,8 @@ function calcGains(
   techGrowthBonus: number,
   powerGrowthBonus: number,
   weekNumber: number,
-  tierOvrCap: number,
 ): Partial<PlayerAttributes> {
-  const cap = Math.min(attrCap(player.potential), tierOvrCap);
+  const cap = attrCap(player.potential);
   const attrs = player.attributes ?? {
     pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
   };
@@ -144,13 +143,12 @@ export function checkBreakthroughSpike(
   player: Player,
   assignedCoach: Coach | null,
   weekNumber: number,
-  tierOvrCap: number = 100,
 ): { attribute: AttributeName; gain: number } | null {
   // Eligibility gates
   if (!assignedCoach) return null;
   if ((player.morale ?? 50) < 65) return null;
 
-  const cap = Math.min(attrCap(player.potential), tierOvrCap);
+  const cap = attrCap(player.potential);
   const attrs = player.attributes ?? {
     pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
   };
@@ -208,7 +206,6 @@ export function computePlayerDevelopment(
   coaches: Coach[],
   facilityEffects: FacilityEffects,
   weekNumber: number,
-  tierOvrCap: number = 100,
 ): Record<string, PlayerDevelopmentUpdate> {
   const techGrowthBonus  = facilityEffects.technicalGrowthMultiplierTotal;
   const powerGrowthBonus = facilityEffects.powerGrowthMultiplierTotal;
@@ -229,7 +226,7 @@ export function computePlayerDevelopment(
       pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
     };
 
-    const gains = calcGains(player, assignedCoach, techGrowthBonus, powerGrowthBonus, weekNumber, tierOvrCap);
+    const gains = calcGains(player, assignedCoach, techGrowthBonus, powerGrowthBonus, weekNumber);
 
     const updated: PlayerAttributes = { ...currentAttrs };
     ATTRIBUTE_NAMES.forEach((attr) => {
@@ -238,18 +235,17 @@ export function computePlayerDevelopment(
     });
 
     // ── Breakthrough spike ───────────────────────────────────────────────────
-    const spike = checkBreakthroughSpike(player, assignedCoach, weekNumber, tierOvrCap);
+    const spike = checkBreakthroughSpike(player, assignedCoach, weekNumber);
     if (spike) {
-      const cap = Math.min(attrCap(player.potential), tierOvrCap);
+      const cap = attrCap(player.potential);
       updated[spike.attribute] = Math.round(
         Math.min(updated[spike.attribute] + spike.gain, cap) * 10,
       ) / 10;
     }
 
-    // OVR = mean of updated attributes, capped at the current tier ceiling
-    const overallRating = Math.min(
-      Math.round(ATTRIBUTE_NAMES.reduce((s, a) => s + updated[a], 0) / ATTRIBUTE_NAMES.length),
-      tierOvrCap,
+    // OVR = mean of updated attributes
+    const overallRating = Math.round(
+      ATTRIBUTE_NAMES.reduce((s, a) => s + updated[a], 0) / ATTRIBUTE_NAMES.length,
     );
 
     devUpdates[player.id] = {

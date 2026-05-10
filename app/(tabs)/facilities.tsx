@@ -543,7 +543,7 @@ function HirePane({
                 <Avatar appearance={scoutAppearance} role="SCOUT" size={44} />
                 <View style={{ flex: 1 }}>
                   <BodyText size={14} upper numberOfLines={1}>{ms.firstName} {ms.lastName}</BodyText>
-                  <PixelText size={8} color={rangeColor[range]}>{rangeLabel[range]} SCOUT</PixelText>
+                  <PixelText size={8} color={rangeColor[range]}>{`${rangeLabel[range] ?? ''} SCOUT`}</PixelText>
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                     <FlagText nationality={ms.nationality} size={11} />
                     <BodyText size={11} dim>· </BodyText>

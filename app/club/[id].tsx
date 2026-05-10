@@ -12,7 +12,8 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useFinanceStore } from '@/stores/financeStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
+import { useQuery } from '@tanstack/react-query';
+import { useSQLiteContext } from 'expo-sqlite';
 import { Money } from '@/components/ui/Money';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer } from '@/types/world';
@@ -108,9 +109,20 @@ export default function ClubDetailScreen() {
 
   const currentSeason  = Math.ceil(weekNumber / 38);
   const season = `Season ${currentSeason}`;
-  // Select raw records (stable reference) — never call computed methods as selectors,
-  // they return new array instances every render and trigger an infinite useSyncExternalStore loop.
-  const lsRecords = useLeagueStatsStore((s) => s.records);
+  const db = useSQLiteContext();
+
+  type ClubStatsRow = { player_id: string; goals: number; assists: number };
+  const { data: clubStatsRows = [] } = useQuery({
+    queryKey: ['club-season-stats', id, currentSeason],
+    queryFn: () => db.getAllAsync<ClubStatsRow>(
+      `SELECT player_id, SUM(goals) as goals, SUM(assists) as assists
+       FROM player_season_stats
+       WHERE club_id = ? AND season = ?
+       GROUP BY player_id`,
+      [id, currentSeason],
+    ),
+    enabled: !!id,
+  });
 
   // ── NPC transfer history for this club ───────────────────────────────────────
   const npcTransfers = useMemo<NpcTransferEntry[]>(() => {
@@ -162,13 +174,9 @@ export default function ClubDetailScreen() {
     let topOvr = -1;
 
     // Build a season-filtered lookup of goals/assists per playerId for this club.
-    // Mirrors the same filter used by the league STATS tab (season === currentSeason)
-    // so the numbers are consistent between the two views.
     const statsById = new Map<string, { goals: number; assists: number }>();
-    for (const r of Object.values(lsRecords)) {
-      if (r.clubId !== id || r.season !== currentSeason) continue;
-      const prev = statsById.get(r.playerId) ?? { goals: 0, assists: 0 };
-      statsById.set(r.playerId, { goals: prev.goals + r.goals, assists: prev.assists + r.assists });
+    for (const r of clubStatsRows) {
+      statsById.set(r.player_id, { goals: r.goals, assists: r.assists });
     }
 
     for (const p of club.players) {
@@ -186,7 +194,7 @@ export default function ClubDetailScreen() {
     const latestSigning = [...club.players].sort((a, b) => b.id.localeCompare(a.id))[0] ?? null;
 
     return { topScorer, topScorerGoals, topAssister, topAssisterAssists, topPlayer, topOvr, latestSigning };
-  }, [club, season, lsRecords, id]);
+  }, [club, clubStatsRows]);
 
   if (!club) {
     // isInitialized true but clubs still empty = loadClubs() still running

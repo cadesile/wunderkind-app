@@ -11,7 +11,6 @@ import { useWorldStore } from './worldStore';
 import { useLeagueStore } from './leagueStore';
 import { useLeagueHistoryStore } from './leagueHistoryStore';
 import { useManagerRecordStore } from './managerRecordStore';
-import { useLeagueStatsStore } from './leagueStatsStore';
 import { useFanStore } from './fanStore';
 import { useCalendarStore } from './calendarStore';
 import { getFirstSaturdayOfJune } from '@/utils/dateUtils';
@@ -52,7 +51,6 @@ const ALL_STORE_KEYS = [
   'guardian-store',
   'event-chain-store',
   'manager-record-store',
-  'league-stats-store',
   'calendar-store',
 ];
 
@@ -81,7 +79,6 @@ export function resetInMemoryStores(): void {
   useEventChainStore.getState().clearAll();
   useLeagueHistoryStore.setState({ history: {} });
   useManagerRecordStore.getState().clearAll();
-  useLeagueStatsStore.getState().resetStats();
   useFanStore.getState().resetFans();
   useCalendarStore.getState().setGameDate(getFirstSaturdayOfJune(new Date().getFullYear()));
 }

@@ -23,8 +23,8 @@ import { useAltercationStore } from '@/stores/altercationStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useLeagueStore } from '@/stores/leagueStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { computeStandings } from '@/utils/standingsCalculator';
+import { getDatabase } from '@/db/client';
 import type { SyncTransfer, SyncLedgerEntry, SyncMatchResult, SyncPlayerStat, SyncSigning } from '@/types/api';
 import { GlobalHeader } from '@/components/GlobalHeader';
 import { WeeklyTickOverlay } from '@/components/WeeklyTickOverlay';
@@ -377,20 +377,34 @@ export default function TabLayout() {
         };
       });
 
-      // Player season stats — read from leagueStatsStore (aggregate, no player.appearances needed)
+      // Player season stats — read from SQLite (aggregate, no player.appearances needed)
       const { players: squadPlayers } = useSquadStore.getState();
-      const { records: lsRecords } = useLeagueStatsStore.getState();
       const leagueId = currentLeague?.id ?? '';
+      type StatsRow = { player_id: string; appearances: number; goals: number; assists: number; avg_rating: number };
+      let statsRows: StatsRow[] = [];
+      try {
+        const db = getDatabase();
+        statsRows = await db.getAllAsync<StatsRow>(
+          `SELECT player_id, SUM(appearances) as appearances, SUM(goals) as goals,
+                  SUM(assists) as assists, AVG(avg_rating) as avg_rating
+           FROM player_season_stats
+           WHERE club_id = ? AND league_id = ? AND season = ?
+           GROUP BY player_id`,
+          [ampClubId, leagueId, currentSeason],
+        );
+      } catch (_e) {
+        // DB not initialized yet — skip stats for this sync
+      }
+      const statsMap = new Map(statsRows.map((r) => [r.player_id, r]));
       const playerStats: SyncPlayerStat[] = squadPlayers.flatMap((p) => {
-        const key = `${p.id}:${ampClubId}:${leagueId}:${currentSeason}`;
-        const rec = lsRecords[key];
+        const rec = statsMap.get(p.id);
         if (!rec || rec.appearances === 0) return [];
         return [{
           playerId:      p.id,
           appearances:   rec.appearances,
           goals:         rec.goals,
           assists:       rec.assists,
-          averageRating: rec.averageRating,
+          averageRating: rec.avg_rating,
         }];
       });
 

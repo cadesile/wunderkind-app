@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
+import { usePlayerSeasonStats } from '@/hooks/db/usePlayerSeasonStats';
 import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -194,12 +194,11 @@ function TransferHistorySection({
   ampClubName: string;
   worldClubs: Record<string, { name: string }>;
 }) {
-  const records = useLeagueStatsStore((s) => s.records);
+  const { data: seasonStats = [] } = usePlayerSeasonStats(playerId);
 
   const byClub = useMemo(() => {
     const map = new Map<string, { goals: number; assists: number; appearances: number }>();
-    for (const r of Object.values(records)) {
-      if (r.playerId !== playerId) continue;
+    for (const r of seasonStats) {
       const prev = map.get(r.clubId);
       if (prev) {
         map.set(r.clubId, {
@@ -212,7 +211,7 @@ function TransferHistorySection({
       }
     }
     return Array.from(map.entries()).map(([clubId, stats]) => ({ clubId, ...stats }));
-  }, [records, playerId]);
+  }, [seasonStats]);
 
   if (byClub.length === 0) return null;
 

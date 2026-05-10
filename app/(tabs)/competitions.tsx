@@ -19,7 +19,6 @@ import { FixtureList } from '@/components/competitions/FixtureList';
 import { LeagueBrowser } from '@/components/competitions/LeagueBrowser';
 import { SeasonHistory } from '@/components/competitions/SeasonHistory';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
-import { useMatchResultStore } from '@/stores/matchResultStore';
 import type { Fixture } from '@/stores/fixtureStore';
 import type { LeaderboardEntry } from '@/types/api';
 
@@ -86,8 +85,6 @@ export default function CompetitionsScreen() {
   const worldLeagues    = useWorldStore((s) => s.leagues);
   const worldClubs      = useWorldStore((s) => s.clubs);
   const ampSquad        = useSquadStore((s) => s.players);
-  const matchResults    = useMatchResultStore((s) => s.results);
-
   const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
 
   const relegationSpots = useMemo(() => {
@@ -106,8 +103,8 @@ export default function CompetitionsScreen() {
 
   const overlayData = useMemo(() => {
     if (!selectedFixture) return null;
-    return buildMatchResultData(selectedFixture, ampClubId, ampName, clubNameMap, matchResults);
-  }, [selectedFixture, ampClubId, ampName, clubNameMap, matchResults]);
+    return buildMatchResultData(selectedFixture, ampClubId, ampName, clubNameMap, {});
+  }, [selectedFixture, ampClubId, ampName, clubNameMap]);
 
   return (
     <View style={{ flex: 1, backgroundColor: WK.greenDark }}>
