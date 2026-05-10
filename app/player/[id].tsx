@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { PixelDialog } from '@/components/ui/PixelDialog';
@@ -23,7 +23,7 @@ import { AttributesRadar } from '@/components/radar/AttributesRadar';
 import { Money } from '@/components/ui/Money';
 import { WK, pixelShadow, traitColor } from '@/constants/theme';
 import { AttributeName, TraitName, PlayerAppearances } from '@/types/player';
-import { loadPlayerAppearances } from '@/utils/appearanceStorage';
+import { usePlayerAppearances } from '@/hooks/db/usePlayerAppearances';
 import { Guardian } from '@/types/guardian';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 import { useCalendarStore } from '@/stores/calendarStore';
@@ -356,7 +356,7 @@ export default function PlayerDetailScreen() {
   // Contract extension cost: ability × rand(randMin, randMax) × playerMultiplier × 52 weeks
   const extensionCostPence = player
     ? calculateExtensionCost(
-        player.ovr ?? player.currentAbility ?? 0,
+        player.overallRating ?? 0,
         52,
         wageMultiplierTiers,
         contractValueRandMin,
@@ -365,11 +365,7 @@ export default function PlayerDetailScreen() {
     : 0;
   const canAffordExtension = clubBalance >= extensionCostPence;
 
-  const [playerAppearances, setPlayerAppearances] = useState<PlayerAppearances | undefined>(undefined);
-  useEffect(() => {
-    if (!id) return;
-    loadPlayerAppearances(id).then(setPlayerAppearances).catch(() => setPlayerAppearances({}));
-  }, [id]);
+  const { data: playerAppearances, isLoading: appearancesLoading } = usePlayerAppearances(id ?? '');
 
   const [attrsExpanded, setAttrsExpanded]   = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
@@ -458,7 +454,7 @@ export default function PlayerDetailScreen() {
 
   function handleExtend() {
     const newWeeklyWage = calculateWeeklyWage(
-      player!.ovr ?? player!.currentAbility ?? 0,
+      player!.overallRating ?? 0,
       wageMultiplierTiers,
       contractValueRandMin,
       contractValueRandMax,
@@ -854,8 +850,7 @@ export default function PlayerDetailScreen() {
             })()}
 
             {/* ── 11. Enrollment contract — with progress bar ──────────────────────── */}
-            {player.enrollmentEndWeek !== undefined && (
-              <View style={{
+            <View style={{
                 backgroundColor: WK.tealCard, borderWidth: 3,
                 borderColor: contractBorderColor, padding: 14, ...pixelShadow,
               }}>
@@ -925,8 +920,7 @@ export default function PlayerDetailScreen() {
                     </View>
                   </Pressable>
                 )}
-              </View>
-            )}
+            </View>
 
             {/* ── 12. Recent interactions — hidden when empty ──────────────────────── */}
             {recentInteractions.length > 0 && (

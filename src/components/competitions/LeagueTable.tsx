@@ -3,7 +3,8 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { PixelText, VT323Text, BodyText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 import { computeStandings } from '@/utils/standingsCalculator';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
+import { useLeagueTopScorers } from '@/hooks/db/useLeagueTopScorers';
+import { useLeagueTopAssisters } from '@/hooks/db/useLeagueTopAssisters';
 import type { Fixture } from '@/stores/fixtureStore';
 import type { WorldClub } from '@/types/world';
 import type { Player } from '@/types/player';
@@ -51,9 +52,15 @@ const FORM_COLOR: Record<'W' | 'D' | 'L', string> = {
 export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpots, relegationSpots, onClubPress, worldClubs, ampSquad }: LeagueTableProps) {
   const clubNameMap = useMemo(() => {
     const map = new Map<string, string>(clubs.map((c) => [c.id, c.name]));
+    // Supplement from worldClubs — overrides any club where name === id (bad fallback from buildLeagueSnapshot)
+    if (worldClubs) {
+      for (const [id, wc] of Object.entries(worldClubs)) {
+        if (!map.has(id) || map.get(id) === id) map.set(id, wc.name);
+      }
+    }
     if (ampClubId && ampName) map.set(ampClubId, ampName);
     return map;
-  }, [clubs, ampClubId, ampName]);
+  }, [clubs, ampClubId, ampName, worldClubs]);
 
   // Derive the active season from the fixture data itself — more reliable than weekNumber / 38
   const currentSeasonNumber = useMemo(() => {
@@ -75,59 +82,62 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
     [currentFixtures],
   );
 
-  const lsRecords = useLeagueStatsStore((s) => s.records);
+  const { data: rawTopScorers } = useLeagueTopScorers(leagueId ?? '', currentSeasonNumber);
+  const { data: rawTopAssisters } = useLeagueTopAssisters(leagueId ?? '', currentSeasonNumber);
 
-  // ── Collect player stats from leagueStatsStore ──────────────────────────────
-  const playerStats = useMemo((): StatEntry[] => {
-    if (!leagueId) return [];
+  // ── Resolve player names/positions from SQLite hook data ────────────────────
+  const ampSquadMap = useMemo(
+    () => new Map<string, Player>(ampSquad?.map((p) => [p.id, p]) ?? []),
+    [ampSquad],
+  );
 
-    // Build quick lookup maps for name/position resolution
-    const ampSquadMap = new Map<string, Player>(ampSquad?.map((p) => [p.id, p]) ?? []);
-
-    const relevant = Object.values(lsRecords).filter(
-      (r) => r.leagueId === leagueId && r.season === currentSeasonNumber,
-    );
-
-    // Aggregate per player (a player may have multiple club records if transferred mid-season)
-    const byPlayer = new Map<string, { goals: number; assists: number; clubId: string }>();
-    for (const r of relevant) {
-      const prev = byPlayer.get(r.playerId);
-      if (prev) {
-        byPlayer.set(r.playerId, { goals: prev.goals + r.goals, assists: prev.assists + r.assists, clubId: r.clubId });
-      } else {
-        byPlayer.set(r.playerId, { goals: r.goals, assists: r.assists, clubId: r.clubId });
-      }
-    }
-
-    const entries: StatEntry[] = [];
-    for (const [playerId, stats] of byPlayer) {
-      if (stats.goals === 0 && stats.assists === 0) continue;
-      const clubName = clubNameMap.get(stats.clubId) ?? stats.clubId;
-
+  const resolveEntry = useMemo(() => (
+    (playerId: string, goals: number, assists: number): StatEntry | null => {
       const ampPlayer = ampSquadMap.get(playerId);
       if (ampPlayer) {
-        entries.push({ id: playerId, name: ampPlayer.name, clubName, position: ampPlayer.position, goals: stats.goals, assists: stats.assists });
-        continue;
+        // Find the most recent club for this player from worldClubs or use ampClubId
+        const clubId = ampClubId ?? '';
+        const clubName = clubNameMap.get(clubId) ?? clubId;
+        return { id: playerId, name: ampPlayer.name, clubName, position: ampPlayer.position, goals, assists };
       }
-
-      const wc = worldClubs?.[stats.clubId];
-      const npcPlayer = wc?.players.find((p) => p.id === playerId);
-      if (npcPlayer) {
-        entries.push({ id: playerId, name: `${npcPlayer.firstName} ${npcPlayer.lastName}`, clubName, position: npcPlayer.position === 'ATT' ? 'FWD' : npcPlayer.position, goals: stats.goals, assists: stats.assists });
+      // Search NPC clubs
+      if (worldClubs) {
+        for (const [clubId, wc] of Object.entries(worldClubs)) {
+          const npcPlayer = wc.players.find((p) => p.id === playerId);
+          if (npcPlayer) {
+            const clubName = clubNameMap.get(clubId) ?? clubId;
+            return {
+              id: playerId,
+              name: `${npcPlayer.firstName} ${npcPlayer.lastName}`,
+              clubName,
+              position: npcPlayer.position === 'ATT' ? 'FWD' : npcPlayer.position,
+              goals,
+              assists,
+            };
+          }
+        }
       }
+      return null;
     }
-    return entries;
-  }, [lsRecords, leagueId, currentSeasonNumber, ampSquad, worldClubs, clubNameMap]);
+  ), [ampSquadMap, ampClubId, clubNameMap, worldClubs]);
 
-  const topScorers = useMemo(() =>
-    [...playerStats].sort((a, b) => b.goals - a.goals).filter((p) => p.goals > 0).slice(0, 4),
-    [playerStats],
-  );
+  const topScorers = useMemo((): StatEntry[] => {
+    if (!rawTopScorers) return [];
+    return rawTopScorers
+      .filter((r) => r.goals > 0)
+      .slice(0, 4)
+      .map((r) => resolveEntry(r.playerId, r.goals, r.assists))
+      .filter((e): e is StatEntry => e !== null);
+  }, [rawTopScorers, resolveEntry]);
 
-  const topAssisters = useMemo(() =>
-    [...playerStats].sort((a, b) => b.assists - a.assists).filter((p) => p.assists > 0).slice(0, 4),
-    [playerStats],
-  );
+  const topAssisters = useMemo((): StatEntry[] => {
+    if (!rawTopAssisters) return [];
+    return rawTopAssisters
+      .filter((r) => r.assists > 0)
+      .slice(0, 4)
+      .map((r) => resolveEntry(r.playerId, r.goals, r.assists))
+      .filter((e): e is StatEntry => e !== null);
+  }, [rawTopAssisters, resolveEntry]);
 
   // ── Form table (last 5 matches per club) ────────────────────────────────────
   const formTable = useMemo((): FormEntry[] => {
