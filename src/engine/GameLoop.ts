@@ -1,6 +1,6 @@
 import { calculateTraitShifts } from './personality';
 import { shouldRetire } from './retirementEngine';
-import { calculateWeeklyFinances } from './finance';
+import { calculateWeeklyFinances, calculateWeeklyWage } from './finance';
 import { renderMoney } from '@/utils/currency';
 import {
   calculateWeeklyXP,
@@ -1262,7 +1262,9 @@ export function processWeeklyTick(): WeeklyTick {
           );
           if (alreadyRenewed) return;
 
-          extendContract(player.id);
+          const { wageMultiplierTiers, contractValueRandMin, contractValueRandMax } = useGameConfigStore.getState().config;
+          const newWage = calculateWeeklyWage(player.overallRating ?? 0, wageMultiplierTiers, contractValueRandMin, contractValueRandMax);
+          extendContract(player.id, newWage);
           addMessage({
             id:      `dof-renew-${player.id}-s${useLeagueStore.getState().league?.season ?? 0}`,
             type:    'system',

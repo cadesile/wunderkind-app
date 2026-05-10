@@ -110,7 +110,7 @@ function worldPlayerToPlayer(wp: WorldPlayer, weekNumber: number): Player {
     nationality: wp.nationality,
     overallRating,
     potential: overallRating,
-    wage: overallRating * 100,
+    wage: wp.contractValue ?? overallRating * 100,
     personality,
     appearance: generateAppearance(wp.id, 'PLAYER', age, personality),
     agentId: null,

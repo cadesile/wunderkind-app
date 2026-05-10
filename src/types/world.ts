@@ -22,6 +22,8 @@ export interface WorldPlayer {
   appearance?: Appearance;
   /** Match appearance history keyed by season → clubId → appearances array */
   appearances?: PlayerAppearances;
+  /** Weekly wage in pence from the backend. Server-authoritative. */
+  contractValue?: number;
   /** ID of the NPC club this player belongs to, or null if unassigned. Updated by MarketEngine. */
   npcClubId: string | null;
 }

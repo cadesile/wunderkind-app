@@ -37,10 +37,11 @@ interface SquadState {
   /** @deprecated Use applyWeeklyPlayerUpdates instead */
   applyTraitShifts: (shifts: Record<string, Partial<PersonalityMatrix>>) => void;
   /**
-   * Extend a player's enrollment by 52 weeks and increment extensionCount.
-   * Caller is responsible for deducting the extension fee from the club balance.
+   * Extend a player's enrollment by 52 weeks, update their weekly wage to the
+   * newly calculated value, and increment extensionCount.
+   * Caller is responsible for deducting the total extension cost from the club balance.
    */
-  extendContract: (playerId: string) => void;
+  extendContract: (playerId: string, newWeeklyWagePence: number) => void;
   /** Set or clear a development focus on a player. Pass null to clear. */
   setDevelopmentFocus: (
     playerId: string,
@@ -175,7 +176,7 @@ export const useSquadStore = create<SquadState>()(
           }),
         })),
 
-      extendContract: (playerId) =>
+      extendContract: (playerId, newWeeklyWagePence) =>
         set((state) => ({
           players: state.players.map((p) =>
             p.id === playerId
@@ -183,6 +184,7 @@ export const useSquadStore = create<SquadState>()(
                   ...p,
                   enrollmentEndWeek: (p.enrollmentEndWeek ?? 0) + 52,
                   extensionCount: (p.extensionCount ?? 0) + 1,
+                  wage: newWeeklyWagePence,
                 }
               : p,
           ),

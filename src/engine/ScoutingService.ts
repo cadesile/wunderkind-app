@@ -92,6 +92,7 @@ function buildNPCCandidates(
         isLocalGem:       true,
         requiresTransferFee: true,
         transferFee,
+        contractValue:    wp.contractValue,
         npcClubName:      club.name,
         npcClubTier:      club.tier,
       });

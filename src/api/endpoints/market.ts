@@ -182,6 +182,7 @@ function transformMarketData(raw: RawMarketData, validRoles: StaffRole[] = []): 
         position: mapPosition(p.position),
         potential: p.potential,
         currentAbility: overallRating,
+        contractValue: p.contractValue,
         personality: null,  // backend does not return personality — generated locally on recruit
         attributes: hasAttributes
           ? { pace: p.pace!, technical: p.technical!, vision: p.vision!, power: p.power!, stamina: p.stamina!, heart: p.heart! }

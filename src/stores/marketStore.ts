@@ -293,7 +293,7 @@ export const useMarketStore = create<MarketState>()(
           nationality: player.nationality,
           overallRating: player.currentAbility,
           potential: player.potential,
-          wage: player.currentAbility * 100,
+          wage: player.contractValue ?? player.currentAbility * 100,
           personality,
           appearance: generateAppearance(player.id, 'PLAYER', age, personality),
           agentId: player.agent?.id ?? null,

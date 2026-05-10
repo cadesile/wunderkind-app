@@ -18,6 +18,22 @@ import { WageMultiplierTier, resolveWageTier } from '@/types/gameConfig';
  * freshly computed from the player's current ability — old contractValue
  * is not inherited.
  */
+/** Weekly wage in pence for a player at the given ability, rolled fresh each call. */
+export function calculateWeeklyWage(
+  ability: number,
+  tiers: WageMultiplierTier[],
+  randMin: number,
+  randMax: number,
+): number {
+  const tier = resolveWageTier(tiers, ability);
+  const randCoeff = randMin + Math.floor(Math.random() * (randMax - randMin + 1));
+  return Math.round(ability * randCoeff * tier.playerMultiplier);
+}
+
+/**
+ * Total cost (pence) to extend a contract for contractLengthWeeks.
+ * Rolls a fresh wage — does not inherit the player's old contractValue.
+ */
 export function calculateExtensionCost(
   ability: number,
   contractLengthWeeks: number,
@@ -25,10 +41,7 @@ export function calculateExtensionCost(
   randMin: number,
   randMax: number,
 ): number {
-  const tier = resolveWageTier(tiers, ability);
-  const randCoeff = randMin + Math.floor(Math.random() * (randMax - randMin + 1));
-  const weeklyWagePence = Math.round(ability * randCoeff * tier.playerMultiplier);
-  return weeklyWagePence * contractLengthWeeks;
+  return calculateWeeklyWage(ability, tiers, randMin, randMax) * contractLengthWeeks;
 }
 
 /**

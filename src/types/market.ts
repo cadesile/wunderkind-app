@@ -129,6 +129,8 @@ export interface MarketPlayer {
   guardians?: import('@/types/api').ApiGuardian[];
   scoutingStatus?: 'hidden' | 'scouting' | 'revealed';
   scoutingProgress?: number;
+  /** Weekly wage in pence — server-authoritative value from contractValue field. */
+  contractValue?: number;
   marketValue?: number;     // pence = currentAbility * 1000
   currentOffer?: number;    // agent's asking price in pence
   perceivedAbility?: number; // revealed ability with scout error applied

@@ -28,7 +28,7 @@ import { Guardian } from '@/types/guardian';
 import { getGameDate, computePlayerAge } from '@/utils/gameDate';
 import { useCalendarStore } from '@/stores/calendarStore';
 import { isTransferWindowOpen, getNextTransferWindowDate } from '@/utils/dateUtils';
-import { calculateExtensionCost } from '@/engine/finance';
+import { calculateExtensionCost, calculateWeeklyWage } from '@/engine/finance';
 import { moraleLabel } from '@/utils/morale';
 import { MoraleBar } from '@/components/ui/MoraleBar';
 import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
@@ -457,6 +457,12 @@ export default function PlayerDetailScreen() {
   }
 
   function handleExtend() {
+    const newWeeklyWage = calculateWeeklyWage(
+      player!.ovr ?? player!.currentAbility ?? 0,
+      wageMultiplierTiers,
+      contractValueRandMin,
+      contractValueRandMax,
+    );
     addBalance(-extensionCostPence);
     addTransaction({
       amount: -extensionCostPence,
@@ -464,7 +470,7 @@ export default function PlayerDetailScreen() {
       description: `${player!.name} enrollment extension`,
       weekNumber,
     });
-    extendContract(player!.id);
+    extendContract(player!.id, newWeeklyWage);
     setShowExtendDialog(false);
   }
 
