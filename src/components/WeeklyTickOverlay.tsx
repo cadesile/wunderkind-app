@@ -3,7 +3,7 @@ import { View, Animated } from 'react-native';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
 import { useClubStore } from '@/stores/clubStore';
 import { useCalendarStore } from '@/stores/calendarStore';
-import { isJune } from '@/utils/dateUtils';
+import { isJune, formatGameDate, addWeeks } from '@/utils/dateUtils';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK } from '@/constants/theme';
 
@@ -20,6 +20,8 @@ export function WeeklyTickOverlay() {
 
   const gameDateObj       = new Date(gameDate);
   const windowOpen        = isJune(gameDateObj);
+  const currentDateLabel  = formatGameDate(gameDateObj);
+  const nextDateLabel     = formatGameDate(addWeeks(gameDateObj, 1));
   const julyFirst         = new Date(gameDateObj.getFullYear(), 6, 1);
   const weeksLeftInJune   = windowOpen
     ? Math.max(1, Math.ceil((julyFirst.getTime() - gameDateObj.getTime()) / MS_PER_WEEK))
@@ -112,12 +114,12 @@ export function WeeklyTickOverlay() {
           paddingHorizontal: 20,
           paddingVertical: 10,
         }}>
-          <PixelText size={14} color={WK.yellow}>
-            WEEK {weekNumber}
+          <PixelText size={11} color={WK.yellow}>
+            {currentDateLabel}
           </PixelText>
         </View>
         <PixelText size={6} color={WK.tealLight} style={{ marginTop: 6 }}>
-          → ADVANCING TO WEEK {weekNumber + 1}
+          → ADVANCING TO {nextDateLabel}
         </PixelText>
       </View>
 
