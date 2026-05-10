@@ -10,19 +10,16 @@ import { useWorldStore } from '@/stores/worldStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useTickProgressStore } from '@/stores/tickProgressStore';
 import { useInboxStore } from '@/stores/inboxStore';
-import { useMatchResultStore } from '@/stores/matchResultStore';
 import { useAttendanceStore } from '@/stores/attendanceStore';
 import { useManagerRecordStore } from '@/stores/managerRecordStore';
 import type { ManagerOutcome } from '@/stores/managerRecordStore';
-import { useLeagueStatsStore } from '@/stores/leagueStatsStore';
 import { useClubStatsStore } from '@/stores/clubStatsStore';
-import type { BulkStatsEntry } from '@/stores/leagueStatsStore';
 import type { ClubResultEntry } from '@/stores/clubStatsStore';
 import type { MatchResultRecord } from '@/stores/matchResultStore';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
 import { ResultsEngine, SimTeam } from './ResultsEngine';
-import { Player, Position, MatchAppearance } from '../types/player';
+import { Player, Position } from '../types/player';
 import { Formation } from '../types/game';
 import { WorldPlayer, WorldClub } from '../types/world';
 import type { FacilityType } from '@/types/facility';
@@ -44,7 +41,13 @@ import {
 // Processes narrative story ticks and match simulations entirely on-device.
 
 import { useGameConfigStore } from '@/stores/gameConfigStore';
-import { batchAppendAppearances } from '@/utils/appearanceStorage';
+import { getDatabase } from '@/db/client';
+import { batchUpdateResults } from '@/db/repositories/fixtureRepository';
+import { batchInsertResults } from '@/db/repositories/matchResultRepository';
+import { batchUpsertStats } from '@/db/repositories/statsRepository';
+import { batchInsertAppearances } from '@/db/repositories/appearanceRepository';
+import type { FixtureResultEntry, AppearanceInsertEntry, StatsInsertEntry } from '@/db/types';
+import { queryClient } from '@/api/queryClient';
 
 class SimulationService {
 
@@ -80,15 +83,15 @@ class SimulationService {
       (f) => f.round === currentMatchday && f.result === null
     );
 
-    const tacticalMatrix = gameConfig?.tacticalMatrix ?? {};
+    const tacticalMatrix = (gameConfig as any)?.tacticalMatrix ?? {};
     const styleInfluence = (useGameConfigStore.getState().config?.playingStyleInfluence) ?? {};
 
     // 2. Process in chunks — collect all batch entries, flush ONCE at the end
     const batchSize = 10;
 
-    const appearanceEntries: Array<{ playerId: string; clubId: string; season: number; appearance: MatchAppearance }> = [];
-    const statsEntries: BulkStatsEntry[] = [];
-    const fixtureResultEntries: Array<{ fixtureId: string; result: { homeGoals: number; awayGoals: number; playedAt: string } }> = [];
+    const appearanceEntries: AppearanceInsertEntry[] = [];
+    const statsEntries: StatsInsertEntry[] = [];
+    const fixtureResultEntries: FixtureResultEntry[] = [];
     const matchResultEntries: MatchResultRecord[] = [];
     const clubResultEntries: ClubResultEntry[] = [];
     const managerResultEntries: Array<{ managerId: string; name: string; outcome: ManagerOutcome }> = [];
@@ -107,7 +110,9 @@ class SimulationService {
           // ── Collect fixture result (flushed in batch below) ────────────────
           fixtureResultEntries.push({
             fixtureId: fixture.id,
-            result: { homeGoals: result.homeScore, awayGoals: result.awayScore, playedAt },
+            homeGoals: result.homeScore,
+            awayGoals: result.awayScore,
+            playedAt,
           });
 
           // ── Collect club all-time record update ────────────────────────────
@@ -203,20 +208,25 @@ class SimulationService {
             const opponentId = ampIsHome ? fixture.awayClubId : fixture.homeClubId;
             const ampPerformance = ampIsHome ? result.homePerformance : result.awayPerformance;
             const ampSquadIds = new Set(userSquad.map((p) => p.id));
+            const tier = leagueTierMap.get(fixture.leagueId) ?? 1;
             ampPerformance.players.forEach((pp) => {
               if (!ampSquadIds.has(pp.player.id)) return;
               appearanceEntries.push({
                 playerId:   pp.player.id,
                 clubId:     userClub.id,
+                leagueId:   fixture.leagueId,
                 season:     fixture.season,
-                appearance: {
-                  opponentId,
-                  result:  matchResult,
-                  scoreline,
-                  rating:  pp.rating,
-                  goals:   pp.goal,
-                  assists: pp.assist,
-                },
+                tier,
+                fixtureId:  fixture.id,
+                week:       fixture.round,
+                opponentId,
+                result:     matchResult,
+                scoreline,
+                goals:      pp.goal,
+                assists:    pp.assist,
+                minutes:    90,
+                rating:     pp.rating,
+                position:   pp.player.position,
               });
             });
             const outcome = ampGoals > oppGoals ? 'Win' : ampGoals < oppGoals ? 'Loss' : 'Draw';
@@ -312,13 +322,27 @@ class SimulationService {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // ── Flush all collected data in single set() calls ─────────────────────
-    useFixtureStore.getState().batchRecordResults(fixtureResultEntries);
-    useMatchResultStore.getState().batchAddResults(matchResultEntries);
-    useLeagueStatsStore.getState().batchRecordMatchStats(statsEntries);
+    // ── Flush all collected data — SQLite writes (historical) ──────────────
+    const db = getDatabase();
+    await batchUpdateResults(db, fixtureResultEntries);
+    await batchInsertResults(db, matchResultEntries);
+    await batchUpsertStats(db, statsEntries);
+    await batchInsertAppearances(db, appearanceEntries);
+
+    // ── Invalidate TanStack Query caches ───────────────────────────────────
+    queryClient.invalidateQueries({ queryKey: ['league-scorers'] });
+    queryClient.invalidateQueries({ queryKey: ['league-assisters'] });
+    queryClient.invalidateQueries({ queryKey: ['appearances'] });
+
+    // ── Zustand in-memory updates (unchanged) ──────────────────────────────
+    useFixtureStore.getState().batchRecordResults(
+      fixtureResultEntries.map((e) => ({
+        fixtureId: e.fixtureId,
+        result: { homeGoals: e.homeGoals, awayGoals: e.awayGoals, playedAt: e.playedAt },
+      })),
+    );
     useClubStatsStore.getState().batchUpdateFromResults(clubResultEntries);
     useManagerRecordStore.getState().batchRecordResults(managerResultEntries);
-    await batchAppendAppearances(appearanceEntries);
 
     endSimulation();
     useFixtureStore.getState().advanceMatchday();
