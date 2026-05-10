@@ -45,9 +45,8 @@ import { WeeklyTick } from '@/types/game';
 import { FacilityLevels, repairFacilityCost } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
-import { TIER_OVR_CEILING, TIER_ORDER } from '@/types/club';
+import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
-import { getEffectiveTier } from '@/utils/tierGate';
 import { calculateClubValuation } from '@/hooks/useClubMetrics';
 import { useCalendarStore } from '@/stores/calendarStore';
 import { isTransferWindowOpen } from '@/utils/dateUtils';
@@ -529,9 +528,7 @@ export function processWeeklyTick(): WeeklyTick {
   // Re-read players to pick up injuries set in step 3b so the injury check
   // inside computePlayerDevelopment sees the current state.
   const playersWithInjuries = useSquadStore.getState().players;
-  const effectiveTier = getEffectiveTier(club.reputationTier, levels);
-  const tierOvrCap = TIER_OVR_CEILING[effectiveTier];
-  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, facilityEffects, weekNumber, tierOvrCap);
+  const devUpdates = computePlayerDevelopment(playersWithInjuries, coaches, facilityEffects, weekNumber);
   applyWeeklyPlayerUpdates(traitShifts, devUpdates);
 
   // Re-read players after development updates to ensure transfer values and bid

@@ -24,6 +24,8 @@ import { shouldRetire } from './retirementEngine';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import { pruneAppearancesBefore } from '@/utils/appearanceStorage';
 import { archiveFixtureSeason, pruneFixtureArchives } from '@/utils/fixtureArchive';
+import { getDatabase } from '@/db/client';
+import { batchInsertFixtures } from '@/db/repositories/fixtureRepository';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -228,6 +230,13 @@ export async function applySeasonResponse(
   for (const l of responseLeagues) {
     useFixtureStore.getState().loadFromServerSchedule(l.id, nextSeason, l.fixtures);
   }
+
+  // 5. Persist new season fixtures to SQLite so the DB stays in sync with Zustand.
+  const newSeasonFixtures = useFixtureStore.getState().fixtures.filter(
+    (f) => f.season === nextSeason,
+  );
+  const db = getDatabase();
+  await batchInsertFixtures(db, newSeasonFixtures);
 }
 
 /**
