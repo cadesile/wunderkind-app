@@ -3,6 +3,7 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useSQLiteContext } from 'expo-sqlite';
+import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
@@ -14,6 +15,122 @@ import type { ColumnDef } from '@/components/ui/SortableTable';
 import { WK, pixelShadow } from '@/constants/theme';
 import { hapticTap } from '@/utils/haptics';
 import type { Player } from '@/types/player';
+
+// ─── Squad Ability Chart ───────────────────────────────────────────────────────
+
+const ABILITY_ATTRS = [
+  { key: 'pace'      as const, label: 'PACE',    color: '#4CC9F0' },
+  { key: 'technical' as const, label: 'TECH',    color: '#F5C842' },
+  { key: 'vision'    as const, label: 'VISION',  color: '#A78BFA' },
+  { key: 'power'     as const, label: 'POWER',   color: '#F97316' },
+  { key: 'stamina'   as const, label: 'STAMINA', color: '#22C55E' },
+  { key: 'heart'     as const, label: 'HEART',   color: '#EC4899' },
+];
+
+function polarToXY(cx: number, cy: number, r: number, angle: number) {
+  return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+}
+
+function donutSlice(cx: number, cy: number, outerR: number, innerR: number, start: number, end: number) {
+  const os = polarToXY(cx, cy, outerR, start);
+  const oe = polarToXY(cx, cy, outerR, end);
+  const is = polarToXY(cx, cy, innerR, start);
+  const ie = polarToXY(cx, cy, innerR, end);
+  const large = end - start > Math.PI ? 1 : 0;
+  return `M ${os.x} ${os.y} A ${outerR} ${outerR} 0 ${large} 1 ${oe.x} ${oe.y} L ${ie.x} ${ie.y} A ${innerR} ${innerR} 0 ${large} 0 ${is.x} ${is.y} Z`;
+}
+
+function SquadAbilityChart({ players }: { players: Player[] }) {
+  const data = useMemo(() => {
+    const sums = { pace: 0, technical: 0, vision: 0, power: 0, stamina: 0, heart: 0 };
+    let n = 0;
+    for (const p of players) {
+      const a = p.attributes;
+      if (!a) { Object.keys(sums).forEach((k) => { sums[k as keyof typeof sums] += p.overallRating; }); }
+      else { sums.pace += a.pace; sums.technical += a.technical; sums.vision += a.vision; sums.power += a.power; sums.stamina += a.stamina; sums.heart += a.heart; }
+      n++;
+    }
+    if (n === 0) return ABILITY_ATTRS.map((a) => ({ ...a, avg: 0 }));
+    return ABILITY_ATTRS.map((a) => ({ ...a, avg: Math.round(sums[a.key] / n * 10) / 10 }));
+  }, [players]);
+
+  const slices = useMemo(() => {
+    const total = data.reduce((s, d) => s + d.avg, 0) || 1;
+    let angle = -Math.PI / 2;
+    return data.map((d) => {
+      const sweep = (d.avg / total) * 2 * Math.PI;
+      const start = angle;
+      angle += sweep;
+      return { ...d, start, end: angle };
+    });
+  }, [data]);
+
+  const teamOvr = useMemo(() => {
+    if (data.every((d) => d.avg === 0)) return 0;
+    return Math.round(data.reduce((s, d) => s + d.avg, 0) / data.length);
+  }, [data]);
+
+  const SIZE = 160;
+  const CX = SIZE / 2;
+  const CY = SIZE / 2;
+  const OUTER_R = 64;
+  const INNER_R = 40;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      {/* Donut */}
+      <Svg width={SIZE} height={SIZE}>
+        <G>
+          {slices.map((s) => (
+            <Path
+              key={s.key}
+              d={donutSlice(CX, CY, OUTER_R, INNER_R, s.start, s.end)}
+              fill={s.color}
+              stroke={WK.border}
+              strokeWidth={2}
+            />
+          ))}
+          {/* Center label */}
+          <SvgText
+            x={CX}
+            y={CY - 5}
+            textAnchor="middle"
+            fill={WK.text}
+            fontSize={16}
+            fontFamily="VT323_400Regular"
+          >
+            {teamOvr}
+          </SvgText>
+          <SvgText
+            x={CX}
+            y={CY + 9}
+            textAnchor="middle"
+            fill={WK.dim}
+            fontSize={9}
+            fontFamily="VT323_400Regular"
+          >
+            AVG OVR
+          </SvgText>
+        </G>
+      </Svg>
+
+      {/* Legend */}
+      <View style={{ flex: 1, gap: 5 }}>
+        {data.map((d) => (
+          <View key={d.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 8, height: 8, backgroundColor: d.color, borderWidth: 1, borderColor: WK.border }} />
+            <BodyText size={11} dim style={{ width: 44 }}>{d.label}</BodyText>
+            {/* Mini bar */}
+            <View style={{ flex: 1, height: 6, backgroundColor: WK.tealDark, borderWidth: 1, borderColor: WK.border }}>
+              <View style={{ width: `${Math.min(d.avg, 100)}%`, height: '100%', backgroundColor: d.color + 'CC' }} />
+            </View>
+            <PixelText size={6} style={{ width: 26, textAlign: 'right' }}>{d.avg > 0 ? d.avg.toFixed(0) : '—'}</PixelText>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 const FAB_CLEARANCE = 80;
 
@@ -221,6 +338,11 @@ export function PerformancePane() {
           {renderLeaderPanel('THIS SEASON', assistMakerSeason, assistMakerSeason ? `${assistMakerSeason.assists} ASSISTS` : '— ASSISTS')}
           {renderLeaderPanel('ALL TIME', assistMakerAllTime, assistMakerAllTime ? `${assistMakerAllTime.allTimeAssists} ASSISTS` : '— ASSISTS')}
         </View>
+      </View>
+
+      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
+        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 12 }}>SQUAD ABILITY</PixelText>
+        <SquadAbilityChart players={activePlayers} />
       </View>
 
       <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>

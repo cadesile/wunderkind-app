@@ -1,7 +1,9 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Modal, ScrollView, Pressable } from 'react-native';
 import { Trophy } from 'lucide-react-native';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useLeagueStore } from '@/stores/leagueStore';
+import type { PlayerSeasonStats } from '@/types/stats';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useClubStore } from '@/stores/clubStore';
@@ -294,6 +296,7 @@ function AmpSummarySlide({
 export function SeasonEndOverlay({ visible, onComplete }: Props) {
   const [phase, setPhase]                         = useState<Phase>('loading');
   const processedRef                              = useRef(false);
+  const db                                        = useSQLiteContext();
 
   const [displayStandings,      setDisplayStandings]      = useState<SeasonStanding[]>([]);
   const [displayPromotionSpots, setDisplayPromotionSpots] = useState<number | null>(null);
@@ -353,12 +356,27 @@ export function SeasonEndOverlay({ visible, onComplete }: Props) {
     if (visible && !processedRef.current) {
       processedRef.current = true;
 
-      // Capture season review data BEFORE performSeasonTransition clears the fixture store.
-      const currentLeague  = useLeagueStore.getState().league;
-      const capturedSeason = currentLeague?.season ?? 1;
-      setReviewData(buildSeasonReviewData(capturedSeason));
+      void (async () => {
+        // Capture season review data BEFORE performSeasonTransition clears the fixture store.
+        const currentLeague  = useLeagueStore.getState().league;
+        const capturedSeason = currentLeague?.season ?? 1;
 
-      void handleTransition();
+        // Fetch stats from SQLite so golden boot / assists are populated.
+        let seasonStats: PlayerSeasonStats[] = [];
+        try {
+          seasonStats = await db.getAllAsync<PlayerSeasonStats>(
+            `SELECT player_id as playerId, club_id as clubId, league_id as leagueId,
+                    season, tier, appearances, goals, assists, avg_rating as averageRating
+             FROM player_season_stats WHERE season = ?`,
+            [capturedSeason],
+          );
+        } catch {
+          // non-fatal — leaderboards will be empty
+        }
+
+        setReviewData(buildSeasonReviewData(capturedSeason, seasonStats));
+        void handleTransition();
+      })();
     }
     if (!visible) {
       processedRef.current = false;
