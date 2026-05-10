@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { LeagueSnapshot } from '@/types/api';
 import type { WorldLeague } from '@/types/world';
-import { zustandStorage } from '@/utils/storage';
+import type { FixtureResultEntry } from '@/db/types';
 import { generateRoundRobin } from '@/utils/fixtureGenerator';
 
 export interface FixtureResult {
@@ -40,9 +39,17 @@ interface FixtureActions {
   recordResult: (fixtureId: string, result: Omit<FixtureResult, 'synced'>) => void;
   /**
    * Bulk version of recordResult — updates all provided fixture results in a single set() call.
-   * Use in SimulationService to collapse 40+ individual AsyncStorage writes per matchday into one.
    */
   batchRecordResults: (entries: Array<{ fixtureId: string; result: Omit<FixtureResult, 'synced'> }>) => void;
+  /**
+   * Replace all in-memory fixtures. Used at boot (hydration from SQLite) and at season start.
+   */
+  setFixtures: (fixtures: Fixture[]) => void;
+  /**
+   * Update in-memory fixture results after simulation. Takes FixtureResultEntry[] from the
+   * SQLite write path and applies them to the in-memory store in one set() call.
+   */
+  applyResultsToMemory: (entries: FixtureResultEntry[]) => void;
   advanceMatchday: () => void;
   markSynced: (fixtureIds: string[]) => void;
   clearSeason: () => void;
@@ -52,10 +59,9 @@ interface FixtureActions {
 type FixtureStore = FixtureState & FixtureActions;
 
 export const useFixtureStore = create<FixtureStore>()(
-  persist(
-    (set, get) => ({
-      fixtures: [],
-      currentMatchday: 0,
+  (set, get) => ({
+    fixtures: [],
+    currentMatchday: 0,
 
       generateFixtures: (league, ampClubId) => {
         const { fixtures } = get();
@@ -154,6 +160,29 @@ export const useFixtureStore = create<FixtureStore>()(
         }));
       },
 
+      setFixtures: (fixtures) => set({ fixtures }),
+
+      applyResultsToMemory: (entries) => {
+        set((state) => {
+          const updated = [...state.fixtures];
+          for (const e of entries) {
+            const idx = updated.findIndex((f) => f.id === e.fixtureId);
+            if (idx !== -1) {
+              updated[idx] = {
+                ...updated[idx],
+                result: {
+                  homeGoals: e.homeGoals,
+                  awayGoals: e.awayGoals,
+                  playedAt: e.playedAt,
+                  synced: false,
+                },
+              };
+            }
+          }
+          return { fixtures: updated };
+        });
+      },
+
       advanceMatchday: () =>
         set((state) => ({ currentMatchday: state.currentMatchday + 1 })),
 
@@ -172,20 +201,5 @@ export const useFixtureStore = create<FixtureStore>()(
 
       getUnsyncedResults: () =>
         get().fixtures.filter((f) => f.result !== null && f.result.synced === false),
-    }),
-    {
-      name: 'fixture-store',
-      storage: zustandStorage,
-      // Only persist the current season's fixtures. Older seasons are dead weight —
-      // the UI only displays the live schedule and won't go back in time.
-      partialize: (state) => {
-        const seasons = state.fixtures.map((f) => f.season);
-        const maxSeason = seasons.length > 0 ? Math.max(...seasons) : 0;
-        return {
-          currentMatchday: state.currentMatchday,
-          fixtures: state.fixtures.filter((f) => f.season === maxSeason),
-        };
-      },
-    }
-  )
+    })
 );

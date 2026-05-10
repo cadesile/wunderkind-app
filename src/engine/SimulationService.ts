@@ -335,12 +335,7 @@ class SimulationService {
     queryClient.invalidateQueries({ queryKey: ['appearances'] });
 
     // ── Zustand in-memory updates (unchanged) ──────────────────────────────
-    useFixtureStore.getState().batchRecordResults(
-      fixtureResultEntries.map((e) => ({
-        fixtureId: e.fixtureId,
-        result: { homeGoals: e.homeGoals, awayGoals: e.awayGoals, playedAt: e.playedAt },
-      })),
-    );
+    useFixtureStore.getState().applyResultsToMemory(fixtureResultEntries);
     useClubStatsStore.getState().batchUpdateFromResults(clubResultEntries);
     useManagerRecordStore.getState().batchRecordResults(managerResultEntries);
 

@@ -18,6 +18,10 @@ import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { useAuthFlow } from '@/hooks/useAuthFlow';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { clearAllClubData } from '@/stores/resetAllStores';
+import { useSQLiteContext } from 'expo-sqlite';
+import { loadSeasonFixtures } from '@/db/repositories/fixtureRepository';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useFixtureStore } from '@/stores/fixtureStore';
 import { useNarrativeSync } from '@/hooks/useNarrativeSync';
 import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 import { useArchetypeSync } from '@/hooks/useArchetypeSync';
@@ -37,6 +41,7 @@ SplashScreen.preventAutoHideAsync();
 
 
 function AppNavigator() {
+  const db = useSQLiteContext();
   const [fontsLoaded, fontError] = useFonts({
     PressStart2P_400Regular,
     VT323_400Regular,
@@ -99,6 +104,22 @@ function AppNavigator() {
   useEffect(() => {
     void syncQueue.init();
   }, []);
+
+  // Hydrate fixtureStore from SQLite once the app is ready and stores have rehydrated
+  useEffect(() => {
+    if (!isReady || isOnboarding || !storesHydrated) return;
+    async function hydrateFixtures() {
+      const leagueState = useLeagueStore.getState();
+      const leagueId = leagueState.league?.id;
+      const season = leagueState.currentSeason;
+      if (!leagueId || !season) return;
+      const fixtures = await loadSeasonFixtures(db, leagueId, season);
+      if (fixtures.length > 0) {
+        useFixtureStore.getState().setFixtures(fixtures);
+      }
+    }
+    void hydrateFixtures();
+  }, [isReady, isOnboarding, storesHydrated, db]);
 
   // React to the game over screen's "START AGAIN" request
   useEffect(() => {
