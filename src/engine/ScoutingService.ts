@@ -13,6 +13,7 @@ import { MarketPlayer } from '@/types/market';
 import { calculateMarketPlayerValue } from '@/engine/MarketEngine';
 import { getAvailableRegions } from '@/utils/scoutingRegions';
 import { CLUB_CODE_TO_NATIONALITY } from '@/utils/nationality';
+import { resolveAbilityRange } from '@/types/gameConfig';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -255,6 +256,26 @@ export function processMissions(): void {
       const signedIds  = new Set(useSquadStore.getState().players.map((p) => p.id));
       const marketIds  = new Set(useMarketStore.getState().players.map((p) => p.id));
 
+      // ── Tier above: free-agent pool filtered to higher-tier ability range ──
+      // Scouts can surface aspirational free transfers — players whose ability
+      // matches the tier above AMP's current league, available at no transfer fee.
+      const { ampLeagueId, leagues } = useWorldStore.getState();
+      const ampLeagueTier = ampLeagueId
+        ? leagues.find((l) => l.id === ampLeagueId)?.tier ?? null
+        : null;
+
+      const higherTierFreeAgents: MarketPlayer[] = (() => {
+        if (ampLeagueTier === null || ampLeagueTier <= 1) return [];
+        const targetTier = ampLeagueTier - 1;
+        const { leaguePlayerAbilityRanges } = useGameConfigStore.getState().config;
+        const country = club.country ?? '';
+        const range = resolveAbilityRange(leaguePlayerAbilityRanges, country, targetTier);
+        return useProspectPoolStore.getState().prospects
+          .filter((p) => !signedIds.has(p.id) && !marketIds.has(p.id))
+          .filter((p) => p.currentAbility >= range.min && p.currentAbility <= range.max)
+          .map((p) => ({ ...p, requiresTransferFee: false, transferFee: 0, currentOffer: 0 }));
+      })();
+
       // Build allowed nationality set for this scout
       const availableRegions = getAvailableRegions(club.reputationTier, scout.scoutingRange);
       const domesticNationality = club.country
@@ -279,8 +300,17 @@ export function processMissions(): void {
         ? prospects.filter((p) => p.position === mission.position)
         : [...prospects];
 
-      // Combine: NPC first so they are preferentially selected
-      const combined = [...npcByPosition, ...freeAgentByPosition];
+      // Higher-tier free agents — aspirational finds available as free transfers
+      const higherTierByPosition = mission.position
+        ? higherTierFreeAgents.filter((p) => p.position === mission.position)
+        : [...higherTierFreeAgents];
+
+      // 50% of the time use the higher-tier free-transfer pool as primary so AMP
+      // gets genuinely squad-improving finds. Otherwise fall back to NPC + free agents.
+      const useHigherTierPool = higherTierByPosition.length > 0 && Math.random() < 0.5;
+      const combined = useHigherTierPool
+        ? [...higherTierByPosition, ...npcByPosition, ...freeAgentByPosition]
+        : [...npcByPosition, ...freeAgentByPosition, ...higherTierByPosition];
 
       let candidates: MarketPlayer[];
       if (allowedNationalities.length === 0) {
