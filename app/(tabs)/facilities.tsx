@@ -491,7 +491,7 @@ function HirePane({
       description: `Signed ${mc.firstName} ${mc.lastName}`,
       weekNumber,
     });
-    hireCoach(mc.id, weekNumber);
+    hireCoach(mc.id, weekNumber, 104);
   }
 
   function signScout(ms: MarketScout) {
@@ -508,7 +508,7 @@ function HirePane({
       description: `Signed ${ms.firstName} ${ms.lastName}`,
       weekNumber,
     });
-    hireScout(ms.id, weekNumber);
+    hireScout(ms.id, weekNumber, 104);
   }
 
   return (
