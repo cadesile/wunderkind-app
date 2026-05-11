@@ -1,6 +1,6 @@
 import { calculateTraitShifts } from './personality';
 import { shouldRetire } from './retirementEngine';
-import { calculateWeeklyFinances, calculateWeeklyWage } from './finance';
+import { calculateWeeklyFinances, calculateWeeklyWage, calculateStaffSignOnFee } from './finance';
 import { renderMoney } from '@/utils/currency';
 import {
   calculateWeeklyXP,
@@ -451,6 +451,76 @@ export function processWeeklyTick(): WeeklyTick {
         });
       }
     });
+  }
+
+  // ── 3d. Staff contract expiry ─────────────────────────────────────────────
+  // Mirrors player enrollment expiry. Fires inbox warnings at 12 and 4 weeks
+  // remaining, applies morale decay weeks 1–11, removes the member at 0 weeks.
+  {
+    const { updateCoach: updateCoachRecord, removeCoach: expireCoach } = useCoachStore.getState();
+    const { scouts: hiredScouts, updateScout: updateScoutRecord, removeScout: expireScout } = useScoutStore.getState();
+
+    type StaffEntry = {
+      id: string; name: string; salary: number; morale?: number;
+      contractEndWeek?: number; initialContractWeeks?: number;
+      _type: 'coach' | 'scout';
+    };
+
+    const allStaff: StaffEntry[] = [
+      ...coaches.map((c) => ({ ...c, _type: 'coach' as const })),
+      ...hiredScouts.map((s) => ({ ...s, _type: 'scout' as const })),
+    ];
+
+    for (const staff of allStaff) {
+      if (staff.contractEndWeek === undefined) continue;
+      const weeksRemaining = staff.contractEndWeek - weekNumber;
+
+      if (weeksRemaining <= 0) {
+        if (staff._type === 'coach') expireCoach(staff.id);
+        else expireScout(staff.id);
+        addMessage({
+          id: `staff-expired-${staff.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: `${staff.name} Has Left`,
+          body: `${staff.name}'s contract has expired and they have left the club.`,
+          isRead: false,
+          entityId: staff.id,
+        });
+        continue;
+      }
+
+      // Morale decay: weeks 1–11
+      if (weeksRemaining <= 11) {
+        const newMorale = Math.max(0, Math.min(100, (staff.morale ?? 70) - 2));
+        if (staff._type === 'coach') updateCoachRecord(staff.id, { morale: newMorale });
+        else updateScoutRecord(staff.id, { morale: newMorale });
+      }
+
+      if (weeksRemaining === 12) {
+        addMessage({
+          id: `staff-warn-12-${staff.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Staff Contract Expiring Soon',
+          body: `${staff.name}'s contract ends in 12 weeks. Renew it from the staff screen or they will leave the club.`,
+          isRead: false,
+          entityId: staff.id,
+        });
+      }
+
+      if (weeksRemaining === 4) {
+        addMessage({
+          id: `staff-warn-4-${staff.id}-wk${weekNumber}`,
+          type: 'system',
+          week: weekNumber,
+          subject: 'Staff Contract Ending — Final Notice',
+          body: `${staff.name}'s contract ends in 4 weeks. Their morale is suffering. Act now or they will leave.`,
+          isRead: false,
+          entityId: staff.id,
+        });
+      }
+    }
   }
 
   // ── 4. Injury morale impact ───────────────────────────────────────────────────
@@ -1333,7 +1403,74 @@ export function processWeeklyTick(): WeeklyTick {
         }
       }
 
-      // ── 14c. Auto-sign players ──────────────────────────────────────────────
+      // ── 14c. DOF auto-renew staff contracts ──────────────────────────────────
+      if (dof.dofAutoRenewContracts) {
+        const { staffSignOnFeePercentMin, staffSignOnFeePercentMax } = config;
+        const { scouts: currentScouts } = useScoutStore.getState();
+        const { updateCoach: renewCoach } = useCoachStore.getState();
+        const { updateScout: renewScout } = useScoutStore.getState();
+
+        type RenewEntry = {
+          id: string; name: string; salary: number;
+          contractEndWeek?: number; initialContractWeeks?: number;
+          _type: 'coach' | 'scout';
+        };
+        const renewCandidates: RenewEntry[] = [
+          ...coaches.filter((c) => c.id !== dof.id).map((c) => ({ ...c, _type: 'coach' as const })),
+          ...currentScouts.map((s) => ({ ...s, _type: 'scout' as const })),
+        ];
+
+        for (const staff of renewCandidates) {
+          if (staff.contractEndWeek === undefined) continue;
+          const weeksLeft = staff.contractEndWeek - weekNumber;
+          if (weeksLeft <= 0 || weeksLeft > 12) continue;
+
+          // Guard: only attempt renewal once per contract (keyed by contractEndWeek)
+          const guardId = `dof-staff-renew-${staff.id}-end${staff.contractEndWeek}`;
+          if (useInboxStore.getState().messages.some((m) => m.id === guardId)) continue;
+
+          const renewWeeks = staff.initialContractWeeks ?? 52;
+          const signOnFee = calculateStaffSignOnFee(staff.salary, renewWeeks, staffSignOnFeePercentMin, staffSignOnFeePercentMax);
+          const currentBalance = useClubStore.getState().club.balance ?? 0;
+
+          if (currentBalance < signOnFee) {
+            addMessage({
+              id: guardId,
+              type: 'system',
+              week: weekNumber,
+              subject: `${staff.name} Renewal Failed`,
+              body: `${dof.name} could not renew ${staff.name}'s contract — insufficient funds. Sign-on fee required: £${Math.round(signOnFee / 100).toLocaleString()}.`,
+              isRead: false,
+              entityId: staff.id,
+            });
+            continue;
+          }
+
+          useFinanceStore.getState().addTransaction({
+            amount: -signOnFee,
+            category: 'staff_sign_on',
+            description: `${dof.name} renewed ${staff.name}'s contract (${renewWeeks / 52} yr)`,
+            weekNumber,
+          });
+
+          const newEnd = weekNumber + renewWeeks;
+          if (staff._type === 'coach') renewCoach(staff.id, { contractEndWeek: newEnd, initialContractWeeks: renewWeeks });
+          else renewScout(staff.id, { contractEndWeek: newEnd, initialContractWeeks: renewWeeks });
+
+          addMessage({
+            id: guardId,
+            type: 'system',
+            week: weekNumber,
+            subject: `${staff.name} Contract Renewed`,
+            body: `${dof.name} has renewed ${staff.name}'s contract for ${renewWeeks / 52} year(s). Sign-on fee of £${Math.round(signOnFee / 100).toLocaleString()} paid.`,
+            isRead: false,
+            entityId: staff.id,
+            metadata: { systemType: 'dof_staff_contract_renewal' },
+          });
+        }
+      }
+
+      // ── 14d. Auto-sign players ──────────────────────────────────────────────
       // When manager's assessment is positive, sign revealed market players.
       if (dof.dofAutoSignPlayers && activeManager) {
         const { players: marketPlayers, signPlayer } = useMarketStore.getState();
