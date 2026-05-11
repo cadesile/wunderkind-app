@@ -50,6 +50,10 @@ export interface Scout {
   successRate: number;    // 0–100
   nationality: string;
   joinedWeek?: number;
+  /** Game week when this contract expires. Undefined = legacy/no contract. */
+  contractEndWeek?: number;
+  /** Original duration chosen at signing (52, 104, or 156 weeks). Used for DOF auto-renewal. */
+  initialContractWeeks?: number;
   appearance?: import('./player').Appearance;
   assignedPlayerIds?: string[];
   morale?: number;

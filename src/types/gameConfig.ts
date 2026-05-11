@@ -274,6 +274,12 @@ export interface GameConfig {
   largeSponsorMax: number;
   /** % reduction per finishing position for leaguePositionPot distribution. */
   leaguePositionDecreasePercent: number;
+  /**
+   * Denominator for stadium capacity calculation.
+   * Capacity = Math.round(baseCost / capacityCalculation) * level
+   * Default: 1000
+   */
+  capacityCalculation: number;
 
   // ── Staff ─────────────────────────────────────────────────────────────────
   /** StaffRole enum values from the backend — used as filter options in the Hire screen. */
@@ -290,6 +296,12 @@ export interface GameConfig {
   maxChairmensPerClub: number;
   /** Maximum number of scouts allowed per club. */
   maxScoutsPerClub: number;
+  /** Minimum % of total contract value charged as sign-on fee. Default: 2 */
+  staffSignOnFeePercentMin: number;
+  /** Maximum % of total contract value charged as sign-on fee. Default: 8 */
+  staffSignOnFeePercentMax: number;
+  /** % of remaining contract value paid as severance on early release. Default: 50 */
+  staffSeverancePercent: number;
 
   // ── Offer probabilities (per reputation tier, 0–1) ────────────────────────
   /** Weekly probability of a sponsor offer when club is Local tier. */
@@ -397,6 +409,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   largeSponsorMin: 50000000,
   largeSponsorMax: 200000000,
   leaguePositionDecreasePercent: 5,
+  capacityCalculation: 1000,
 
   staffRoles: [],
   maxCoachesPerClub: 15,
@@ -405,6 +418,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   maxFacilityManagersPerClub: 1,
   maxChairmensPerClub: 1,
   maxScoutsPerClub: 3,
+  staffSignOnFeePercentMin: 2,
+  staffSignOnFeePercentMax: 8,
+  staffSeverancePercent: 50,
 
   sponsorProbabilityLocal:    1,
   sponsorProbabilityRegional: 1,

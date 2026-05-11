@@ -2,6 +2,8 @@ export type FinancialCategory =
   | 'wages'
   | 'transfer_fee'
   | 'staff_signing'
+  | 'staff_sign_on'
+  | 'staff_severance'
   | 'investment'
   | 'sponsor_payment'
   | 'league_sponsor'
@@ -19,6 +21,8 @@ export const CATEGORY_LABELS: Record<FinancialCategory, string> = {
   wages:                'WAGES',
   transfer_fee:         'TRANSFERS',
   staff_signing:        'STAFF SIGNING',
+  staff_sign_on:        'STAFF SIGN-ON',
+  staff_severance:      'STAFF SEVERANCE',
   investment:           'INVESTMENT',
   sponsor_payment:      'SPONSORS',
   league_sponsor:       'LEAGUE SPONSOR',

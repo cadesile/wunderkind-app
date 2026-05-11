@@ -27,6 +27,10 @@ export interface Coach {
   appearance?: Appearance;
   nationality: string;
   joinedWeek: number;
+  /** Game week when this contract expires. Undefined = legacy/no contract. */
+  contractEndWeek?: number;
+  /** Original duration chosen at signing (52, 104, or 156 weeks). Used for DOF auto-renewal. */
+  initialContractWeeks?: number;
   /** 1–2 attribute specialisms this coach develops in players */
   specialisms?: CoachSpecialisms;
   morale?: number;
