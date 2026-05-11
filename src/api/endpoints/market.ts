@@ -44,6 +44,7 @@ interface RawPlayer {
   overall?: number;
   height?: number;
   weight?: number;
+  physical?: { height: number; weight: number };
   guardians?: ApiGuardian[];
   tier?: string;
 }
@@ -187,8 +188,8 @@ function transformMarketData(raw: RawMarketData, validRoles: StaffRole[] = []): 
         attributes: hasAttributes
           ? { pace: p.pace!, technical: p.technical!, vision: p.vision!, power: p.power!, stamina: p.stamina!, heart: p.heart! }
           : undefined,
-        height: p.height,
-        weight: p.weight,
+        height: p.physical?.height ?? p.height,
+        weight: p.physical?.weight ?? p.weight,
         agent: p.agent
           ? {
               id: p.agent.id,

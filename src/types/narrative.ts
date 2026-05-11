@@ -5,6 +5,7 @@ export enum EventCategory {
   FINANCE = 'FINANCE',
   NPC_INTERACTION = 'NPC_INTERACTION',
   GUARDIAN = 'GUARDIAN',
+  MATCH = 'MATCH',
 }
 
 export enum TargetType {

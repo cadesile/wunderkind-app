@@ -10,7 +10,7 @@ import type { MatchResultRecord } from '@/db/types';
 
 /**
  * Builds a MatchResultContentData payload for a played fixture.
- * Looks up the full player performance record from matchResultStore (keyed by fixtureId).
+ * Pass the MatchResultRecord loaded from SQLite (or null if unavailable).
  * Works for all fixtures — AMP or NPC.
  */
 export function buildMatchResultData(
@@ -18,7 +18,7 @@ export function buildMatchResultData(
   ampClubId: string,
   ampClubName: string,
   clubNameMap: Map<string, string>,
-  matchResults: Record<string, MatchResultRecord>,
+  record: MatchResultRecord | null,
 ): MatchResultContentData | null {
   if (!fixture.result) return null;
 
@@ -33,7 +33,6 @@ export function buildMatchResultData(
     ampClubName,
   };
 
-  const record = matchResults[fixture.id];
   if (!record) return base;
 
   return {
@@ -42,6 +41,7 @@ export function buildMatchResultData(
     awayAvgRating: record.awayAvgRating,
     homePlayers:   record.homePlayers,
     awayPlayers:   record.awayPlayers,
+    events:        record.events.length > 0 ? record.events : undefined,
   };
 }
 

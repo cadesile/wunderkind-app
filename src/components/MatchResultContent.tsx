@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { useState } from 'react';
+import { View, Pressable, ScrollView } from 'react-native';
 import { PixelText } from '@/components/ui/PixelText';
 import { WK, pixelShadow } from '@/constants/theme';
 
@@ -28,6 +29,8 @@ export interface MatchResultContentData {
   awayPlayers?: MatchPlayerRow[];
   /** Used to colour-code the AMP team header and determine win/loss/draw colour. */
   ampClubName: string;
+  /** Match event narrative strings. When non-empty, a two-tab view is shown. */
+  events?: string[];
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -156,6 +159,96 @@ function TeamTable({
   );
 }
 
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+
+type ResultTab = 'EVENTS' | 'STATS';
+
+function ResultTabBar({
+  active,
+  onChange,
+}: {
+  active: ResultTab;
+  onChange: (t: ResultTab) => void;
+}) {
+  return (
+    <View style={{
+      flexDirection: 'row',
+      borderBottomWidth: 2,
+      borderBottomColor: WK.border,
+      backgroundColor: WK.tealDark,
+    }}>
+      {(['EVENTS', 'STATS'] as ResultTab[]).map((tab) => {
+        const isActive = tab === active;
+        return (
+          <Pressable
+            key={tab}
+            onPress={() => onChange(tab)}
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              alignItems: 'center',
+              borderBottomWidth: 3,
+              borderBottomColor: isActive ? WK.yellow : 'transparent',
+            }}
+          >
+            <PixelText size={8} color={isActive ? WK.yellow : WK.dim}>
+              {tab === 'EVENTS' ? 'MATCH EVENTS' : 'PLAYER STATS'}
+            </PixelText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Score banner (shared) ────────────────────────────────────────────────────
+
+function ScoreBanner({
+  homeTeamName,
+  awayTeamName,
+  homeScore,
+  awayScore,
+  outcomeColor,
+}: {
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number;
+  awayScore: number;
+  outcomeColor: string;
+}) {
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      paddingVertical: 14, paddingHorizontal: 16, gap: 16,
+      backgroundColor: WK.tealDark,
+    }}>
+      <PixelText
+        size={10} color={WK.text}
+        style={{ flex: 1, textAlign: 'right' }}
+        numberOfLines={1}
+      >
+        {homeTeamName.toUpperCase()}
+      </PixelText>
+      <View style={{
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: WK.border, paddingHorizontal: 14, paddingVertical: 8,
+        borderWidth: 2, borderColor: outcomeColor,
+      }}>
+        <PixelText size={22} variant="vt323" color={outcomeColor}>{homeScore}</PixelText>
+        <PixelText size={18} variant="vt323" color={WK.dim}>–</PixelText>
+        <PixelText size={22} variant="vt323" color={outcomeColor}>{awayScore}</PixelText>
+      </View>
+      <PixelText
+        size={10} color={WK.text}
+        style={{ flex: 1 }}
+        numberOfLines={1}
+      >
+        {awayTeamName.toUpperCase()}
+      </PixelText>
+    </View>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function MatchResultContent({ data }: { data: MatchResultContentData }) {
@@ -165,6 +258,7 @@ export function MatchResultContent({ data }: { data: MatchResultContentData }) {
     homeAvgRating, awayAvgRating,
     homePlayers, awayPlayers,
     ampClubName,
+    events,
   } = data;
 
   const ampIsHome    = homeTeamName === ampClubName;
@@ -183,41 +277,49 @@ export function MatchResultContent({ data }: { data: MatchResultContentData }) {
     awayPlayers && awayPlayers.length > 0
   );
 
+  const hasEvents = !!(events && events.length > 0);
+  const showTabs  = hasEvents;
+
+  const [activeTab, setActiveTab] = useState<ResultTab>('EVENTS');
+
   return (
     <View style={{ borderWidth: 3, borderColor: outcomeColor, ...pixelShadow }}>
-      {/* Score banner */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        paddingVertical: 14, paddingHorizontal: 16, gap: 16,
-        backgroundColor: WK.tealDark,
-      }}>
-        <PixelText
-          size={10} color={WK.text}
-          style={{ flex: 1, textAlign: 'right' }}
-          numberOfLines={1}
-        >
-          {homeTeamName.toUpperCase()}
-        </PixelText>
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 8,
-          backgroundColor: WK.border, paddingHorizontal: 14, paddingVertical: 8,
-          borderWidth: 2, borderColor: outcomeColor,
-        }}>
-          <PixelText size={22} variant="vt323" color={outcomeColor}>{homeScore}</PixelText>
-          <PixelText size={18} variant="vt323" color={WK.dim}>–</PixelText>
-          <PixelText size={22} variant="vt323" color={outcomeColor}>{awayScore}</PixelText>
-        </View>
-        <PixelText
-          size={10} color={WK.text}
-          style={{ flex: 1 }}
-          numberOfLines={1}
-        >
-          {awayTeamName.toUpperCase()}
-        </PixelText>
-      </View>
+      {/* Score banner — always visible */}
+      <ScoreBanner
+        homeTeamName={homeTeamName}
+        awayTeamName={awayTeamName}
+        homeScore={homeScore}
+        awayScore={awayScore}
+        outcomeColor={outcomeColor}
+      />
 
-      {/* Team tables — AMP matches only */}
-      {hasPlayers && (
+      {/* Tab bar — only when events are present */}
+      {showTabs && (
+        <ResultTabBar active={activeTab} onChange={setActiveTab} />
+      )}
+
+      {/* Match Events tab */}
+      {(!showTabs || activeTab === 'EVENTS') && hasEvents && (
+        <View style={{ paddingHorizontal: 12, paddingVertical: 10, gap: 6 }}>
+          {events!.map((evt, i) => (
+            <View
+              key={i}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                backgroundColor: i % 2 === 0 ? WK.tealCard : WK.tealDark,
+                borderWidth: 1,
+                borderColor: WK.border,
+              }}
+            >
+              <PixelText size={8} color={WK.text}>{evt}</PixelText>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Player Stats tab (or default view when no events) */}
+      {(!showTabs || activeTab === 'STATS') && hasPlayers && (
         <View style={{ padding: 10 }}>
           <TeamTable
             teamName={homeTeamName}

@@ -341,6 +341,13 @@ export interface SyncFsDirectoryEntry {
   totalKb: number;
 }
 
+export interface SyncSqliteTableEntry {
+  /** Table name, e.g. "world_clubs" */
+  name: string;
+  /** Row count for this table */
+  rowCount: number;
+}
+
 export interface SyncDebugLog {
   /** ISO 8601 — when the log snapshot was captured */
   capturedAt: string;
@@ -349,8 +356,8 @@ export interface SyncDebugLog {
   /** How long the full weekly tick took, milliseconds */
   tickDurationMs: number;
   storage: {
-    /** SQLite / AsyncStorage metrics */
-    sqlite: {
+    /** AsyncStorage key-value metrics */
+    asyncStorage: {
       /** Sum of all AsyncStorage values, KB */
       totalKb: number;
       /** Total number of AsyncStorage keys */
@@ -361,6 +368,13 @@ export interface SyncDebugLog {
       leagueStatsKeyCount: number;
       /** Count of player_app:* keys */
       playerAppKeyCount: number;
+    };
+    /** SQLite database metrics */
+    sqlite: {
+      /** Size of wk.db on disk, KB (-1 if unavailable) */
+      fileSizeKb: number;
+      /** Per-table row counts */
+      tables: SyncSqliteTableEntry[];
     };
     /** Device file system metrics (expo-file-system, documentDirectory) */
     fileSystem: {

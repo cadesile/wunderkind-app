@@ -541,6 +541,14 @@ export default function PlayerDetailScreen() {
                 <MoraleBar morale={player.morale} width={48} />
               )}
             </View>
+            {/* Physical — height · weight */}
+            {(player.height || player.weight) && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                {player.height ? <BodyText size={11} dim>{player.height} cm</BodyText> : null}
+                {player.height && player.weight ? <BodyText size={11} dim>·</BodyText> : null}
+                {player.weight ? <BodyText size={11} dim>{player.weight} kg</BodyText> : null}
+              </View>
+            )}
           </View>
         </View>
 

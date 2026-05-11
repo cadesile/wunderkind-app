@@ -26,6 +26,7 @@ export interface MatchResultRecord {
   awayAvgRating: number;
   homePlayers: PlayerMatchStats[];
   awayPlayers: PlayerMatchStats[];
+  events: string[];
   playedAt: string;
 }
 

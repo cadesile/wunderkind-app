@@ -15,6 +15,7 @@ import { useSquadStore } from '@/stores/squadStore';
 import { useLeagueTopScorers } from '@/hooks/db/useLeagueTopScorers';
 import { useLeagueTopAssisters } from '@/hooks/db/useLeagueTopAssisters';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
+import { useMatchResult } from '@/hooks/db/useMatchResult';
 import {
   loadArchivedFixtureSeason,
   listArchivedFixtureSeasons,
@@ -535,6 +536,7 @@ export default function LeagueDashboardScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('TABLE');
 
   const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
+  const { data: selectedMatchResult = null } = useMatchResult(selectedFixture?.id ?? '');
 
   // Season browsing — null means "current season" (from store)
   const [archivedSeasons, setArchivedSeasons] = useState<number[]>([]);
@@ -607,8 +609,8 @@ export default function LeagueDashboardScreen() {
 
   const overlayData = useMemo(() => {
     if (!selectedFixture) return null;
-    return buildMatchResultData(selectedFixture, ampClub.id, ampClub.name, clubNameMap, {});
-  }, [selectedFixture, ampClub.id, ampClub.name, clubNameMap]);
+    return buildMatchResultData(selectedFixture, ampClub.id, ampClub.name, clubNameMap, selectedMatchResult);
+  }, [selectedFixture, ampClub.id, ampClub.name, clubNameMap, selectedMatchResult]);
 
   const leagueFixtures = useMemo(() => {
     const all = allFixtures.filter((f) => f.leagueId === id);

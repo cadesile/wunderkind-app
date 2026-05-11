@@ -1,5 +1,7 @@
 import { Player } from '../types/player';
 import { SelectionService } from './SelectionService';
+import { useEventStore } from '@/stores/eventStore';
+import { EventCategory, StatOperator } from '@/types/narrative';
 
 export type PlayingStyle = 'POSSESSION' | 'DIRECT' | 'COUNTER' | 'HIGH_PRESS';
 
@@ -12,12 +14,20 @@ export interface SimTeam {
 export interface MatchResult {
   homeScore: number;
   awayScore: number;
-  events: any[];
+  events: string[];                        // resolved narrative strings
+  moraleDeltas: Record<string, number>;    // playerId → signed morale delta, caller applies
   homePlayers: Player[];
   awayPlayers: Player[];
   homePerformance: Performance;
   awayPerformance: Performance;
 }
+
+const FALLBACK_MATCH_TEMPLATES: Record<string, { texts: string[]; moraleDelta: number }> = {
+  match_goal:             { texts: ['{player} gets on the scoresheet!', '{player} finds the net!'], moraleDelta: 5 },
+  match_assist:           { texts: ['{player} with a brilliant assist!', '{player} sets it up perfectly.'], moraleDelta: 3 },
+  match_performance_high: { texts: ['{player} is having a superb game.', '{player} is unplayable today.'], moraleDelta: 4 },
+  match_performance_low:  { texts: ['{player} struggling to make an impact.', '{player} having a difficult afternoon.'], moraleDelta: -4 },
+};
 
 export interface Performance {
   team: SimTeam;
@@ -45,6 +55,7 @@ export class ResultsEngine {
     away: SimTeam,
     tacticalMatrix: Record<string, Record<string, number>>,
     styleInfluence: Record<string, string[]> = {},
+    ampSide: 'home' | 'away' | false = false,
   ): MatchResult {
     const homeDominance = this.calculateDominance(home, away, tacticalMatrix, styleInfluence);
     const awayDominance = this.calculateDominance(away, home, tacticalMatrix, styleInfluence);
@@ -62,10 +73,24 @@ export class ResultsEngine {
     const homePerformance = this.calculatePerformance(home, homeScore, awayScore, styleInfluence);
     const awayPerformance = this.calculatePerformance(away, awayScore, homeScore, styleInfluence);
 
+    let events: string[] = [];
+    let moraleDeltas: Record<string, number> = {};
+
+    if (ampSide) {
+      // Generate events for both teams so NPC goals/assists are also narrated
+      const generatedHome = this.generateMatchEvents(homePerformance.players);
+      const generatedAway = this.generateMatchEvents(awayPerformance.players);
+      events = [...generatedHome.events, ...generatedAway.events];
+      // Morale deltas only apply to AMP's own players
+      const ampGenerated = ampSide === 'home' ? generatedHome : generatedAway;
+      moraleDeltas = ampGenerated.moraleDeltas;
+    }
+
     return {
       homeScore,
       awayScore,
-      events: [],
+      events,
+      moraleDeltas,
       homePlayers: home.xi,
       awayPlayers: away.xi,
       homePerformance,
@@ -138,7 +163,15 @@ export class ResultsEngine {
       styleBonus = (sum / boostedAttrs.length / 100) * 0.5;
     }
 
-    const noise = (Math.random() - 0.5) * 1.5; // ±0.75
+    const personality = player.personality;
+    const consistency  = personality?.consistency  ?? 10;
+    const temperament  = personality?.temperament  ?? 10;
+    const pressure     = personality?.pressure     ?? 10;
+
+    const varianceScore = (consistency + temperament + pressure) / 3;
+    // Maps 1 → ±1.5, 20 → ±0.3
+    const noiseRange = 1.5 - ((varianceScore - 1) / 19) * 1.2;
+    const noise = (Math.random() - 0.5) * 2 * noiseRange;
 
     const raw = baseRating + resultBonus + performanceBonus + styleBonus + noise;
     const rating = Math.max(1, Math.min(10, Math.round(raw * 10) / 10));
@@ -229,7 +262,87 @@ export class ResultsEngine {
     // Manager Boost (up to 5% boost based on ability)
     score *= (1 + (team.managerAbility / 100) * 0.05);
 
+    // Personality multiplier — ±5% based on squad avg professionalism + consistency
+    const avgPersonality = team.xi.reduce((sum, p) => {
+      const prof = p.personality?.professionalism ?? 10;
+      const cons = p.personality?.consistency     ?? 10;
+      return sum + (prof + cons) / 2;
+    }, 0) / (team.xi.length || 1);
+
+    // Centred on midpoint of 1–20 scale (10.5); max ±5%
+    const personalityMultiplier = 1 + ((avgPersonality - 10.5) / 10.5) * 0.05;
+    score *= personalityMultiplier;
+
     return score;
+  }
+
+  /**
+   * Generates resolved narrative event strings and morale deltas for home XI only.
+   * Falls back to FALLBACK_MATCH_TEMPLATES if backend templates are not loaded.
+   */
+  private static generateMatchEvents(
+    players: PlayerPerformance[],
+  ): { events: string[]; moraleDeltas: Record<string, number> } {
+    const events: string[] = [];
+    const moraleDeltas: Record<string, number> = {};
+
+    const allTemplates = useEventStore.getState().getTemplatesByCategory(EventCategory.MATCH);
+
+    const resolveEvent = (slugPrefix: string, playerName: string): { text: string; delta: number } => {
+      const matches = allTemplates.filter((t) => t.slug.startsWith(slugPrefix));
+      if (matches.length > 0) {
+        const template = matches[Math.floor(Math.random() * matches.length)];
+        const text = template.bodyTemplate
+          .replace('{player}', playerName)
+          .replace('{player_1}', playerName);
+        const statChange = template.impacts.stat_changes?.find((s) => s.field === 'morale');
+        const delta = statChange
+          ? (statChange.operator === StatOperator.SUBTRACT ? -statChange.value : statChange.value)
+          : 0;
+        return { text, delta };
+      }
+      // Fallback
+      const fallback = FALLBACK_MATCH_TEMPLATES[slugPrefix];
+      const text = fallback.texts[Math.floor(Math.random() * fallback.texts.length)]
+        .replace('{player}', playerName)
+        .replace('{player_1}', playerName);
+      return { text, delta: fallback.moraleDelta };
+    };
+
+    for (const p of players) {
+      const name = p.player.name;
+      const id   = p.player.id;
+
+      // Goals — one event per goal
+      for (let g = 0; g < p.goal; g++) {
+        const { text, delta } = resolveEvent('match_goal', name);
+        events.push(text);
+        moraleDeltas[id] = (moraleDeltas[id] ?? 0) + delta;
+      }
+
+      // Assists — one event per assist
+      for (let a = 0; a < p.assist; a++) {
+        const { text, delta } = resolveEvent('match_assist', name);
+        events.push(text);
+        moraleDeltas[id] = (moraleDeltas[id] ?? 0) + delta;
+      }
+
+      // Standout positive — one event max
+      if (p.rating >= 8.0) {
+        const { text, delta } = resolveEvent('match_performance_high', name);
+        events.push(text);
+        moraleDeltas[id] = (moraleDeltas[id] ?? 0) + delta;
+      }
+
+      // Standout negative — one event max
+      if (p.rating <= 4.5) {
+        const { text, delta } = resolveEvent('match_performance_low', name);
+        events.push(text);
+        moraleDeltas[id] = (moraleDeltas[id] ?? 0) + delta;
+      }
+    }
+
+    return { events, moraleDeltas };
   }
 
   /**

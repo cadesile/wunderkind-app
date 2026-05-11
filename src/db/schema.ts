@@ -64,9 +64,26 @@ CREATE TABLE IF NOT EXISTS match_results (
   away_avg_rating REAL,
   home_players    TEXT NOT NULL,
   away_players    TEXT NOT NULL,
+  events          TEXT NOT NULL DEFAULT '[]',
   played_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_mr_season    ON match_results(season);
 CREATE INDEX IF NOT EXISTS idx_mr_home_club ON match_results(home_club_id);
 CREATE INDEX IF NOT EXISTS idx_mr_away_club ON match_results(away_club_id);
+
+CREATE TABLE IF NOT EXISTS world_clubs (
+  id        TEXT PRIMARY KEY,
+  league_id TEXT NOT NULL,
+  data      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wc_league ON world_clubs(league_id);
 `;
+
+/**
+ * Additive migrations — run once on every app open, each in its own try-catch.
+ * Safe to apply repeatedly; SQLite will throw "duplicate column name" if the
+ * column already exists, which the caller silently ignores.
+ */
+export const MIGRATIONS: string[] = [
+  `ALTER TABLE match_results ADD COLUMN events TEXT NOT NULL DEFAULT '[]'`,
+];

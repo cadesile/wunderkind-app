@@ -14,6 +14,7 @@ interface RawRow {
   away_avg_rating: number | null;
   home_players: string; // JSON array of PlayerMatchStats
   away_players: string; // JSON array of PlayerMatchStats
+  events: string;       // JSON array of strings
   played_at: string;
 }
 
@@ -29,6 +30,7 @@ function rowToRecord(row: RawRow): MatchResultRecord {
     awayAvgRating: row.away_avg_rating ?? 0,
     homePlayers: safeParseJson<PlayerMatchStats[]>(row.home_players, []),
     awayPlayers: safeParseJson<PlayerMatchStats[]>(row.away_players, []),
+    events: safeParseJson<string[]>(row.events ?? '[]', []),
     playedAt: row.played_at,
   };
 }
@@ -53,8 +55,8 @@ export async function batchInsertResults(
       await db.runAsync(
         `INSERT OR IGNORE INTO match_results
            (fixture_id, season, home_club_id, away_club_id, home_goals, away_goals,
-            home_avg_rating, away_avg_rating, home_players, away_players, played_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            home_avg_rating, away_avg_rating, home_players, away_players, events, played_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           r.fixtureId,
           r.season,
@@ -66,6 +68,7 @@ export async function batchInsertResults(
           r.awayAvgRating ?? null,
           JSON.stringify(r.homePlayers ?? []),
           JSON.stringify(r.awayPlayers ?? []),
+          JSON.stringify(r.events ?? []),
           r.playedAt,
         ],
       );

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, Pressable, FlatList, Alert } from 'react-native';
+import { View, ScrollView, Pressable, FlatList, Alert, DevSettings } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
@@ -178,6 +178,24 @@ export default function DebugScreen() {
   const fetchArchetypes = useArchetypeStore((s) => s.fetchArchetypes);
   const [selected, setSelected] = useState<DebugLogEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const db = SQLite.useSQLiteContext();
+
+  const handleDbStats = useCallback(async () => {
+    try {
+      const tables = ['appearances', 'player_season_stats', 'fixtures', 'match_results', 'world_clubs'];
+      const lines: string[] = [];
+      for (const t of tables) {
+        const row = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) AS n FROM "${t}"`);
+        lines.push(`${t}: ${row?.n ?? '?'}`);
+      }
+      const sample = await db.getFirstAsync<{ fixture_id: string }>(`SELECT fixture_id FROM match_results LIMIT 1`);
+      lines.push('');
+      lines.push(`sample id: ${sample?.fixture_id ?? 'none'}`);
+      Alert.alert('SQLite Row Counts', lines.join('\n'));
+    } catch (e: any) {
+      Alert.alert('DB Stats Error', String(e?.message ?? e));
+    }
+  }, [db]);
 
   const handleNuke = useCallback(() => {
     Alert.alert(
@@ -189,14 +207,24 @@ export default function DebugScreen() {
           text: 'NUKE',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.clear();
-            await SQLite.deleteDatabaseAsync('wk.db');
-            await Updates.reloadAsync();
+            try {
+              await AsyncStorage.clear();
+              try { await db.closeAsync(); } catch { /* already closed */ }
+              try { await SQLite.deleteDatabaseAsync('wk.db'); } catch { /* ignore */ }
+              try {
+                await Updates.reloadAsync();
+              } catch {
+                // expo-updates not available in dev — fall back to DevSettings
+                DevSettings.reload();
+              }
+            } catch (e: any) {
+              Alert.alert('Nuke failed', String(e?.message ?? e));
+            }
           },
         },
       ],
     );
-  }, []);
+  }, [db]);
 
   const handleRefreshNarrative = useCallback(async () => {
     setRefreshing(true);
@@ -234,8 +262,22 @@ export default function DebugScreen() {
         borderBottomColor: WK.border,
         gap: 10,
       }}>
-        <PixelText size={9} upper style={{ flex: 1 }}>Debug Log</PixelText>
-        <BodyText size={11} color={WK.dim}>{entries.length} entries</BodyText>
+        <View>
+          <PixelText size={9} upper style={{ flex: 1 }}>Debug Log</PixelText>
+          <BodyText size={11} color={WK.dim}>{entries.length} entries</BodyText>
+        </View>
+        <Pressable
+          onPress={handleDbStats}
+          style={[{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: WK.tealCard,
+            borderWidth: 2,
+            borderColor: WK.border,
+          }, pixelShadow]}
+        >
+          <PixelText size={8} color={WK.tealLight}>DB</PixelText>
+        </Pressable>
         <Pressable
           onPress={handleRefreshNarrative}
           disabled={refreshing}

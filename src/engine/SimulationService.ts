@@ -104,8 +104,20 @@ class SimulationService {
         const awayTeam = this.getSimTeam(fixture.awayClubId, worldClubs, userClub, userSquad);
 
         if (homeTeam && awayTeam) {
-          const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix, styleInfluence);
+          // AMP detection must precede simulate() so we can gate generateEvents
+          const ampIsHome = fixture.homeClubId === userClub.id;
+          const ampIsAway = fixture.awayClubId === userClub.id;
+
+          const ampSide: 'home' | 'away' | false = ampIsHome ? 'home' : ampIsAway ? 'away' : false;
+          const result = ResultsEngine.simulate(homeTeam, awayTeam, tacticalMatrix, styleInfluence, ampSide);
           const playedAt = new Date().toISOString();
+
+          // Apply morale deltas from match events to AMP squad
+          if (ampSide && Object.keys(result.moraleDeltas).length > 0) {
+            for (const [playerId, delta] of Object.entries(result.moraleDeltas)) {
+              useSquadStore.getState().updateMorale(playerId, delta);
+            }
+          }
 
           // ── Collect fixture result (flushed in batch below) ────────────────
           fixtureResultEntries.push({
@@ -140,10 +152,6 @@ class SimulationService {
           const homePlayers = serializePerf(result.homePerformance);
           const awayPlayers = serializePerf(result.awayPerformance);
 
-          // Hoist AMP detection so it's available for stats + appearance gating below
-          const ampIsHome = fixture.homeClubId === userClub.id;
-          const ampIsAway = fixture.awayClubId === userClub.id;
-
           // ── Collect match result record (flushed in batch below) ───────────
           matchResultEntries.push({
             fixtureId:      fixture.id,
@@ -156,6 +164,7 @@ class SimulationService {
             awayAvgRating:  result.awayPerformance.averageRating,
             homePlayers,
             awayPlayers,
+            events:         result.events,
             playedAt,
           });
 

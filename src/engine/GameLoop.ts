@@ -317,6 +317,37 @@ export function processWeeklyTick(): WeeklyTick {
     );
   });
 
+  // Facility-driven personality growth — nudge active players toward 20 on relevant traits
+  const facilityTraitNudges: Partial<PersonalityMatrix> = {
+    determination:   facilityEffects.determinationGrowthTotal,
+    professionalism: facilityEffects.professionalismGrowthTotal,
+    ambition:        facilityEffects.ambitionGrowthTotal,
+    loyalty:         facilityEffects.loyaltyGrowthTotal,
+    adaptability:    facilityEffects.adaptabilityGrowthTotal,
+    pressure:        facilityEffects.pressureGrowthTotal,
+    temperament:     facilityEffects.temperamentGrowthTotal,
+    consistency:     facilityEffects.consistencyGrowthTotal,
+  };
+  const traitNudgeEntries = (Object.entries(facilityTraitNudges) as [keyof PersonalityMatrix, number][])
+    .filter(([, v]) => v > 0);
+  if (traitNudgeEntries.length > 0) {
+    players.forEach((player) => {
+      if (!player.isActive) return;
+      const nudges: Partial<PersonalityMatrix> = {};
+      for (const [trait, delta] of traitNudgeEntries) {
+        if (player.personality[trait] < 20) nudges[trait] = delta;
+      }
+      if (Object.keys(nudges).length > 0) {
+        const existing = traitShifts[player.id] ?? {};
+        const merged: Partial<PersonalityMatrix> = { ...existing };
+        for (const [trait, delta] of Object.entries(nudges) as [keyof PersonalityMatrix, number][]) {
+          merged[trait] = (merged[trait] ?? 0) + delta;
+        }
+        traitShifts[player.id] = merged;
+      }
+    });
+  }
+
   // Trait shifts are applied later alongside development updates (single set() call).
 
   // ── 3b. Injury rolls ──────────────────────────────────────────────────────────

@@ -24,6 +24,11 @@ export interface WorldPlayer {
   appearances?: PlayerAppearances;
   /** Weekly wage in pence from the backend. Server-authoritative. */
   contractValue?: number;
+  /** Physical measurements — nested shape sent by backend */
+  physical?: { height: number; weight: number };
+  /** Flat aliases — fallback if backend sends flat instead of nested */
+  height?: number;
+  weight?: number;
   /** ID of the NPC club this player belongs to, or null if unassigned. Updated by MarketEngine. */
   npcClubId: string | null;
 }

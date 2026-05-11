@@ -6,7 +6,7 @@ enableScreens();
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SQLiteProvider } from 'expo-sqlite';
-import { CREATE_SCHEMA } from '@/db/schema';
+import { CREATE_SCHEMA, MIGRATIONS } from '@/db/schema';
 import { setDatabase } from '@/db/client';
 import { queryClient } from '@/api/queryClient';
 import { StatusBar } from 'expo-status-bar';
@@ -204,6 +204,9 @@ export default function RootLayout() {
       databaseName="wk.db"
       onInit={async (db) => {
         await db.execAsync(CREATE_SCHEMA);
+        for (const migration of MIGRATIONS) {
+          try { await db.execAsync(migration); } catch { /* column already exists */ }
+        }
         setDatabase(db);
       }}
     >

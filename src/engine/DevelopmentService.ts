@@ -55,8 +55,7 @@ export function computeCoachPerformanceScore(coach: Coach): number {
 function calcGains(
   player: Player,
   assignedCoach: Coach | null,
-  techGrowthBonus: number,
-  powerGrowthBonus: number,
+  facilityEffects: FacilityEffects,
   weekNumber: number,
 ): Partial<PlayerAttributes> {
   const cap = attrCap(player.potential);
@@ -64,7 +63,15 @@ function calcGains(
     pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
   };
 
-  const facilityMod = 1 + techGrowthBonus;
+  const attrGrowthBonus: Record<AttributeName, number> = {
+    pace:      facilityEffects.paceGrowthMultiplierTotal,
+    technical: facilityEffects.technicalGrowthMultiplierTotal,
+    vision:    facilityEffects.visionGrowthMultiplierTotal,
+    power:     facilityEffects.powerGrowthMultiplierTotal,
+    stamina:   facilityEffects.staminaGrowthMultiplierTotal,
+    heart:     facilityEffects.heartGrowthMultiplierTotal,
+  };
+
   const am = ageMod(player.age);
   const det = player.personality.determination;
   const personalityMod = 1 + (det / 20) * 0.3; // 1.0–1.3
@@ -93,6 +100,9 @@ function calcGains(
 
     const baseGrowth = 0.3 + Math.random() * 0.5; // 0.3–0.8
 
+    // Per-attribute facility multiplier (1.0 when no relevant facility is built)
+    const facilityMod = 1 + attrGrowthBonus[attr];
+
     // Coach specialism bonus: only if coach is assigned
     const coachBonus = assignedCoach
       ? (assignedCoach.specialisms?.[attr] ?? 0) / 100 * 0.4 * (coachScore / assignedCoach.influence)
@@ -101,14 +111,9 @@ function calcGains(
     // Focus bonus: +10% on the prioritised attribute
     const focusBonus = focusActive && focus!.attribute === attr ? 0.1 : 0;
 
-    // Strength Suite bonus for power/stamina via powerGrowthMultiplierPerLevel
-    const strengthBonus = (attr === 'power' || attr === 'stamina')
-      ? 1 + powerGrowthBonus
-      : 1;
-
     const rawGain =
       (baseGrowth * facilityMod * am * personalityMod + coachBonus) *
-      (1 + focusBonus) * strengthBonus;
+      (1 + focusBonus);
 
     // Global development rate scalar — single control knob for overall pace
     const scaledGain = rawGain * 0.2;
@@ -207,8 +212,6 @@ export function computePlayerDevelopment(
   facilityEffects: FacilityEffects,
   weekNumber: number,
 ): Record<string, PlayerDevelopmentUpdate> {
-  const techGrowthBonus  = facilityEffects.technicalGrowthMultiplierTotal;
-  const powerGrowthBonus = facilityEffects.powerGrowthMultiplierTotal;
   const devUpdates: Record<string, PlayerDevelopmentUpdate> = {};
   const highlights: { id: string; name: string; attr: string; newVal: number }[] = [];
 
@@ -226,7 +229,7 @@ export function computePlayerDevelopment(
       pace: player.overallRating, technical: player.overallRating, vision: player.overallRating, power: player.overallRating, stamina: player.overallRating, heart: player.overallRating,
     };
 
-    const gains = calcGains(player, assignedCoach, techGrowthBonus, powerGrowthBonus, weekNumber);
+    const gains = calcGains(player, assignedCoach, facilityEffects, weekNumber);
 
     const updated: PlayerAttributes = { ...currentAttrs };
     ATTRIBUTE_NAMES.forEach((attr) => {

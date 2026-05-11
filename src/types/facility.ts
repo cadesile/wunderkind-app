@@ -30,9 +30,16 @@ export interface FacilityTemplate {
   /**
    * Per-level gameplay effect deltas applied during the weekly tick.
    * Each value is multiplied by the facility's effective level (level × condition/100).
-   * Keys: xpMultiplierPerLevel, technicalGrowthMultiplierPerLevel, powerGrowthMultiplierPerLevel,
-   *       injuryProbabilityDeltaPerLevel, injuryRecoveryWeeksDeltaPerLevel,
-   *       scoutErrorRangeDeltaPerLevel, scoutRevealWeeksDeltaPerLevel, cohesionBonusPerLevel
+   * Attribute growth multipliers (per-level, multiplicative): xpMultiplierPerLevel,
+   *   technicalGrowthMultiplierPerLevel, powerGrowthMultiplierPerLevel,
+   *   paceGrowthMultiplierPerLevel, visionGrowthMultiplierPerLevel,
+   *   staminaGrowthMultiplierPerLevel, heartGrowthMultiplierPerLevel
+   * Other gameplay effects: injuryProbabilityDeltaPerLevel, injuryRecoveryWeeksDeltaPerLevel,
+   *   scoutErrorRangeDeltaPerLevel, scoutRevealWeeksDeltaPerLevel, cohesionBonusPerLevel
+   * Personality trait growth (per-level, flat weekly gain): determinationGrowthPerLevel,
+   *   professionalismGrowthPerLevel, ambitionGrowthPerLevel, loyaltyGrowthPerLevel,
+   *   adaptabilityGrowthPerLevel, pressureGrowthPerLevel, temperamentGrowthPerLevel,
+   *   consistencyGrowthPerLevel
    */
   gameplayEffects?: Record<string, number>;
 }

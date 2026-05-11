@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // kept for one-time upgrade migration only
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { zustandStorage } from '@/utils/storage';
@@ -12,21 +12,11 @@ import { penceToPounds } from '@/utils/currency';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { ClubSnapshot, LeagueSnapshot } from '@/types/api';
+import { getDatabase } from '@/db/client';
+import { upsertClub, upsertClubs, loadAllClubs } from '@/db/repositories/worldClubRepository';
 
-const CLUBS_KEY_PREFIX = 'worldStore_clubs_';
-
-/** Strip appearance history from WorldPlayer objects before writing to AsyncStorage.
- *  Appearances are stored in per-player/club/season keys via appearanceStorage.ts. */
-function stripClubMapAppearances(map: Record<string, WorldClub>): Record<string, WorldClub> {
-  const stripped: Record<string, WorldClub> = {};
-  for (const [id, club] of Object.entries(map)) {
-    stripped[id] = {
-      ...club,
-      players: club.players.map(({ appearances: _a, ...p }) => p as WorldPlayer),
-    };
-  }
-  return stripped;
-}
+/** Prefix used by the old AsyncStorage club storage — used for migration only. */
+const LEGACY_CLUBS_KEY_PREFIX = 'worldStore_clubs_';
 
 const VALID_REPUTATION_TIERS = ['local', 'regional', 'national', 'elite'] as const;
 
@@ -112,7 +102,7 @@ export const useWorldStore = create<WorldState>()(
             clubIds,
           });
 
-          const leagueClubMap: Record<string, WorldClub> = {};
+          const builtClubs: WorldClub[] = [];
           for (const club of leagueData.clubs) {
             const builtClub: WorldClub = {
               ...club,
@@ -128,23 +118,10 @@ export const useWorldStore = create<WorldState>()(
               })),
             };
             clubs[builtClub.id] = builtClub;
-            leagueClubMap[builtClub.id] = builtClub;
+            builtClubs.push(builtClub);
           }
 
-          const key = `${CLUBS_KEY_PREFIX}${leagueData.id}`;
-          await AsyncStorage.setItem(key, JSON.stringify(stripClubMapAppearances(leagueClubMap)));
-
-          // Verify the write round-tripped successfully (only when we had clubs to persist)
-          if (leagueData.clubs.length > 0) {
-            const verification = await AsyncStorage.getItem(key);
-            if (!verification) {
-              throw new Error(`WorldStore: storage write did not persist for league ${leagueData.id}`);
-            }
-            const parsed = JSON.parse(verification) as Record<string, WorldClub>;
-            if (Object.keys(parsed).length === 0) {
-              throw new Error(`WorldStore: persisted club map is empty for league ${leagueData.id}`);
-            }
-          }
+          await upsertClubs(getDatabase(), leagueData.id, builtClubs);
         }
 
         // Find the bottom league for the AMP's country (highest tier number = lowest prestige).
@@ -252,26 +229,28 @@ export const useWorldStore = create<WorldState>()(
       },
 
       loadClubs: async () => {
-        const { leagues } = get();
-        if (leagues.length === 0) return;
-        const clubs: Record<string, WorldClub> = {};
-        const errors: string[] = [];
-        for (const league of leagues) {
-          const raw = await AsyncStorage.getItem(`${CLUBS_KEY_PREFIX}${league.id}`);
-          if (raw) {
+        const db = getDatabase();
+        let clubs = await loadAllClubs(db);
+
+        // One-time migration: if SQLite is empty but old AsyncStorage data exists,
+        // migrate each league's clubs into SQLite then remove the legacy keys.
+        if (Object.keys(clubs).length === 0 && get().isInitialized) {
+          const { leagues } = get();
+          for (const league of leagues) {
+            const raw = await AsyncStorage.getItem(`${LEGACY_CLUBS_KEY_PREFIX}${league.id}`);
+            if (!raw) continue;
             try {
               const leagueClubs = JSON.parse(raw) as Record<string, WorldClub>;
-              Object.assign(clubs, leagueClubs);
+              await upsertClubs(db, league.id, Object.values(leagueClubs));
+              await AsyncStorage.removeItem(`${LEGACY_CLUBS_KEY_PREFIX}${league.id}`);
             } catch (e) {
-              console.warn(`[WorldStore] Failed to parse clubs for league ${league.id}:`, e);
-              errors.push(`league ${league.id}: ${String(e)}`);
+              console.warn(`[WorldStore] Migration failed for league ${league.id}:`, e);
             }
           }
+          clubs = await loadAllClubs(db);
         }
-        set({
-          clubs,
-          clubsLoadError: errors.length > 0 ? errors.join('; ') : null,
-        });
+
+        set({ clubs, clubsLoadError: null });
       },
 
       getClub: (clubId) => get().clubs[clubId],
@@ -327,18 +306,13 @@ export const useWorldStore = create<WorldState>()(
           }
         }
 
-        // Persist ALL leagues to AsyncStorage — directly follow the backend's assignment.
+        // Persist ALL leagues to SQLite — directly follow the backend's assignment.
         // No dirty-tracking: every league gets its authoritative club map written.
+        const db = getDatabase();
         for (const l of responseLeagues) {
           const npcClubIds = l.clubs.filter((c) => !c.isAmp).map((c) => c.clubId);
-          const leagueClubMap: Record<string, WorldClub> = {};
-          for (const id of npcClubIds) {
-            if (updatedClubs[id]) leagueClubMap[id] = updatedClubs[id];
-          }
-          await AsyncStorage.setItem(
-            `${CLUBS_KEY_PREFIX}${l.id}`,
-            JSON.stringify(stripClubMapAppearances(leagueClubMap)),
-          );
+          const leagueClubs = npcClubIds.flatMap((id) => (updatedClubs[id] ? [updatedClubs[id]] : []));
+          await upsertClubs(db, l.id, leagueClubs);
         }
 
         set({
@@ -354,23 +328,11 @@ export const useWorldStore = create<WorldState>()(
         if (!club) return;
 
         const updatedClub = { ...club, players: updatedPlayers };
-
-        // Update in-memory map
         set((s) => ({ clubs: { ...s.clubs, [clubId]: updatedClub } }));
 
-        // Find which league this club belongs to and re-persist that league's clubs
         const leagueId = leagues.find((l) => l.clubIds.includes(clubId))?.id;
         if (!leagueId) return;
-
-        const allLeagueClubs = get().getLeagueClubs(leagueId);
-        const leagueClubMap: Record<string, WorldClub> = {};
-        for (const c of allLeagueClubs) {
-          leagueClubMap[c.id] = c.id === clubId ? updatedClub : c;
-        }
-        await AsyncStorage.setItem(
-          `${CLUBS_KEY_PREFIX}${leagueId}`,
-          JSON.stringify(stripClubMapAppearances(leagueClubMap)),
-        );
+        await upsertClub(getDatabase(), updatedClub, leagueId);
       },
 
       addTrophyToClub: async (clubId, trophy) => {
@@ -379,23 +341,11 @@ export const useWorldStore = create<WorldState>()(
         if (!club) return;
 
         const updatedClub = { ...club, trophies: [...(club.trophies ?? []), trophy] };
-
-        // Update in-memory map
         set((s) => ({ clubs: { ...s.clubs, [clubId]: updatedClub } }));
 
-        // Find which league this club belongs to and re-persist that league's clubs
         const leagueId = leagues.find((l) => l.clubIds.includes(clubId))?.id;
         if (!leagueId) return;
-
-        const allLeagueClubs = get().getLeagueClubs(leagueId);
-        const leagueClubMap: Record<string, WorldClub> = {};
-        for (const c of allLeagueClubs) {
-          leagueClubMap[c.id] = c.id === clubId ? updatedClub : c;
-        }
-        await AsyncStorage.setItem(
-          `${CLUBS_KEY_PREFIX}${leagueId}`,
-          JSON.stringify(stripClubMapAppearances(leagueClubMap)),
-        );
+        await upsertClub(getDatabase(), updatedClub, leagueId);
       },
 
     }),

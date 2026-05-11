@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { SyncDebugLog, SyncFsDirectoryEntry } from '@/types/api';
+import type { SyncDebugLog, SyncFsDirectoryEntry, SyncSqliteTableEntry } from '@/types/api';
+import { getDatabase } from '@/db/client';
 
 interface KeySizeEntry {
   key: string;
@@ -155,7 +156,8 @@ async function scanFileSystemDirs(): Promise<{ directories: SyncFsDirectoryEntry
 export async function collectDebugLog(tickStartMs: number): Promise<SyncDebugLog> {
   const tickDurationMs = Date.now() - tickStartMs;
 
-  const [sqliteResult, fsResult] = await Promise.allSettled([
+  const [asyncStorageResult, sqliteResult, fsResult] = await Promise.allSettled([
+    // AsyncStorage key-value stats
     (async () => {
       const allKeys = (await AsyncStorage.getAllKeys()) as string[];
       const pairs   = await AsyncStorage.multiGet(allKeys);
@@ -177,12 +179,37 @@ export async function collectDebugLog(tickStartMs: number): Promise<SyncDebugLog
         playerAppKeyCount:   allKeys.filter((k) => k.startsWith('player_app:')).length,
       };
     })(),
+    // SQLite DB file size + per-table row counts
+    (async () => {
+      const dbPath = `${FileSystem.documentDirectory}SQLite/wk.db`;
+      const fileInfo = await FileSystem.getInfoAsync(dbPath);
+      const fileSizeKb = fileInfo.exists && !fileInfo.isDirectory
+        ? Math.round((fileInfo.size ?? 0) / 1024 * 10) / 10
+        : -1;
+
+      const db = getDatabase();
+      const tableRows = await db.getAllAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
+      );
+      const tables: SyncSqliteTableEntry[] = await Promise.all(
+        tableRows.map(async ({ name }) => {
+          const row = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) AS n FROM "${name}"`);
+          return { name, rowCount: row?.n ?? 0 };
+        }),
+      );
+
+      return { fileSizeKb, tables };
+    })(),
     scanFileSystemDirs(),
   ]);
 
+  const asyncStorage = asyncStorageResult.status === 'fulfilled'
+    ? asyncStorageResult.value
+    : { totalKb: -1, keyCount: -1, topKeys: [], leagueStatsKeyCount: -1, playerAppKeyCount: -1 };
+
   const sqlite = sqliteResult.status === 'fulfilled'
     ? sqliteResult.value
-    : { totalKb: -1, keyCount: -1, topKeys: [], leagueStatsKeyCount: -1, playerAppKeyCount: -1 };
+    : { fileSizeKb: -1, tables: [] };
 
   const fileSystem = fsResult.status === 'fulfilled'
     ? fsResult.value
@@ -192,6 +219,6 @@ export async function collectDebugLog(tickStartMs: number): Promise<SyncDebugLog
     capturedAt:    new Date().toISOString(),
     platform:      Platform.OS,
     tickDurationMs,
-    storage:       { sqlite, fileSystem },
+    storage:       { asyncStorage, sqlite, fileSystem },
   };
 }

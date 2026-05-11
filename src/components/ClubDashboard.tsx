@@ -13,6 +13,7 @@ import useClubMetrics from '@/hooks/useClubMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
+import { useMatchResult } from '@/hooks/db/useMatchResult';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -660,10 +661,12 @@ export function ClubDashboard() {
     [allFixtures, overlayFixtureId],
   );
 
+  const { data: overlayMatchResult = null } = useMatchResult(overlayFixtureId ?? '');
+
   const overlayData = useMemo(() => {
     if (!overlayFixture) return null;
-    return buildMatchResultData(overlayFixture, club.id, club.name, dashboardClubNameMap, {});
-  }, [overlayFixture, club.id, club.name, dashboardClubNameMap]);
+    return buildMatchResultData(overlayFixture, club.id, club.name, dashboardClubNameMap, overlayMatchResult);
+  }, [overlayFixture, club.id, club.name, dashboardClubNameMap, overlayMatchResult]);
 
   const crownJewelArchetype = crownJewel
     ? getArchetypeForPlayer(crownJewel, archetypes)

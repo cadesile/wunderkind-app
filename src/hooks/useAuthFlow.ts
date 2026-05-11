@@ -128,6 +128,8 @@ function worldPlayerToPlayer(wp: WorldPlayer, weekNumber: number): Player {
       stamina:   wp.stamina,
       heart:     wp.heart,
     },
+    height: wp.physical?.height ?? wp.height,
+    weight: wp.physical?.weight ?? wp.weight,
   } as Player;
 }
 
@@ -452,8 +454,36 @@ export function useAuthFlow(): AuthFlowResult {
 
     setPlayers(players);
     backfillGuardians(players);
-    for (const coach of assignedCoaches) { addCoach(coach); }
+
+    // Apply default automation flags for DOF and Facility Manager on first load
+    let hasDof = false;
+    let hasFacilityManager = false;
+    for (const coach of assignedCoaches) {
+      if (coach.role === 'director_of_football') {
+        hasDof = true;
+        addCoach({
+          ...coach,
+          dofAutoRenewContracts: true,
+          dofAutoAssignScouts:   true,
+          dofAutoSignPlayers:    true,
+          // dofAutoSellPlayers intentionally left false
+        });
+      } else if (coach.role === 'facility_manager') {
+        hasFacilityManager = true;
+        addCoach({ ...coach, facilityManagerAutoRepair: true });
+      } else {
+        addCoach(coach);
+      }
+    }
     for (const scout of assignedScouts)  { addScout(scout); }
+
+    // Default stadium name
+    useClubStore.getState().setStadiumName(`${clubName} Stadium`);
+
+    // Default pricing to DOF suggestions (Local tier, neutral fan morale)
+    if (hasDof) {
+      useClubStore.getState().updatePricing({ ticketPrice: 1500, shirtPrice: 2500, foodDrinksPrice: 500 });
+    }
 
     // 7. Apply sponsor/investor assignments
     setSponsorIds(sponsorIds);

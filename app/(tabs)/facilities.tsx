@@ -15,6 +15,8 @@ import { useMarketStore } from '@/stores/marketStore';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
+import { useDofScoutingConfigStore } from '@/stores/dofScoutingConfigStore';
+import type { ScoutPosition, ScoutTargetType } from '@/stores/dofScoutingConfigStore';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { Button } from '@/components/ui/Button';
@@ -79,6 +81,85 @@ function conditionColor(pct: number): string {
   if (pct >= 60) return WK.tealLight;
   if (pct >= 30) return WK.orange;
   return WK.red;
+}
+
+// ─── Scouting Config Card (DOF) ───────────────────────────────────────────────
+
+const SCOUT_POSITIONS: ScoutPosition[] = ['GK', 'DEF', 'MID', 'FWD'];
+const TARGET_TYPE_OPTIONS: { id: ScoutTargetType; label: string; desc: string }[] = [
+  { id: 'FIRST_TEAM',    label: 'FIRST TEAM',    desc: 'Better than top 3 players' },
+  { id: 'SQUAD_PLAYER',  label: 'SQUAD PLAYER',  desc: 'Better than bottom 50%' },
+  { id: 'NO_RESTRICTION', label: 'NO RESTRICTION', desc: 'Sign whoever the manager wants' },
+];
+
+function ScoutingConfigCard() {
+  const { config, togglePosition, setTargetType } = useDofScoutingConfigStore();
+
+  return (
+    <View style={{
+      backgroundColor: WK.tealCard,
+      borderWidth: 3,
+      borderColor: WK.yellow,
+      padding: 12,
+      marginBottom: 10,
+      ...pixelShadow,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <PixelText size={8} color={WK.yellow}>DOF SCOUTING CONFIG</PixelText>
+      </View>
+
+      {/* Position multi-select */}
+      <BodyText size={11} dim style={{ marginBottom: 6 }}>POSITION</BodyText>
+      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14 }}>
+        {SCOUT_POSITIONS.map((pos) => {
+          const active = config.positions.includes(pos);
+          return (
+            <Pressable
+              key={pos}
+              onPress={() => { hapticTap(); togglePosition(pos); }}
+              style={{
+                flex: 1,
+                paddingVertical: 8,
+                alignItems: 'center',
+                backgroundColor: active ? WK.yellow : WK.tealMid,
+                borderWidth: 2,
+                borderColor: active ? WK.yellow : WK.border,
+              }}
+            >
+              <PixelText size={8} color={active ? WK.border : WK.dim}>{pos}</PixelText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Target type single-select */}
+      <BodyText size={11} dim style={{ marginBottom: 6 }}>TYPE</BodyText>
+      <View style={{ gap: 6 }}>
+        {TARGET_TYPE_OPTIONS.map((opt) => {
+          const active = config.targetType === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              onPress={() => { hapticTap(); setTargetType(opt.id); }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                backgroundColor: active ? WK.yellow : WK.tealMid,
+                borderWidth: 2,
+                borderColor: active ? WK.yellow : WK.border,
+              }}
+            >
+              <PixelText size={8} color={active ? WK.border : WK.text}>{opt.label}</PixelText>
+              <BodyText size={11} color={active ? WK.tealDark : WK.dim}>{opt.desc}</BodyText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 // ─── Facility card ────────────────────────────────────────────────────────────
@@ -733,6 +814,7 @@ export default function FacilitiesScreen() {
   const club = useClubStore((s) => s.club);
   const coaches = useCoachStore((s) => s.coaches);
   const facilityManager = coaches.find((c) => c.role === 'facility_manager') ?? null;
+  const dof = coaches.find((c) => c.role === 'director_of_football') ?? null;
   const [activeTab, setActiveTab] = useState<FacilitiesTab>('TRAINING');
   const [selectedRole, setSelectedRole] = useState<string>('ALL');
 
@@ -792,6 +874,9 @@ export default function FacilitiesScreen() {
         <HirePane selectedRole={selectedRole} setSelectedRole={setSelectedRole} />
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, marginTop: 10, paddingBottom: FAB_CLEARANCE }}>
+          {activeTab === 'SCOUTING' && dof?.dofAutoAssignScouts && (
+            <ScoutingConfigCard />
+          )}
           {visibleTemplates.map((template) => (
             <FacilityCard
               key={template.slug}

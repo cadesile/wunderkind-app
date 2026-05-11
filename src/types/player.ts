@@ -123,6 +123,10 @@ export interface Player {
   /** Transfer market value in pence — recalculated each weekly tick by MarketEngine */
   transferValue?: number;
   personality: PersonalityMatrix;
+  /** Height in centimetres — generated server-side, read-only on client */
+  height?: number;
+  /** Weight in kilograms — generated server-side, read-only on client */
+  weight?: number;
   /** Club tier this player belongs to — from backend ('local'|'regional'|'national'|'elite') */
   tier?: import('./club').ClubTier;
   /** Deterministic visual appearance generated from id. Optional for backward compat. */
