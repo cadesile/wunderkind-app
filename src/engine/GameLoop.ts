@@ -498,27 +498,33 @@ export function processWeeklyTick(): WeeklyTick {
       }
 
       if (weeksRemaining === 12) {
-        addMessage({
-          id: `staff-warn-12-${staff.id}-wk${weekNumber}`,
-          type: 'system',
-          week: weekNumber,
-          subject: 'Staff Contract Expiring Soon',
-          body: `${staff.name}'s contract ends in 12 weeks. Renew it from the staff screen or they will leave the club.`,
-          isRead: false,
-          entityId: staff.id,
-        });
+        const warnId12 = `staff-warn-12-${staff.id}-wk${weekNumber}`;
+        if (!useInboxStore.getState().messages.some((m) => m.id === warnId12)) {
+          addMessage({
+            id: warnId12,
+            type: 'system',
+            week: weekNumber,
+            subject: 'Staff Contract Expiring Soon',
+            body: `${staff.name}'s contract ends in 12 weeks. Renew it from the staff screen or they will leave the club.`,
+            isRead: false,
+            entityId: staff.id,
+          });
+        }
       }
 
       if (weeksRemaining === 4) {
-        addMessage({
-          id: `staff-warn-4-${staff.id}-wk${weekNumber}`,
-          type: 'system',
-          week: weekNumber,
-          subject: 'Staff Contract Ending — Final Notice',
-          body: `${staff.name}'s contract ends in 4 weeks. Their morale is suffering. Act now or they will leave.`,
-          isRead: false,
-          entityId: staff.id,
-        });
+        const warnId4 = `staff-warn-4-${staff.id}-wk${weekNumber}`;
+        if (!useInboxStore.getState().messages.some((m) => m.id === warnId4)) {
+          addMessage({
+            id: warnId4,
+            type: 'system',
+            week: weekNumber,
+            subject: 'Staff Contract Ending — Final Notice',
+            body: `${staff.name}'s contract ends in 4 weeks. Their morale is suffering. Act now or they will leave.`,
+            isRead: false,
+            entityId: staff.id,
+          });
+        }
       }
     }
   }
