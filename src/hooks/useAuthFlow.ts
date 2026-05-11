@@ -449,7 +449,10 @@ export function useAuthFlow(): AuthFlowResult {
 
       console.log(`[useAuthFlow] World initialized: ${players.length}p / ${assignedCoaches.length}c / ${assignedScouts.length}s`);
     } catch (err) {
-      console.error('[useAuthFlow] World initialization failed — squad will be empty:', err);
+      const detail = err instanceof ApiError
+        ? `HTTP ${err.status}: ${err.message}`
+        : String(err);
+      console.error('[useAuthFlow] World initialization failed — squad will be empty:', detail);
     }
 
     setPlayers(players);
@@ -459,23 +462,26 @@ export function useAuthFlow(): AuthFlowResult {
     let hasDof = false;
     let hasFacilityManager = false;
     for (const coach of assignedCoaches) {
+      const contractFields = { contractEndWeek: weekNumber + 104, initialContractWeeks: 104 };
       if (coach.role === 'director_of_football') {
         hasDof = true;
         addCoach({
           ...coach,
+          ...contractFields,
           dofAutoRenewContracts: true,
           dofAutoAssignScouts:   true,
           dofAutoSignPlayers:    true,
-          // dofAutoSellPlayers intentionally left false
         });
       } else if (coach.role === 'facility_manager') {
         hasFacilityManager = true;
-        addCoach({ ...coach, facilityManagerAutoRepair: true });
+        addCoach({ ...coach, ...contractFields, facilityManagerAutoRepair: true });
       } else {
-        addCoach(coach);
+        addCoach({ ...coach, ...contractFields });
       }
     }
-    for (const scout of assignedScouts)  { addScout(scout); }
+    for (const scout of assignedScouts) {
+      addScout({ ...scout, contractEndWeek: weekNumber + 104, initialContractWeeks: 104 });
+    }
 
     // Default stadium name
     useClubStore.getState().setStadiumName(`${clubName} Stadium`);

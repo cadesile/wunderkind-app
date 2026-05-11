@@ -111,8 +111,8 @@ interface MarketState {
   addMarketPlayer: (player: MarketPlayer) => void;
   signPlayer: (playerId: string) => void;
   rejectPlayer: (playerId: string) => void;
-  hireCoach: (coachId: string, weekNumber: number) => void;
-  hireScout: (scoutId: string, weekNumber: number) => void;
+  hireCoach: (coachId: string, weekNumber: number, durationWeeks: number) => void;
+  hireScout: (scoutId: string, weekNumber: number, durationWeeks: number) => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -404,7 +404,7 @@ export const useMarketStore = create<MarketState>()(
         }));
       },
 
-      hireCoach: (coachId, weekNumber) => {
+      hireCoach: (coachId, weekNumber, durationWeeks) => {
         const marketCoach = get().coaches.find((c) => c.id === coachId);
         if (!marketCoach) return;
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -422,20 +422,20 @@ export const useMarketStore = create<MarketState>()(
           appearance: generateAppearance(marketCoach.id, 'COACH', 35, personality),
           nationality: marketCoach.nationality,
           joinedWeek: weekNumber,
+          contractEndWeek: weekNumber + durationWeeks,
+          initialContractWeeks: durationWeeks,
           morale: marketCoach.morale ?? randomBaseMorale(useGameConfigStore.getState().config.defaultMoraleMin, useGameConfigStore.getState().config.defaultMoraleMax),
           specialisms: marketCoach.specialisms,
           relationships: [],
           tier: marketCoach.tier,
         });
         set((state) => ({ coaches: state.coaches.filter((c) => c.id !== coachId) }));
-
-        // Hiring a coach signals investment in the club — moderate rep boost
         const { setReputation: setRep, markRepActivity } = useClubStore.getState();
         setRep(1.0);
         markRepActivity();
       },
 
-      hireScout: (scoutId, weekNumber) => {
+      hireScout: (scoutId, weekNumber, durationWeeks) => {
         const marketScout = get().marketScouts.find((s) => s.id === scoutId);
         if (!marketScout) return;
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -454,6 +454,8 @@ export const useMarketStore = create<MarketState>()(
           successRate: marketScout.successRate,
           nationality: marketScout.nationality,
           joinedWeek: weekNumber,
+          contractEndWeek: weekNumber + durationWeeks,
+          initialContractWeeks: durationWeeks,
           appearance: generateAppearance(marketScout.id, 'SCOUT', scoutAge),
           morale: randomBaseMorale(useGameConfigStore.getState().config.defaultMoraleMin, useGameConfigStore.getState().config.defaultMoraleMax),
           relationships: [],
