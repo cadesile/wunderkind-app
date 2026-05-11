@@ -93,6 +93,7 @@ export function processWeeklyTick(): WeeklyTick {
   const { club, addEarnings, setReputation, incrementWeek } = useClubStore.getState();
   const { addIncident, addMessage, messages: inboxMessages } = useInboxStore.getState();
   const { coaches } = useCoachStore.getState();
+  const { scouts } = useScoutStore.getState();
   const { levels, conditions, templates: facilityTemplates } = useFacilityStore.getState();
 
   // Effective level = level × (condition / 100), used to scale all facility benefits
@@ -477,6 +478,7 @@ export function processWeeklyTick(): WeeklyTick {
   const financialSummary = calculateWeeklyFinances(
     weekNumber, club, players, coaches, levels, [], weeklyLoanRepayment, facilityTemplates,
     config.playerWageMultiplier,
+    scouts,
   );
 
   // Sponsor earnings tracker (separate from balance — career metric)

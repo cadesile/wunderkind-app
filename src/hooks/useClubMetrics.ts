@@ -1,6 +1,7 @@
 import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
+import { useScoutStore } from '@/stores/scoutStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
@@ -100,6 +101,7 @@ export default function useClubMetrics(): ClubMetrics {
   const club = useClubStore((s) => s.club);
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
+  const scouts = useScoutStore((s) => s.scouts);
   const levels            = useFacilityStore((s) => s.levels);
   const facilityTemplates = useFacilityStore((s) => s.templates);
   const conditions        = useFacilityStore((s) => s.conditions);
@@ -168,6 +170,8 @@ export default function useClubMetrics(): ClubMetrics {
     [],           // sponsors handled separately below
     0,
     facilityTemplates,
+    1.0,
+    scouts,
   ).net + sponsorIncomePence;
   // Facility (matchday) income — reduced on weeks without a home match.
   const hasHomeMatch = fixtures.some(

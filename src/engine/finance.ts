@@ -3,7 +3,7 @@ import { Club } from '@/types/club';
 import { Player } from '@/types/player';
 import { Coach } from '@/types/coach';
 import { FacilityTemplate, FacilityLevels } from '@/types/facility';
-import { Sponsor } from '@/types/market';
+import { Sponsor, Scout } from '@/types/market';
 import { calculateFacilityUpkeep } from '@/utils/facilityUpkeep';
 import { WageMultiplierTier, resolveWageTier } from '@/types/gameConfig';
 
@@ -45,6 +45,33 @@ export function calculateExtensionCost(
 }
 
 /**
+ * Sign-on fee (pence) when hiring a staff member for durationWeeks.
+ * Fee = totalContractValue × rand(percentMin, percentMax) / 100
+ */
+export function calculateStaffSignOnFee(
+  weeklySalaryPence: number,
+  durationWeeks: number,
+  percentMin: number,
+  percentMax: number,
+): number {
+  const totalValue = weeklySalaryPence * durationWeeks;
+  const pct = percentMin + Math.random() * (percentMax - percentMin);
+  return Math.round(totalValue * pct / 100);
+}
+
+/**
+ * Severance payout (pence) on early release.
+ * Severance = weeklySalary × weeksRemaining × severancePercent / 100
+ */
+export function calculateStaffSeverance(
+  weeklySalaryPence: number,
+  weeksRemaining: number,
+  severancePercent: number,
+): number {
+  return Math.round(weeklySalaryPence * weeksRemaining * severancePercent / 100);
+}
+
+/**
  * Net sale price after deducting agent commission and investor equity.
  * Formula: net = grossFee × (1 − agentComm/100) × (1 − ΣinvestorEquity/100)
  */
@@ -75,6 +102,7 @@ export function calculateWeeklyFinances(
   weeklyLoanRepayment: number = 0,
   facilityTemplates: FacilityTemplate[] = [],
   playerWageMultiplier: number = 1.0,
+  scouts: Scout[] = [],
 ): FinancialRecord {
   const breakdown: ExpenseItem[] = [];
 
@@ -92,10 +120,10 @@ export function calculateWeeklyFinances(
     breakdown.push({ label: 'Coach salaries', amount: coachSalaryTotal });
   }
 
-  // Legacy staff wages
-  const staffWages = club.staffCount * 500;
-  if (staffWages > 0) {
-    breakdown.push({ label: 'Staff wages', amount: staffWages });
+  // Scout salaries
+  const scoutSalaryTotal = scouts.reduce((sum, s) => sum + s.salary, 0);
+  if (scoutSalaryTotal > 0) {
+    breakdown.push({ label: 'Scout salaries', amount: scoutSalaryTotal });
   }
 
   // Facility maintenance: exponential scaling (weeklyUpkeepBase × 1.5^level)
