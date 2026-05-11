@@ -51,7 +51,7 @@ export const FALLBACK_FACILITY_TEMPLATES: FacilityTemplate[] = [
   // ── Stadium stands ──────────────────────────────────────────────────────────
   // Income is NOT computed from matchdayIncome/matchdayIncomeMultiplier.
   // Instead, all *_stand income is combined: attendance × ticketPrice.
-  // Capacity per level = Math.round(baseCost / 1000) seats.
+  // Capacity per level = Math.round(baseCost / capacityCalculation) seats.
   {
     slug:                    'main_stand',
     label:                   'Main Stand',

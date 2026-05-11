@@ -107,9 +107,19 @@ export default function ClubDetailScreen() {
   const inboxMessages = useInboxStore((s) => s.messages);
   const ampTransfers  = useFinanceStore((s) => s.transfers);
 
-  const currentSeason  = Math.ceil(weekNumber / 38);
-  const season = `Season ${currentSeason}`;
   const db = useSQLiteContext();
+
+  // Derive the active season from the DB rather than weekNumber to avoid mismatch
+  const { data: maxSeasonRow } = useQuery({
+    queryKey: ['club-max-season', id],
+    queryFn: () => db.getFirstAsync<{ season: number }>(
+      'SELECT MAX(season) as season FROM player_season_stats WHERE club_id = ?',
+      [id],
+    ),
+    enabled: !!id,
+  });
+  const currentSeason = maxSeasonRow?.season ?? Math.ceil(weekNumber / 38);
+  const season = `Season ${currentSeason}`;
 
   type ClubStatsRow = { player_id: string; goals: number; assists: number };
   const { data: clubStatsRows = [] } = useQuery({

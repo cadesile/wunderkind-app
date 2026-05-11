@@ -1,4 +1,5 @@
 import type { FacilityTemplate, FacilityLevels, FacilityConditions } from '@/types/facility';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 
 /**
  * Calculates total matchday income in pence for a single home game.
@@ -76,7 +77,7 @@ export function calculateMatchdayIncome(
  * Combined stand income for a single home match.
  *
  * All *_stand facilities contribute to a shared seating capacity:
- *   seatsPerLevel = Math.round(baseCost / 1000)
+ *   seatsPerLevel = Math.round(baseCost / capacityCalculation)
  *   effectiveSeats = seatsPerLevel × level × (condition / 100)
  *
  * Expected attendance = effectiveCapacity × tierFillPct
@@ -99,6 +100,7 @@ export function calculateStandIncome(
     Elite:    0.85,
   };
   const fillPct = TIER_FILL[reputationTier] ?? 0.35;
+  const capacityCalculation = useGameConfigStore.getState().config.capacityCalculation ?? 1000;
 
   let effectiveCapacity = 0;
   for (const t of templates) {
@@ -106,7 +108,7 @@ export function calculateStandIncome(
     const level = levels[t.slug] ?? 0;
     if (level === 0) continue;
     const condition = conditions[t.slug] ?? 100;
-    const seatsPerLevel = Math.round(t.baseCost / 1000);
+    const seatsPerLevel = Math.round(t.baseCost / capacityCalculation);
     effectiveCapacity += seatsPerLevel * level * (condition / 100);
   }
 

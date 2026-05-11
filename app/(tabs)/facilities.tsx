@@ -35,7 +35,14 @@ import type { ClubTier } from '@/types/club';
 import { MarketCoach, MarketScout } from '@/types/market';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
 import { generateAppearance } from '@/engine/appearance';
+import { calculateStaffSignOnFee } from '@/engine/finance';
 import type { Player } from '@/types/player';
+
+const DURATION_OPTIONS = [
+  { weeks: 52,  label: '1 YEAR' },
+  { weeks: 104, label: '2 YEARS' },
+  { weeks: 156, label: '3 YEARS' },
+] as const;
 
 function isoToFlag(code: string): string {
   if (!code || code.length !== 2) return '';
@@ -412,6 +419,8 @@ function HirePane({
   const [signError, setSignError]           = useState<string | null>(null);
   const [tierPopup, setTierPopup]           = useState<{ item: HireItem; quote: string } | null>(null);
   const [capPopup, setCapPopup]             = useState<CapBlock | null>(null);
+  const [hirePending, setHirePending]       = useState<HireItem | null>(null);
+  const [hireError, setHireError]           = useState<string | null>(null);
 
   const TIER_REJECTION_QUOTES = [
     "Sorry, I'm not interested in working at this level.",
@@ -477,38 +486,42 @@ function HirePane({
   const visibleItems = allVisibleItems.slice(0, visibleCount);
   const hasMore = allVisibleItems.length > visibleCount;
 
-  function signCoach(mc: MarketCoach) {
+  function signCoach(mc: MarketCoach, durationWeeks: number) {
     const block = getCapBlock(mc.role);
     if (block) { setCapPopup(block); return; }
-    const feePence = mc.salary * 4;
+    const feePence = calculateStaffSignOnFee(mc.salary, durationWeeks, config.staffSignOnFeePercentMin, config.staffSignOnFeePercentMax);
     if ((club.balance ?? 0) < feePence) {
-      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(feePence / 100).toLocaleString()}`);
+      setHireError(`INSUFFICIENT FUNDS — need £${Math.round(feePence / 100).toLocaleString()}`);
       return;
     }
     useFinanceStore.getState().addTransaction({
       amount:      -feePence,
-      category:    'staff_signing',
-      description: `Signed ${mc.firstName} ${mc.lastName}`,
+      category:    'staff_sign_on',
+      description: `Signed ${mc.firstName} ${mc.lastName} (${durationWeeks / 52} yr)`,
       weekNumber,
     });
-    hireCoach(mc.id, weekNumber, 104);
+    hireCoach(mc.id, weekNumber, durationWeeks);
+    setHirePending(null);
+    setHireError(null);
   }
 
-  function signScout(ms: MarketScout) {
+  function signScout(ms: MarketScout, durationWeeks: number) {
     const block = getCapBlock(ms.role);
     if (block) { setCapPopup(block); return; }
-    const feePence = ms.salary * 4;
+    const feePence = calculateStaffSignOnFee(ms.salary, durationWeeks, config.staffSignOnFeePercentMin, config.staffSignOnFeePercentMax);
     if ((club.balance ?? 0) < feePence) {
-      setSignError(`INSUFFICIENT FUNDS — need £${Math.round(feePence / 100).toLocaleString()}`);
+      setHireError(`INSUFFICIENT FUNDS — need £${Math.round(feePence / 100).toLocaleString()}`);
       return;
     }
     useFinanceStore.getState().addTransaction({
       amount:      -feePence,
-      category:    'staff_signing',
-      description: `Signed ${ms.firstName} ${ms.lastName}`,
+      category:    'staff_sign_on',
+      description: `Signed ${ms.firstName} ${ms.lastName} (${durationWeeks / 52} yr)`,
       weekNumber,
     });
-    hireScout(ms.id, weekNumber, 104);
+    hireScout(ms.id, weekNumber, durationWeeks);
+    setHirePending(null);
+    setHireError(null);
   }
 
   return (
@@ -556,7 +569,8 @@ function HirePane({
               <Pressable
                 onPress={() => {
                   if (tierRestricted) { showTierPopup(item); return; }
-                  signCoach(mc);
+                  setHireError(null);
+                  setHirePending(item);
                 }}
                 style={[{
                   backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
@@ -612,7 +626,8 @@ function HirePane({
             <Pressable
               onPress={() => {
                 if (tierRestricted) { showTierPopup(item); return; }
-                signScout(ms);
+                setHireError(null);
+                setHirePending(item);
               }}
               style={[{
                 backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
@@ -725,6 +740,48 @@ function HirePane({
       {signError && (
         <PixelDialog visible title="SIGN FAILED" message={signError} onConfirm={() => setSignError(null)} onClose={() => setSignError(null)} />
       )}
+
+      {/* Duration picker modal */}
+      <Modal visible={!!hirePending} transparent animationType="fade" onRequestClose={() => { setHirePending(null); setHireError(null); }}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' }} onPress={() => { setHirePending(null); setHireError(null); }}>
+          <Pressable onPress={() => {}} style={{ width: '90%' }}>
+            <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.yellow, padding: 16, ...pixelShadow }}>
+              <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 6 }}>Choose Contract Length</PixelText>
+              {hirePending && (() => {
+                const name = hirePending.kind === 'coach'
+                  ? `${hirePending.data.firstName} ${hirePending.data.lastName}`
+                  : `${hirePending.data.firstName} ${hirePending.data.lastName}`;
+                return <PixelText size={7} color={WK.tealLight} style={{ textAlign: 'center', marginBottom: 14 }}>{name}</PixelText>;
+              })()}
+              {hireError && (
+                <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>{hireError}</PixelText>
+              )}
+              <View style={{ gap: 8 }}>
+                {hirePending && DURATION_OPTIONS.map((opt) => {
+                  const salary = hirePending.data.salary;
+                  const fee = calculateStaffSignOnFee(salary, opt.weeks, config.staffSignOnFeePercentMin, config.staffSignOnFeePercentMax);
+                  return (
+                    <Button
+                      key={opt.weeks}
+                      label={`${opt.label}  —  £${Math.round(fee / 100).toLocaleString()} sign-on`}
+                      variant="yellow"
+                      fullWidth
+                      onPress={() => {
+                        if (hirePending.kind === 'coach') {
+                          signCoach(hirePending.data as MarketCoach, opt.weeks);
+                        } else {
+                          signScout(hirePending.data as MarketScout, opt.weeks);
+                        }
+                      }}
+                    />
+                  );
+                })}
+                <Button label="CANCEL" variant="teal" fullWidth onPress={() => { setHirePending(null); setHireError(null); }} />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       {tierPopup && (() => {
         const { item, quote } = tierPopup;
         const isTierCoach = item.kind === 'coach';
@@ -867,7 +924,13 @@ export default function FacilitiesScreen() {
             </View>
           )}
         </View>
-        <Money pence={club.balance ?? 0} size={14} color={WK.yellow} />
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          <Money pence={club.balance ?? 0} size={14} color={WK.yellow} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <BodyText size={9} dim>UPKEEP/WK</BodyText>
+            <Money pence={calculateTotalUpkeep(templates, levels)} size={11} color={WK.orange} />
+          </View>
+        </View>
       </View>
 
       {activeTab === 'HIRE' ? (
@@ -887,20 +950,6 @@ export default function FacilitiesScreen() {
             />
           ))}
 
-          <View style={{
-            backgroundColor: WK.tealCard,
-            borderWidth: 3,
-            borderColor: WK.yellow,
-            padding: 12,
-            marginTop: 4,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            ...pixelShadow,
-          }}>
-            <BodyText size={13} dim>TOTAL WEEKLY UPKEEP</BodyText>
-            <Money pence={calculateTotalUpkeep(templates, levels)} color={WK.orange} size={12} />
-          </View>
         </ScrollView>
       )}
     </SafeAreaView>

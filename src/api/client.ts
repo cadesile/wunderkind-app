@@ -158,6 +158,28 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
+    // Try to extract a meaningful message from the JSON body; fall back to statusText or HTTP code.
+    let errorMessage = response.statusText || `HTTP ${response.status}`;
+    try {
+      const errBody = await response.clone().json() as Record<string, unknown>;
+      const bodyMsg =
+        (errBody.detail as string) ||
+        (errBody.message as string) ||
+        (errBody.error as string);
+      if (bodyMsg && bodyMsg !== `HTTP ${response.status}`) {
+        errorMessage = bodyMsg;
+      } else {
+        // Log full body so the developer can see the raw Symfony/server error
+        console.error(`[API] ${method} ${path} → ${response.status}`, errBody);
+      }
+    } catch {
+      // Non-JSON — try to log raw text
+      try {
+        const rawText = await response.clone().text();
+        console.error(`[API] ${method} ${path} → ${response.status} (non-JSON):`, rawText.slice(0, 500));
+      } catch { /* ignore */ }
+    }
+
     if (debug) {
       useDebugLogStore.getState().addEntry({
         id: logId(),
@@ -167,10 +189,10 @@ export async function apiRequest<T>(
         path,
         statusCode: response.status,
         durationMs: Date.now() - startMs,
-        errorMessage: response.statusText,
+        errorMessage,
       });
     }
-    throw new ApiError(response.status, response.statusText);
+    throw new ApiError(response.status, errorMessage);
   }
 
   const data = await response.json() as T;

@@ -15,6 +15,8 @@ import { useClubStore } from '@/stores/clubStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { calculateTotalUpkeep } from '@/utils/facilityUpkeep';
+import { calculateMatchdayIncome, calculateStandIncome } from '@/utils/matchdayIncome';
+import { calculateStaffSeverance, calculateStaffSignOnFee } from '@/engine/finance';
 import { useMarketStore } from '@/stores/marketStore';
 import type { MarketCoach, MarketScout } from '@/types/market';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
@@ -42,6 +44,12 @@ import { TIER_ORDER } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 
 const CLUB_TABS = ['SQUAD', 'STAFF', 'PERFORMANCE', 'DRESSING ROOM'] as const;
+
+const DURATION_OPTIONS = [
+  { weeks: 52,  label: '1 YEAR' },
+  { weeks: 104, label: '2 YEARS' },
+  { weeks: 156, label: '3 YEARS' },
+] as const;
 type ClubTab = typeof CLUB_TABS[number];
 
 // ─── Player card ──────────────────────────────────────────────────────────────
@@ -146,7 +154,7 @@ function PlayerRow({ player }: { player: Player }) {
 
 // ─── Coach cards ──────────────────────────────────────────────────────────────
 
-function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
+function CoachRow({ coach, weekNumber, onFire, onRenew }: { coach: Coach; weekNumber: number; onFire: () => void; onRenew: () => void }) {
   const debugEnabled = useGameConfigStore((s) => s.config.debugLoggingEnabled);
 
   return (
@@ -194,12 +202,22 @@ function CoachRow({ coach, onFire }: { coach: Coach; onFire: () => void }) {
           )}
         </View>
 
-        {/* Right: badge + release */}
-        <View style={{ alignItems: 'flex-end', gap: 8 }}>
+        {/* Right: badge + contract + actions */}
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <Badge label={`INF ${coach.influence}`} color="yellow" />
-          <Pressable onPress={() => { hapticWarning(); onFire(); }} hitSlop={10}>
-            <PixelText size={7} color={WK.red}>RELEASE</PixelText>
-          </Pressable>
+          {coach.contractEndWeek !== undefined && (() => {
+            const wks = Math.max(0, coach.contractEndWeek - weekNumber);
+            const color = wks <= 4 ? WK.red : wks <= 12 ? WK.orange : WK.green;
+            return <PixelText size={6} color={color}>{wks}WK LEFT</PixelText>;
+          })()}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable onPress={() => { hapticWarning(); onRenew(); }} hitSlop={10}>
+              <PixelText size={7} color={WK.yellow}>RENEW</PixelText>
+            </Pressable>
+            <Pressable onPress={() => { hapticWarning(); onFire(); }} hitSlop={10}>
+              <PixelText size={7} color={WK.red}>RELEASE</PixelText>
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -231,7 +249,7 @@ const RANGE_LABEL: Record<Scout['scoutingRange'], string> = {
   international: 'INTL',
 };
 
-function ScoutRow({ scout }: { scout: Scout }) {
+function ScoutRow({ scout, weekNumber, onRenew, onRelease }: { scout: Scout; weekNumber: number; onRenew: () => void; onRelease: () => void }) {
   const router = useRouter();
   const isOnMission  = scout.activeMission?.status === 'active';
   const dofAutoScouts = useCoachStore(
@@ -286,6 +304,29 @@ function ScoutRow({ scout }: { scout: Scout }) {
           <Badge label={`${scout.successRate}%`} color="yellow" />
         </View>
       </Pressable>
+
+      {/* Contract status + actions */}
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderLeftWidth: 3, borderRightWidth: 3, borderBottomWidth: 3,
+        borderColor: isOnMission ? WK.orange : dofAutoScouts ? WK.tealLight : WK.border,
+        paddingHorizontal: 10, paddingBottom: 8, paddingTop: 4,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        {scout.contractEndWeek !== undefined ? (() => {
+          const wks = Math.max(0, scout.contractEndWeek - weekNumber);
+          const color = wks <= 4 ? WK.red : wks <= 12 ? WK.orange : WK.green;
+          return <PixelText size={6} color={color}>CONTRACT: {wks} WKS</PixelText>;
+        })() : <View />}
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Pressable onPress={() => { hapticWarning(); onRenew(); }} hitSlop={8}>
+            <PixelText size={7} color={WK.yellow}>RENEW</PixelText>
+          </Pressable>
+          <Pressable onPress={() => { hapticWarning(); onRelease(); }} hitSlop={8}>
+            <PixelText size={7} color={WK.red}>RELEASE</PixelText>
+          </Pressable>
+        </View>
+      </View>
 
       {/* Debug: Personality Matrix */}
       {debugEnabled && (scout as any).personality && (
@@ -453,13 +494,14 @@ function formatStaffRole(role: string): string {
 type StaffRoleFilter = 'ALL' | import('@/types/coach').StaffRole;
 
 function StaffPane() {
-  const { coaches, removeCoach } = useCoachStore();
-  const { scouts } = useScoutStore();
+  const { coaches, removeCoach, updateCoach } = useCoachStore();
+  const { scouts, removeScout, updateScout } = useScoutStore();
   const { club, addBalance } = useClubStore();
   const router = useRouter();
   const weekNumber = club.weekNumber ?? 1;
 
-  const staffRoles = useGameConfigStore((s) => s.config.staffRoles);
+  const config = useGameConfigStore((s) => s.config);
+  const staffRoles = config.staffRoles;
   const STAFF_FILTER_OPTIONS = useMemo(() => {
     const roles = ['ALL', ...staffRoles];
     if (!roles.includes('scout')) roles.push('scout' as any);
@@ -473,6 +515,9 @@ function StaffPane() {
     penalty: number;
     penaltyPence: number;
   } | null>(null);
+  const [pendingFireScout, setPendingFireScout] = useState<{ scout: Scout; severancePence: number } | null>(null);
+  const [pendingRenew, setPendingRenew] = useState<{ kind: 'coach'; data: Coach } | { kind: 'scout'; data: Scout } | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
 
   type HiredStaffItem =
@@ -492,30 +537,82 @@ function StaffPane() {
         });
 
   function fireCoach(coach: Coach) {
-    const penaltyPence = Math.floor(coach.salary * 26 * 0.25);
-    const penaltyPounds = Math.round(penaltyPence / 100);
+    const weeksRemaining = Math.max(0, (coach.contractEndWeek ?? weekNumber) - weekNumber);
+    const severancePence = calculateStaffSeverance(coach.salary, weeksRemaining, config.staffSeverancePercent);
     setFireError(null);
-    setPendingFireCoach({ coach, penalty: penaltyPounds, penaltyPence });
+    setPendingFireCoach({ coach, penalty: Math.round(severancePence / 100), penaltyPence: severancePence });
   }
 
   function confirmFireCoach() {
     if (!pendingFireCoach) return;
-    const { coach, penalty, penaltyPence } = pendingFireCoach;
-    const currentBalancePounds = Math.round((club.balance ?? 0) / 100);
-    if (currentBalancePounds < penalty) {
-      setFireError(`INSUFFICIENT FUNDS — need £${penalty.toLocaleString()}`);
+    const { coach, penaltyPence } = pendingFireCoach;
+    if ((club.balance ?? 0) < penaltyPence) {
+      setFireError(`INSUFFICIENT FUNDS — need £${Math.round(penaltyPence / 100).toLocaleString()}`);
       setPendingFireCoach(null);
       return;
     }
-    addBalance(-penalty * 100);
-    useFinanceStore.getState().addTransaction({
-      amount: -penaltyPence,
-      category: 'contract_termination',
-      description: `Released ${coach.name} (25% early termination)`,
-      weekNumber,
-    });
+    if (penaltyPence > 0) {
+      addBalance(-penaltyPence);
+      useFinanceStore.getState().addTransaction({
+        amount: -penaltyPence,
+        category: 'staff_severance',
+        description: `Released ${coach.name}`,
+        weekNumber,
+      });
+    }
     removeCoach(coach.id);
     setPendingFireCoach(null);
+  }
+
+  function fireScout(scout: Scout) {
+    const weeksRemaining = Math.max(0, (scout.contractEndWeek ?? weekNumber) - weekNumber);
+    const severancePence = calculateStaffSeverance(scout.salary, weeksRemaining, config.staffSeverancePercent);
+    setPendingFireScout({ scout, severancePence });
+  }
+
+  function confirmFireScout() {
+    if (!pendingFireScout) return;
+    const { scout, severancePence } = pendingFireScout;
+    if ((club.balance ?? 0) < severancePence) {
+      setFireError(`INSUFFICIENT FUNDS — need £${Math.round(severancePence / 100).toLocaleString()}`);
+      setPendingFireScout(null);
+      return;
+    }
+    if (severancePence > 0) {
+      addBalance(-severancePence);
+      useFinanceStore.getState().addTransaction({
+        amount: -severancePence,
+        category: 'staff_severance',
+        description: `Released ${scout.name}`,
+        weekNumber,
+      });
+    }
+    removeScout(scout.id);
+    setPendingFireScout(null);
+  }
+
+  function renewStaff(durationWeeks: number) {
+    if (!pendingRenew) return;
+    const salary = pendingRenew.data.salary;
+    const fee = calculateStaffSignOnFee(salary, durationWeeks, config.staffSignOnFeePercentMin, config.staffSignOnFeePercentMax);
+    if ((club.balance ?? 0) < fee) {
+      setRenewError(`INSUFFICIENT FUNDS — need £${Math.round(fee / 100).toLocaleString()}`);
+      return;
+    }
+    addBalance(-fee);
+    useFinanceStore.getState().addTransaction({
+      amount: -fee,
+      category: 'staff_sign_on',
+      description: `Renewed ${pendingRenew.data.name}'s contract (${durationWeeks / 52} yr)`,
+      weekNumber,
+    });
+    if (pendingRenew.kind === 'coach') {
+      updateCoach(pendingRenew.data.id, { contractEndWeek: weekNumber + durationWeeks, initialContractWeeks: durationWeeks });
+    } else {
+      updateScout(pendingRenew.data.id, { contractEndWeek: weekNumber + durationWeeks, initialContractWeeks: durationWeeks });
+    }
+    setPendingRenew(null);
+    setRenewError(null);
   }
 
   const totalWeeklyCost = coaches.reduce((s, c) => s + c.salary, 0) +
@@ -554,8 +651,8 @@ function StaffPane() {
         contentContainerStyle={{ padding: 10, paddingBottom: FAB_CLEARANCE }}
         renderItem={({ item }) =>
           item.kind === 'coach'
-            ? <CoachRow coach={item.data} onFire={() => fireCoach(item.data)} />
-            : <ScoutRow scout={item.data} />
+            ? <CoachRow coach={item.data} weekNumber={weekNumber} onFire={() => fireCoach(item.data)} onRenew={() => setPendingRenew({ kind: 'coach', data: item.data })} />
+            : <ScoutRow scout={item.data} weekNumber={weekNumber} onRenew={() => setPendingRenew({ kind: 'scout', data: item.data })} onRelease={() => fireScout(item.data)} />
         }
         ListEmptyComponent={
           <BodyText size={12} dim style={{ textAlign: 'center', marginTop: 32 }}>
@@ -608,7 +705,7 @@ function StaffPane() {
         </Pressable>
       </Modal>
 
-      {/* Fire confirmation */}
+      {/* Coach fire confirmation */}
       {pendingFireCoach && (
         <PixelDialog
           visible
@@ -616,9 +713,14 @@ function StaffPane() {
           message={(
             <View style={{ gap: 8 }}>
               <PixelText size={7} dim>{`Release ${pendingFireCoach.coach.name}?`}</PixelText>
-              <PixelText size={7} dim>Early termination fee:</PixelText>
-              <Money pence={pendingFireCoach.penaltyPence} size={12} />
-              <PixelText size={7} dim>(25% of 26 remaining weeks)</PixelText>
+              {pendingFireCoach.penaltyPence > 0 ? (
+                <>
+                  <PixelText size={7} dim>Severance payout:</PixelText>
+                  <Money pence={pendingFireCoach.penaltyPence} size={12} />
+                </>
+              ) : (
+                <PixelText size={7} dim>No severance — contract already expired.</PixelText>
+              )}
             </View>
           )}
           confirmLabel="RELEASE"
@@ -627,6 +729,63 @@ function StaffPane() {
           onClose={() => setPendingFireCoach(null)}
         />
       )}
+
+      {/* Scout fire confirmation */}
+      {pendingFireScout && (
+        <PixelDialog
+          visible
+          title="RELEASE SCOUT"
+          message={(
+            <View style={{ gap: 8 }}>
+              <PixelText size={7} dim>{`Release ${pendingFireScout.scout.name}?`}</PixelText>
+              {pendingFireScout.severancePence > 0 ? (
+                <>
+                  <PixelText size={7} dim>Severance payout:</PixelText>
+                  <Money pence={pendingFireScout.severancePence} size={12} />
+                </>
+              ) : (
+                <PixelText size={7} dim>No severance — contract already expired.</PixelText>
+              )}
+            </View>
+          )}
+          confirmLabel="RELEASE"
+          confirmVariant="red"
+          onConfirm={confirmFireScout}
+          onClose={() => setPendingFireScout(null)}
+        />
+      )}
+
+      {/* Renew modal */}
+      <Modal visible={!!pendingRenew} transparent animationType="fade" onRequestClose={() => { setPendingRenew(null); setRenewError(null); }}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' }} onPress={() => { setPendingRenew(null); setRenewError(null); }}>
+          <Pressable onPress={() => {}} style={{ width: '90%' }}>
+            <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.yellow, padding: 16, ...pixelShadow }}>
+              <PixelText size={9} upper style={{ textAlign: 'center', marginBottom: 6 }}>Renew Contract</PixelText>
+              {pendingRenew && (
+                <PixelText size={7} color={WK.tealLight} style={{ textAlign: 'center', marginBottom: 14 }}>{pendingRenew.data.name}</PixelText>
+              )}
+              {renewError && (
+                <PixelText size={6} color={WK.red} style={{ marginBottom: 10, textAlign: 'center' }}>{renewError}</PixelText>
+              )}
+              <View style={{ gap: 8 }}>
+                {pendingRenew && DURATION_OPTIONS.map((opt) => {
+                  const fee = calculateStaffSignOnFee(pendingRenew.data.salary, opt.weeks, config.staffSignOnFeePercentMin, config.staffSignOnFeePercentMax);
+                  return (
+                    <Button
+                      key={opt.weeks}
+                      label={`${opt.label}  —  £${Math.round(fee / 100).toLocaleString()} sign-on`}
+                      variant="yellow"
+                      fullWidth
+                      onPress={() => renewStaff(opt.weeks)}
+                    />
+                  );
+                })}
+                <Button label="CANCEL" variant="teal" fullWidth onPress={() => { setPendingRenew(null); setRenewError(null); }} />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {fireError && (
         <PixelDialog
@@ -907,14 +1066,34 @@ function DangerStatusCard() {
 }
 
 function UpkeepWarningBanner() {
-  const balancePence = useClubStore((s) => s.club.balance ?? 0);
-  const levels    = useFacilityStore((s) => s.levels);
-  const templates = useFacilityStore((s) => s.templates);
-  const totalUpkeep = calculateTotalUpkeep(templates, levels); // pence
+  const balancePence    = useClubStore((s) => s.club.balance ?? 0);
+  const reputation      = useClubStore((s) => s.club.reputation ?? 0);
+  const reputationTier  = useClubStore((s) => s.club.reputationTier ?? 'Local');
+  const levels          = useFacilityStore((s) => s.levels);
+  const templates       = useFacilityStore((s) => s.templates);
+  const conditions      = useFacilityStore((s) => s.conditions);
+  const ticketPrice     = useFacilityStore((s) => s.ticketPrice);
+  const config          = useGameConfigStore((s) => s.config);
 
+  const totalUpkeep = calculateTotalUpkeep(templates, levels); // pence
   if (totalUpkeep === 0) return null;
-  // Both values in pence — division gives correct weeks
-  const weeksUntilBroke = Math.floor(balancePence / totalUpkeep);
+
+  // Facility income per home-match week (matchday non-stand + stand attendance)
+  const fullMatchdayIncome =
+    calculateMatchdayIncome(templates, levels, conditions, reputation) +
+    calculateStandIncome(templates, levels, conditions, reputationTier, ticketPrice);
+
+  // Average weekly income: home games ~50% of weeks, non-match weeks earn a reduced %
+  const nonMatchPct = config.nonMatchFacilityIncomePercent ?? 0;
+  const avgWeeklyFacilityIncome = Math.floor(fullMatchdayIncome * (1 + nonMatchPct / 100) / 2);
+
+  // Net weekly drain after facility profits offset upkeep
+  const netWeeklyDrain = Math.max(0, totalUpkeep - avgWeeklyFacilityIncome);
+
+  // If facility income covers all upkeep, no warning needed
+  if (netWeeklyDrain === 0) return null;
+
+  const weeksUntilBroke = Math.floor(balancePence / netWeeklyDrain);
   if (weeksUntilBroke >= 10) return null;
 
   return (
@@ -930,8 +1109,8 @@ function UpkeepWarningBanner() {
     }}>
       <BodyText size={13} color={WK.text}>HIGH UPKEEP</BodyText>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <Money pence={totalUpkeep} color={WK.text} size={13} />
-        <BodyText size={13} color={WK.text}>/WK · {weeksUntilBroke}WK LEFT</BodyText>
+        <Money pence={netWeeklyDrain} color={WK.text} size={13} />
+        <BodyText size={13} color={WK.text}>/WK NET · {weeksUntilBroke}WK LEFT</BodyText>
       </View>
     </View>
   );

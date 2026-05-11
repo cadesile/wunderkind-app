@@ -34,8 +34,11 @@ export const useGameConfigStore = create<GameConfigState>()(
 
       setConfig: (config, weekNumber) =>
         set({
-          // Deep-merge: server values override defaults, defaults fill any gaps
-          config: { ...DEFAULT_GAME_CONFIG, ...config },
+          // 3-way merge: defaults → current stored values → new server values.
+          // This ensures a partial piggybacked config (e.g. from a sync response
+          // that omits capacityCalculation) never silently resets a field that was
+          // correctly set by the full /api/game-config fetch.
+          config: { ...DEFAULT_GAME_CONFIG, ...get().config, ...config },
           lastFetchedAt: new Date().toISOString(),
           lastFetchedAtWeek: weekNumber ?? get().lastFetchedAtWeek ?? null,
         }),

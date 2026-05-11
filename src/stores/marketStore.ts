@@ -298,6 +298,8 @@ export const useMarketStore = create<MarketState>()(
           appearance: generateAppearance(player.id, 'PLAYER', age, personality),
           agentId: player.agent?.id ?? null,
           joinedWeek: weekNumber,
+          enrollmentEndWeek: weekNumber + 52,
+          extensionCount: 0,
           isActive: true,
           morale: randomBaseMorale(useGameConfigStore.getState().config.defaultMoraleMin, useGameConfigStore.getState().config.defaultMoraleMax),
           relationships: [],

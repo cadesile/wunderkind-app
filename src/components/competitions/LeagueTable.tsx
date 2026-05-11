@@ -91,6 +91,16 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
     [ampSquad],
   );
 
+  // Derive the set of club IDs that participate in this league (from fixtures)
+  const leagueClubIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const f of currentFixtures) {
+      ids.add(f.homeClubId);
+      ids.add(f.awayClubId);
+    }
+    return ids;
+  }, [currentFixtures]);
+
   const resolveEntry = useMemo(() => (
     (playerId: string, goals: number, assists: number): StatEntry | null => {
       const ampPlayer = ampSquadMap.get(playerId);
@@ -100,9 +110,10 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
         const clubName = clubNameMap.get(clubId) ?? clubId;
         return { id: playerId, name: ampPlayer.name, clubName, position: ampPlayer.position, goals, assists };
       }
-      // Search NPC clubs
+      // Search NPC clubs — restrict to this league's clubs to avoid cross-league mismatches
       if (worldClubs) {
         for (const [clubId, wc] of Object.entries(worldClubs)) {
+          if (!leagueClubIds.has(clubId)) continue;
           const npcPlayer = wc.players.find((p) => p.id === playerId);
           if (npcPlayer) {
             const clubName = clubNameMap.get(clubId) ?? clubId;
@@ -119,7 +130,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
       }
       return null;
     }
-  ), [ampSquadMap, ampClubId, clubNameMap, worldClubs]);
+  ), [ampSquadMap, ampClubId, clubNameMap, worldClubs, leagueClubIds]);
 
   const topScorers = useMemo((): StatEntry[] => {
     if (!rawTopScorers) return [];
@@ -141,7 +152,10 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
 
   // ── Form table (last 5 matches per club) ────────────────────────────────────
   const formTable = useMemo((): FormEntry[] => {
-    return clubs
+    // Include AMP alongside NPC clubs so it appears in the On Form card
+    const allForForm: Array<{ id: string; name: string }> =
+      ampClubId && ampName ? [...clubs, { id: ampClubId, name: ampName }] : clubs;
+    return allForForm
       .map(({ id: clubId }) => {
         const isAmp = clubId === ampClubId;
         const name = clubNameMap.get(clubId) ?? clubId;
@@ -164,7 +178,7 @@ export function LeagueTable({ fixtures, clubs, ampClubId, ampName, promotionSpot
       })
       .filter((r) => r.form.length > 0)
       .sort((a, b) => b.pts - a.pts);
-  }, [currentFixtures, clubs, ampClubId, clubNameMap]);
+  }, [currentFixtures, clubs, ampClubId, ampName, clubNameMap]);
 
   const mostOnForm = formTable[0] ?? null;
 
