@@ -345,6 +345,7 @@ class SimulationService {
     queryClient.invalidateQueries({ queryKey: ['match-result'] });
     queryClient.invalidateQueries({ queryKey: ['player-career'] });
     queryClient.invalidateQueries({ queryKey: ['club-top-scorer'] });
+    queryClient.invalidateQueries({ queryKey: ['amp-season-stats'] });
 
     // ── Zustand in-memory updates (unchanged) ──────────────────────────────
     useFixtureStore.getState().applyResultsToMemory(fixtureResultEntries);

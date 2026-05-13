@@ -27,6 +27,7 @@ import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 import { useArchetypeSync } from '@/hooks/useArchetypeSync';
 import { useProspectSync } from '@/hooks/useProspectSync';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
+import { InitializationScreen } from '@/components/InitializationScreen';
 import { WelcomeSplash } from '@/components/WelcomeSplash';
 import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
@@ -47,7 +48,7 @@ function AppNavigator() {
     VT323_400Regular,
     FlagsColorWorld: require('../assets/fonts/FlagsColorWorld.ttf'),
   });
-  const { isReady, isOnboarding, registerClub, showWelcomeSplash, dismissWelcomeSplash, enabledCountries } = useAuthFlow();
+  const { isReady, isOnboarding, needsInitialization, registerClub, onInitializationComplete, showWelcomeSplash, dismissWelcomeSplash, enabledCountries } = useAuthFlow();
   const clubName = useClubStore((s) => s.club.name);
   useNarrativeSync(isReady && !isOnboarding);
   useArchetypeSync(isReady && !isOnboarding);
@@ -183,6 +184,10 @@ function AppNavigator() {
         enabledCountries={enabledCountries}
       />
     );
+  }
+
+  if (needsInitialization) {
+    return <InitializationScreen onComplete={onInitializationComplete} />;
   }
 
   return (

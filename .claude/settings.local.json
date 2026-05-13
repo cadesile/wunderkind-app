@@ -34,7 +34,11 @@
       "Bash(cat:*)",
       "Bash(nvm use:*)",
       "WebFetch(domain:docs.swmansion.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(npx eas-cli:*)",
+      "WebFetch(domain:www.dicebear.com)",
+      "WebFetch(domain:dicebear.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

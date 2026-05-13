@@ -19,6 +19,8 @@ const SERIES = [
 
 type SeriesKey = typeof SERIES[number]['key'];
 
+const ATTRIBUTE_KEYS: SeriesKey[] = ['pace', 'technical', 'vision', 'power', 'stamina', 'heart'];
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -27,10 +29,16 @@ interface Props {
 
 export function DevelopmentChart({ log }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [hidden, setHidden] = useState<Set<SeriesKey>>(new Set());
+  // Default to OVR-only; attributes are opt-in via legend toggles
+  const [hidden, setHidden] = useState<Set<SeriesKey>>(() => new Set(ATTRIBUTE_KEYS));
   const { width: screenWidth } = useWindowDimensions();
 
   if (log.length < 3) return null;
+
+  // Y-axis ceiling: latest OVR rounded up to nearest 10, plus 10
+  // e.g. OVR=27 → ceil(27/10)*10 = 30, +10 = 40
+  const latestOvr = log[log.length - 1].overallRating;
+  const yMax = Math.ceil(latestOvr / 10) * 10 + 10;
 
   // Chart geometry — matches card structure (10px scroll padding + 14px card padding each side)
   const chartW = screenWidth - 60;
@@ -45,7 +53,7 @@ export function DevelopmentChart({ log }: Props) {
   }
 
   function yFor(v: number) {
-    return padY + (1 - v / 100) * drawH;
+    return padY + (1 - v / yMax) * drawH;
   }
 
   function points(s: typeof SERIES[number]) {
@@ -62,6 +70,8 @@ export function DevelopmentChart({ log }: Props) {
 
   const visibleSeries = SERIES.filter((s) => !hidden.has(s.key));
   const midIdx = Math.floor(log.length / 2);
+  // Grid lines at 25%, 50%, 75% of yMax
+  const gridLines = [Math.round(yMax * 0.25), Math.round(yMax * 0.5), Math.round(yMax * 0.75)];
 
   return (
     <View style={{
@@ -92,8 +102,8 @@ export function DevelopmentChart({ log }: Props) {
             {/* Chart background */}
             <Rect x={0} y={0} width={chartW} height={chartH} fill="rgba(0,0,0,0.35)" />
 
-            {/* Horizontal grid lines at 25 / 50 / 75 */}
-            {[25, 50, 75].map((v) => (
+            {/* Horizontal grid lines at 25% / 50% / 75% of yMax */}
+            {gridLines.map((v) => (
               <Line
                 key={v}
                 x1={padX} y1={yFor(v)}
