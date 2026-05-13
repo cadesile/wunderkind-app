@@ -33,6 +33,21 @@ function mapSkinColor(hex: string): string {
   return SKIN_MAP[hex] ?? 'ecad80';
 }
 
+// ─── Skin tone → DiceBear backgroundColor ────────────────────────────────────
+// Deterministic per-player; cycles blue → purple → lavender across skin tones.
+
+const BG_COLOR_MAP: Record<string, string> = {
+  '#fddbb4': 'ffdfbf', // lightest  → blue
+  '#e8a87c': 'f2d3b1', // light-med → purple
+  '#c68642': 'ecad80', // medium    → lavender
+  '#8d5524': '9e5622', // med-dark  → blue
+  '#4a2912': '763900', // dark      → purple
+};
+
+function mapBackgroundColor(hex: string): string {
+  return BG_COLOR_MAP[hex] ?? 'c0aede';
+}
+
 // ─── Hair color → DiceBear hairColor ─────────────────────────────────────────
 // adventurerNeutral palette: 6c4545 e8e1ef d6b370 f4a142 b58143 a55728 3b1f28
 
@@ -121,10 +136,12 @@ export const Avatar = memo(function Avatar({
 
     // Seed from deterministic appearance fields so the same player always
     // gets the same face regardless of render order.
-    const seed = `${skinTone}|${hairStyle}|${hairColor}|${accessory ?? ''}|${morale}`;
+    // Seed uses only stable fields — morale only drives mouth/eyebrows which are passed explicitly.
+    const seed = `${skinTone}|${hairStyle}|${hairColor}|${accessory ?? ''}`;
 
     const avatar = createAvatar(adventurerNeutral, {
       seed,
+      backgroundColor:    [mapBackgroundColor(skinTone)],
       skinColor:          [mapSkinColor(skinTone)],
       hairColor:          [mapHairColor(hairColor)],
       hair:               isBald ? [] : hairVariants,
