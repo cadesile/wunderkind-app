@@ -75,11 +75,21 @@ function mapMouthForMorale(morale: number): string[] {
   return ['variant04'];
 }
 
+// ─── Morale → adventurerNeutral eyebrow variants ─────────────────────────────
+
+function mapEyebrowsForMorale(morale: number): string[] {
+  if (morale >= 80) return ['variant13'];
+  if (morale >= 60) return ['variant12'];
+  if (morale >= 40) return ['variant10'];
+  if (morale >= 20) return ['variant03'];
+  return ['variant02'];
+}
+
 // ─── Accessory → adventurerNeutral glasses ───────────────────────────────────
 
 function mapGlasses(accessory?: string | null): { glasses: string[]; glassesProbability: number } {
   if (accessory === 'glasses' || accessory === 'sunglasses') {
-    return { glasses: ['variant01', 'variant02', 'variant03'], glassesProbability: 100 };
+    return { glasses: ['variant04'], glassesProbability: 100 };
   }
   return { glasses: [], glassesProbability: 0 };
 }
@@ -103,14 +113,15 @@ export const Avatar = memo(function Avatar({
   const accessory = appearance?.accessory ?? null;
 
   const svgXml = useMemo(() => {
-    const hairVariants  = mapHairVariants(hairStyle);
-    const isBald        = hairStyle === 'bald';
-    const glassesOpts   = mapGlasses(accessory);
-    const mouthVariants = mapMouthForMorale(morale);
+    const hairVariants    = mapHairVariants(hairStyle);
+    const isBald          = hairStyle === 'bald';
+    const glassesOpts     = mapGlasses(accessory);
+    const mouthVariants   = mapMouthForMorale(morale);
+    const eyebrowVariants = mapEyebrowsForMorale(morale);
 
     // Seed from deterministic appearance fields so the same player always
     // gets the same face regardless of render order.
-    const seed = `${skinTone}|${hairStyle}|${hairColor}|${accessory ?? ''}`;
+    const seed = `${skinTone}|${hairStyle}|${hairColor}|${accessory ?? ''}|${morale}`;
 
     const avatar = createAvatar(adventurerNeutral, {
       seed,
@@ -119,6 +130,7 @@ export const Avatar = memo(function Avatar({
       hair:               isBald ? [] : hairVariants,
       hairProbability:    isBald ? 0 : 100,
       mouth:              mouthVariants,
+      eyebrows:           eyebrowVariants,
       glasses:            glassesOpts.glasses,
       glassesProbability: glassesOpts.glassesProbability,
       size:               innerSize,
