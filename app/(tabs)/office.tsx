@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Modal, TextInput, ScrollView, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Trophy, ChevronRight, ArrowLeftRight } from 'lucide-react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { PitchBackground } from '@/components/ui/PitchBackground';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
 import { PixelText, BodyText } from '@/components/ui/PixelText';
@@ -503,11 +503,7 @@ function StadiumOverviewCard({
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '5-4-1', '4-2-3-1'] as const;
 const PLAYING_STYLES = ['POSSESSION', 'DIRECT', 'COUNTER', 'HIGH_PRESS'] as const;
-const BADGE_SHAPES: { value: BaseShape; label: string }[] = [
-  { value: 'shield', label: 'SHIELD' },
-  { value: 'circle', label: 'CIRCLE' },
-  { value: 'crest',  label: 'CREST'  },
-];
+const BADGE_SHAPES: BaseShape[] = ['classic', 'compact', 'badge', 'shield', 'modern'];
 const KIT_COLORS = [
   '#E53935', '#1565C0', '#2E7D32', '#F9A825',
   '#6A1B9A', '#00838F', '#BF360C', '#0D47A1',
@@ -975,37 +971,40 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
       </SectionCard>
 
       <SectionCard label="CLUB BADGE">
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginBottom: 16 }}>
+        <View style={{ alignItems: 'center', marginBottom: 14 }}>
           <PixelFootballBadge
             baseShape={club.badgeShape ?? 'shield'}
             primaryColor={club.primaryColor}
             secondaryColor={club.secondaryColor}
-            size={64}
+            size={72}
           />
-          <View style={{ flex: 1, gap: 6 }}>
-            <PixelText size={7} dim>BADGE SHAPE</PixelText>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {BADGE_SHAPES.map(({ value, label }) => {
-                const active = (club.badgeShape ?? 'shield') === value;
-                return (
-                  <Pressable
-                    key={value}
-                    onPress={() => { hapticTap(); setBadgeShape(value); }}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      alignItems: 'center',
-                      backgroundColor: active ? WK.yellow : WK.tealMid,
-                      borderWidth: 2,
-                      borderColor: active ? WK.yellow : WK.border,
-                    }}
-                  >
-                    <PixelText size={6} color={active ? WK.border : WK.text}>{label}</PixelText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+        </View>
+        <PixelText size={7} dim style={{ marginBottom: 8 }}>BADGE SHAPE</PixelText>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+          {BADGE_SHAPES.map((value) => {
+            const active = (club.badgeShape ?? 'shield') === value;
+            return (
+              <Pressable
+                key={value}
+                onPress={() => { hapticTap(); setBadgeShape(value); }}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  paddingVertical: 8,
+                  backgroundColor: active ? WK.yellow : WK.tealMid,
+                  borderWidth: 2,
+                  borderColor: active ? WK.yellow : WK.border,
+                }}
+              >
+                <PixelFootballBadge
+                  baseShape={value}
+                  primaryColor={club.primaryColor}
+                  secondaryColor={club.secondaryColor}
+                  size={36}
+                />
+              </Pressable>
+            );
+          })}
         </View>
       </SectionCard>
 
@@ -1212,10 +1211,17 @@ function PricingPane() {
 const STAND_SLUGS = ['north_stand', 'south_stand', 'east_stand', 'west_stand'] as const;
 
 export default function OfficeScreen() {
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<OfficeTab>('CLUB');
   const club = useClubStore((s) => s.club);
   const { templates, levels, conditions } = useFacilityStore();
   const router = useRouter();
+
+  useEffect(() => {
+    if (tabParam && OFFICE_TABS.includes(tabParam as OfficeTab)) {
+      setActiveTab(tabParam as OfficeTab);
+    }
+  }, [tabParam]);
   const { width: screenWidth } = useWindowDimensions();
 
   const stadiumTemplates = templates.filter((t) => t.category === 'STADIUM');

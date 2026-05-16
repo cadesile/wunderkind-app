@@ -599,7 +599,7 @@ export function processWeeklyTick(): WeeklyTick {
   const nextWeek = weekNumber + 1; // transactions belong to the week just processed
 
   // All amounts stored in pence for consistent ledger
-  const WAGE_LABELS = new Set(['Player wages', 'Coach salaries', 'Staff wages']);
+  const WAGE_LABELS = new Set(['Player wages', 'Coach salaries', 'Scout salaries', 'Staff wages']);
   const wagesPence = Math.round(
     financialSummary.breakdown
       .filter((item) => WAGE_LABELS.has(item.label))

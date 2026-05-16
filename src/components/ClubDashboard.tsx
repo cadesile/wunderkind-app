@@ -8,12 +8,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Trophy, UserPlus } from 'lucide-react-native';
+import { ChevronRight, Trophy, UserPlus, BarChart2, Heart, ArrowLeftRight, Building2 } from 'lucide-react-native';
 import useClubMetrics from '@/hooks/useClubMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
 import { MatchResultOverlay, buildMatchResultData } from '@/components/MatchResultOverlay';
 import { useMatchResult } from '@/hooks/db/useMatchResult';
+import { useInFormPlayer, InFormGameStat } from '@/hooks/db/useInFormPlayer';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
@@ -22,7 +23,7 @@ import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useSQLiteContext } from 'expo-sqlite';
 import { getArchetypeForPlayer } from '@/engine/archetypeEngine';
-import { penceToPounds, formatCurrencyCompact } from '@/utils/currency';
+import { penceToPounds } from '@/utils/currency';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { getLeaderboard } from '@/api/endpoints/leaderboard';
 import { FlagText } from '@/components/ui/FlagText';
@@ -233,56 +234,88 @@ function getOutcome(homeGoals: number, awayGoals: number, isHome: boolean): Outc
   return isHome ? (homeGoals > awayGoals ? 'W' : 'L') : (awayGoals > homeGoals ? 'W' : 'L');
 }
 
-// ─── Row 1 Left: Club Identity ────────────────────────────────────────────────
+// ─── Row 1: Club Identity — fullwidth hero with form strip ────────────────────
 
-function ClubIdentityCard() {
+function ClubIdentityCard({ ampClubId }: { ampClubId: string }) {
   const club     = useClubStore((s) => s.club);
   const { templates, levels } = useFacilityStore();
   const capacity = calculateStadiumCapacity(templates, levels);
+  const fixtures = useFixtureStore((s) => s.fixtures);
+
+  const played = fixtures
+    .filter((f) => f.result !== null && (f.homeClubId === ampClubId || f.awayClubId === ampClubId))
+    .sort((a, b) => new Date(b.result!.playedAt).getTime() - new Date(a.result!.playedAt).getTime());
+
+  const form: Outcome[] = played
+    .slice(0, FORM_SLOTS)
+    .reverse()
+    .map((f) => getOutcome(f.result!.homeGoals, f.result!.awayGoals, f.homeClubId === ampClubId));
+
+  const slots: (Outcome | null)[] = [
+    ...Array(FORM_SLOTS - form.length).fill(null),
+    ...form,
+  ];
 
   return (
     <View style={{
-      flex: 1,
       backgroundColor: WK.tealCard,
       borderWidth: 3,
       borderColor: WK.yellow,
-      padding: 14,
+      marginHorizontal: 10,
+      marginBottom: 10,
+      overflow: 'hidden',
       ...pixelShadow,
     }}>
-      {/* Badge + name row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      {/* Badge + identity */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 14 }}>
         <PixelFootballBadge
           baseShape={club.badgeShape ?? 'shield'}
           primaryColor={club.primaryColor}
           secondaryColor={club.secondaryColor}
-          size={54}
+          size={72}
         />
-        <View style={{ flex: 1, gap: 4 }}>
-          <PixelText size={8} numberOfLines={2}>{club.name}</PixelText>
+        <View style={{ flex: 1, gap: 6 }}>
+          <PixelText size={11} numberOfLines={2}>{club.name}</PixelText>
           <BodyText size={11} dim>{club.reputationTier.toUpperCase()}</BodyText>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+            <BodyText size={11} dim numberOfLines={1} style={{ flex: 1, marginRight: 8 }}>
+              {club.stadiumName ?? '—'}
+            </BodyText>
+            <VT323Text size={18} color={capacity > 0 ? WK.green : WK.dim}>
+              {capacity > 0 ? capacity.toLocaleString() : '—'}
+            </VT323Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <View style={{ flex: 1, height: 12, backgroundColor: club.primaryColor, borderWidth: 2, borderColor: WK.border }} />
+            <View style={{ flex: 1, height: 12, backgroundColor: club.secondaryColor, borderWidth: 2, borderColor: WK.border }} />
+          </View>
         </View>
       </View>
 
-      {/* Stats */}
-      <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 10, gap: 8 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <BodyText size={11} dim>STADIUM</BodyText>
-          <BodyText size={12} numberOfLines={1} style={{ flex: 1, textAlign: 'right', color: WK.text }}>
-            {club.stadiumName ?? '—'}
-          </BodyText>
-        </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <BodyText size={11} dim>CAPACITY</BodyText>
-          <VT323Text size={20} color={capacity > 0 ? WK.green : WK.dim}>
-            {capacity > 0 ? capacity.toLocaleString() : '—'}
-          </VT323Text>
-        </View>
-
-        {/* Colour swatches */}
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
-          <View style={{ flex: 1, height: 20, backgroundColor: club.primaryColor, borderWidth: 2, borderColor: WK.border }} />
-          <View style={{ flex: 1, height: 20, backgroundColor: club.secondaryColor, borderWidth: 2, borderColor: WK.border }} />
-        </View>
+      {/* Form strip */}
+      <View style={{
+        borderTopWidth: 2, borderTopColor: WK.border,
+        paddingHorizontal: 14, paddingVertical: 10,
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+      }}>
+        <PixelText size={7} color={WK.yellow} style={{ marginRight: 6 }}>FORM</PixelText>
+        {slots.map((r, i) =>
+          r === null ? (
+            <View key={i} style={{
+              flex: 1, height: 30, alignItems: 'center', justifyContent: 'center',
+              borderWidth: 2, borderColor: WK.border, backgroundColor: 'rgba(0,0,0,0.2)',
+            }}>
+              <PixelText size={7} color={WK.border}>·</PixelText>
+            </View>
+          ) : (
+            <View key={i} style={{
+              flex: 1, height: 30, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: OUTCOME_COLOR[r], borderWidth: 2, borderColor: 'rgba(0,0,0,0.3)',
+            }}>
+              <PixelText size={8} color={WK.text}>{r}</PixelText>
+            </View>
+          )
+        )}
       </View>
     </View>
   );
@@ -368,6 +401,7 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
   type Standing = {
     id: string; name: string; primaryColor: string;
     pts: number; gd: number; gf: number; played: number;
+    wins: number; draws: number; losses: number;
   };
 
   const map: Record<string, Standing> = {};
@@ -378,7 +412,7 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
       id,
       name:         isAmp ? (club.name ?? '') : (snap?.name ?? id),
       primaryColor: isAmp ? (club.primaryColor ?? '#888888') : (snap?.primaryColor ?? '#888888'),
-      pts: 0, gd: 0, gf: 0, played: 0,
+      pts: 0, gd: 0, gf: 0, played: 0, wins: 0, draws: 0, losses: 0,
     };
   }
 
@@ -390,9 +424,13 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
     home.played++; away.played++;
     home.gf += homeGoals; home.gd += homeGoals - awayGoals;
     away.gf += awayGoals; away.gd += awayGoals - homeGoals;
-    if      (homeGoals > awayGoals) { home.pts += 3; }
-    else if (homeGoals < awayGoals) { away.pts += 3; }
-    else                            { home.pts += 1; away.pts += 1; }
+    if (homeGoals > awayGoals) {
+      home.pts += 3; home.wins++; away.losses++;
+    } else if (homeGoals < awayGoals) {
+      away.pts += 3; away.wins++; home.losses++;
+    } else {
+      home.pts += 1; away.pts += 1; home.draws++; away.draws++;
+    }
   }
 
   const sorted   = Object.values(map).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
@@ -421,29 +459,45 @@ function LeaguePositionCard({ ampClubId }: { ampClubId: string }) {
         <BodyText size={10} dim numberOfLines={1}>{league.name.toUpperCase()}</BodyText>
       </View>
 
+      {/* Column headers */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, marginBottom: 2 }}>
+        <View style={{ width: 28 }} />
+        <View style={{ flex: 1 }} />
+        {(['GP', 'W', 'D', 'L', 'GD'] as const).map((col) => (
+          <VT323Text key={col} size={13} color={WK.dim} style={{ width: 26, textAlign: 'center' }}>{col}</VT323Text>
+        ))}
+        <VT323Text size={13} color={WK.dim} style={{ width: 28, textAlign: 'right' }}>PTS</VT323Text>
+      </View>
+
       {slice.map((entry, i) => {
         const position = start + i + 1;
         const isAmp    = entry.id === ampClubId;
+        const gdStr    = entry.gd > 0 ? `+${entry.gd}` : `${entry.gd}`;
         return (
           <View
             key={entry.id}
             style={{
-              flexDirection: 'row', alignItems: 'center', gap: 6,
-              paddingVertical: 8,
-              paddingHorizontal: isAmp ? 6 : 2,
+              flexDirection: 'row', alignItems: 'center',
+              paddingVertical: 7,
+              paddingHorizontal: isAmp ? 4 : 2,
               borderBottomWidth: i < slice.length - 1 ? 1 : 0,
               borderBottomColor: WK.border,
               backgroundColor: isAmp ? WK.yellow + '22' : 'transparent',
             }}
           >
-            <PixelText size={7} color={isAmp ? WK.yellow : WK.dim} style={{ width: 22 }}>
+            <PixelText size={7} color={isAmp ? WK.yellow : WK.dim} style={{ width: 28 }}>
               #{position}
             </PixelText>
-            <View style={{ width: 10, height: 10, backgroundColor: entry.primaryColor, borderWidth: 1, borderColor: WK.border }} />
-            <BodyText size={12} color={isAmp ? WK.yellow : WK.text} style={{ flex: 1 }} numberOfLines={1}>
+            <View style={{ width: 10, height: 10, backgroundColor: entry.primaryColor, borderWidth: 1, borderColor: WK.border, marginRight: 6 }} />
+            <BodyText size={11} color={isAmp ? WK.yellow : WK.text} style={{ flex: 1 }} numberOfLines={1}>
               {entry.name.toUpperCase()}
             </BodyText>
-            <VT323Text size={16} color={isAmp ? WK.yellow : WK.dim}>{entry.pts}pt</VT323Text>
+            <VT323Text size={14} color={isAmp ? WK.yellow : WK.dim} style={{ width: 26, textAlign: 'center' }}>{entry.played}</VT323Text>
+            <VT323Text size={14} color={isAmp ? WK.yellow : WK.green} style={{ width: 26, textAlign: 'center' }}>{entry.wins}</VT323Text>
+            <VT323Text size={14} color={isAmp ? WK.yellow : WK.dim} style={{ width: 26, textAlign: 'center' }}>{entry.draws}</VT323Text>
+            <VT323Text size={14} color={isAmp ? WK.yellow : WK.red} style={{ width: 26, textAlign: 'center' }}>{entry.losses}</VT323Text>
+            <VT323Text size={14} color={isAmp ? WK.yellow : (entry.gd >= 0 ? WK.tealLight : WK.red)} style={{ width: 26, textAlign: 'center' }}>{gdStr}</VT323Text>
+            <VT323Text size={16} color={isAmp ? WK.yellow : WK.dim} style={{ width: 28, textAlign: 'right' }}>{entry.pts}pt</VT323Text>
           </View>
         );
       })}
@@ -617,17 +671,53 @@ function AmpSeasonStatCards({ ampClubId, players }: { ampClubId: string; players
   );
 }
 
+// ─── Form rating chart ────────────────────────────────────────────────────────
+
+function ratingColor(r: number): string {
+  if (r >= 8) return WK.green;
+  if (r >= 6.5) return WK.yellow;
+  if (r >= 5) return WK.orange;
+  return WK.red;
+}
+
+function FormRatingChart({ games }: { games: InFormGameStat[] }) {
+  const BAR_MAX_H = 44;
+  return (
+    <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 10 }}>
+      <PixelText size={6} dim style={{ marginBottom: 8 }}>LAST {games.length} GAMES</PixelText>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {games.map((g, i) => {
+          const barH = Math.max(4, Math.round((g.rating / 10) * BAR_MAX_H));
+          const color = ratingColor(g.rating);
+          return (
+            <View key={i} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
+              {/* Bar container — fixed height, bar grows from bottom */}
+              <View style={{ height: BAR_MAX_H, justifyContent: 'flex-end', width: '100%' }}>
+                <View style={{
+                  height: barH,
+                  backgroundColor: color,
+                  borderWidth: 1,
+                  borderColor: WK.border,
+                }} />
+              </View>
+              {/* Rating */}
+              <VT323Text size={14} color={color}>{g.rating.toFixed(1)}</VT323Text>
+              {/* Goals / Assists */}
+              <VT323Text size={12} color={WK.dim}>G:{g.goals}</VT323Text>
+              <VT323Text size={12} color={WK.dim}>A:{g.assists}</VT323Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ClubDashboard() {
   const router = useRouter();
   const {
-    totalValuation,
-    reputationBonusPct,
-    currentTier,
-    nextTier,
-    tierProgressPct,
-    crownJewel,
     cashBalance,
     weeklyNetCashflow,
   } = useClubMetrics();
@@ -637,7 +727,6 @@ export function ClubDashboard() {
   const archetypes   = useArchetypeStore((s) => s.archetypes);
   const players      = useSquadStore((s) => s.players);
   const coaches      = useCoachStore((s) => s.coaches);
-  const { levels, conditions, templates: facilityTemplates } = useFacilityStore();
   const leagueClubs  = useLeagueStore((s) => s.clubs);
   const allFixtures  = useFixtureStore((s) => s.fixtures);
 
@@ -668,9 +757,9 @@ export function ClubDashboard() {
     return buildMatchResultData(overlayFixture, club.id, club.name, dashboardClubNameMap, overlayMatchResult);
   }, [overlayFixture, club.id, club.name, dashboardClubNameMap, overlayMatchResult]);
 
-  const crownJewelArchetype = crownJewel
-    ? getArchetypeForPlayer(crownJewel, archetypes)
-    : null;
+  const { data: inFormData } = useInFormPlayer(club.id);
+  const inFormPlayer = inFormData ? players.find((p) => p.id === inFormData.playerId) ?? null : null;
+  const inFormArchetype = inFormPlayer ? getArchetypeForPlayer(inFormPlayer, archetypes) : null;
 
   const recentMessages = messages.slice(0, 3);
 
@@ -695,7 +784,6 @@ export function ClubDashboard() {
   const moderateCount   = injuredPlayers.filter((p) => p.injury!.severity === 'moderate').length;
   const seriousCount    = injuredPlayers.filter((p) => p.injury!.severity === 'serious').length;
 
-  const builtFacilities  = facilityTemplates.filter((t) => (levels[t.slug] ?? 0) > 0);
 
   const cashPounds        = penceToPounds(cashBalance);
   const isDeficit         = weeklyNetCashflow < 0;
@@ -715,20 +803,18 @@ export function ClubDashboard() {
   }, [willGoNegative]);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
 
-  const nextLabel = nextTier ?? 'MAX';
 
   return (
     <>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 10, paddingBottom: 20 }}>
       <PitchBackground />
 
-      {/* ── Row 1: Club Identity | Form + Table ──────────────────────────── */}
-      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
-        <ClubIdentityCard />
-        <View style={{ flex: 1, gap: 10 }}>
-          <FormMiniCard ampClubId={club.id} />
-          <LeaguePositionCard ampClubId={club.id} />
-        </View>
+      {/* ── Row 1: Club Identity — fullwidth with form ───────────────────── */}
+      <ClubIdentityCard ampClubId={club.id} />
+
+      {/* ── League Table ─────────────────────────────────────────────────── */}
+      <View style={{ marginHorizontal: 10, marginBottom: 10 }}>
+        <LeaguePositionCard ampClubId={club.id} />
       </View>
 
       {/* ── Row 2: Latest Result | Top Scorer + Top Assists ──────────────── */}
@@ -742,53 +828,98 @@ export function ClubDashboard() {
         </View>
       </View>
 
-      {/* ── Row 3: Crown Jewel ───────────────────────────────────────────── */}
-      {crownJewel ? (
-        <Pressable onPress={() => router.push(`/player/${crownJewel.id}`)}>
+      {/* ── Quick Links ──────────────────────────────────────────────────── */}
+      <View style={{ marginHorizontal: 10, marginBottom: 10 }}>
+        <PixelText size={7} dim style={{ marginBottom: 8 }}>QUICK LINKS</PixelText>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+          {([
+            { icon: BarChart2,     label: 'PERFORMANCE', color: WK.tealLight, route: '/(tabs)/hub?tab=PERFORMANCE' },
+            { icon: Heart,         label: 'FANS',        color: WK.tealLight, route: '/(tabs)/office?tab=FANS'                },
+          ] as const).map(({ icon: Icon, label, color, route }) => (
+            <Pressable
+              key={label}
+              onPress={() => router.push(route as any)}
+              style={[{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingVertical: 14, alignItems: 'center', gap: 8 }, pixelShadow]}
+            >
+              <Icon size={18} color={color} />
+              <PixelText size={6} color={color}>{label}</PixelText>
+            </Pressable>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {([
+            { icon: ArrowLeftRight, label: 'TRANSFERS', color: WK.tealLight, route: '/transfers'                        },
+            { icon: Building2,      label: 'STADIUM',   color: WK.tealLight, route: '/(tabs)/office?tab=STADIUM'  },
+          ] as const).map(({ icon: Icon, label, color, route }) => (
+            <Pressable
+              key={label}
+              onPress={() => router.push(route as any)}
+              style={[{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingVertical: 14, alignItems: 'center', gap: 8 }, pixelShadow]}
+            >
+              <Icon size={18} color={color} />
+              <PixelText size={6} color={color}>{label}</PixelText>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* ── Row 3: In Form ───────────────────────────────────────────────── */}
+      {inFormPlayer ? (
+        <Pressable onPress={() => router.push(`/player/${inFormPlayer.id}`)}>
           <SectionCard borderColor={WK.tealLight}>
-            <PixelText size={7} dim upper style={{ marginBottom: 10 }}>Crown Jewel</PixelText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <PixelText size={7} dim upper>In Form</PixelText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <PixelText size={6} color={WK.yellow}>AVG</PixelText>
+                <PixelText size={8} color={WK.yellow}>{inFormData!.avgRating.toFixed(1)}</PixelText>
+              </View>
+            </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
               <Avatar
-                appearance={crownJewel.appearance}
+                appearance={inFormPlayer.appearance}
                 role="PLAYER"
                 size={56}
-                morale={crownJewel.morale ?? 70}
-                age={crownJewel.age}
+                morale={inFormPlayer.morale ?? 70}
+                age={inFormPlayer.age}
               />
               <View style={{ flex: 1 }}>
-                <BodyText size={15} upper numberOfLines={1}>{crownJewel.name}</BodyText>
+                <BodyText size={15} upper numberOfLines={1}>{inFormPlayer.name}</BodyText>
                 <BodyText size={12} color={WK.tealLight} style={{ marginTop: 3 }}>
-                  {crownJewel.position} · AGE {crownJewel.age}
+                  {inFormPlayer.position} · AGE {inFormPlayer.age}
                 </BodyText>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 }}>
-                  <FlagText nationality={crownJewel.nationality} size={14} />
-                  <BodyText size={12} dim>{crownJewel.nationality}</BodyText>
+                  <FlagText nationality={inFormPlayer.nationality} size={14} />
+                  <BodyText size={12} dim>{inFormPlayer.nationality}</BodyText>
                 </View>
               </View>
-              <Badge label={`OVR ${crownJewel.overallRating}`} color="yellow" />
+              <Badge label={`OVR ${inFormPlayer.overallRating}`} color="yellow" />
             </View>
 
-            {crownJewelArchetype && (
-              <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 8 }}>
+            {inFormArchetype && (
+              <View style={{ borderTopWidth: 2, borderTopColor: WK.border, paddingTop: 8, marginBottom: 10 }}>
                 <View style={{
                   backgroundColor: WK.yellow, borderWidth: 2, borderColor: WK.border,
                   paddingHorizontal: 6, paddingVertical: 3,
                   alignSelf: 'flex-start', marginBottom: 6,
                 }}>
-                  <PixelText size={6} color={WK.border}>{crownJewelArchetype.name.toUpperCase()}</PixelText>
+                  <PixelText size={6} color={WK.border}>{inFormArchetype.name.toUpperCase()}</PixelText>
                 </View>
                 <BodyText size={12} dim style={{ lineHeight: 18 }}>
-                  {crownJewelArchetype.description}
+                  {inFormArchetype.description}
                 </BodyText>
               </View>
+            )}
+
+            {inFormData!.last5.length > 0 && (
+              <FormRatingChart games={inFormData!.last5} />
             )}
           </SectionCard>
         </Pressable>
       ) : (
         <SectionCard>
-          <PixelText size={7} dim upper style={{ marginBottom: 6 }}>Crown Jewel</PixelText>
-          <PixelText size={7} dim>No players enrolled yet.</PixelText>
+          <PixelText size={7} dim upper style={{ marginBottom: 6 }}>In Form</PixelText>
+          <PixelText size={7} dim>No match data yet.</PixelText>
         </SectionCard>
       )}
 
@@ -797,41 +928,8 @@ export function ClubDashboard() {
         <FanFavoriteCard />
       </View>
 
-      {/* ── Quick-links: Museum + Transfer History ───────────────────────── */}
-      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10 }}>
-        <Pressable
-          onPress={() => router.push('/museum')}
-          style={[{
-            flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
-            paddingHorizontal: 12, paddingVertical: 12,
-          }, pixelShadow]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Trophy size={14} color={WK.yellow} />
-            <PixelText size={7} color={WK.yellow}>MUSEUM</PixelText>
-          </View>
-          <ChevronRight size={14} color={WK.dim} />
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push('/transfers')}
-          style={[{
-            flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border,
-            paddingHorizontal: 12, paddingVertical: 12,
-          }, pixelShadow]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <UserPlus size={14} color={WK.tealLight} />
-            <PixelText size={7} color={WK.tealLight}>TRANSFERS</PixelText>
-          </View>
-          <ChevronRight size={14} color={WK.dim} />
-        </Pressable>
-      </View>
-
       {/* ── Row 5: Latest Signing | Roster Balance ───────────────────────── */}
-      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10, alignItems: 'flex-start' }}>
+      <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, gap: 10, alignItems: 'stretch' }}>
         {/* Latest Signing */}
         <Pressable
           style={{ flex: 1 }}
@@ -932,28 +1030,6 @@ export function ClubDashboard() {
           Remaining cards (not in sketch — appended below Inbox)
           ════════════════════════════════════════════════════════════════════ */}
 
-      {/* Club Value + Tier Progress */}
-      <SectionCard borderColor={WK.yellow}>
-        <PixelText size={7} dim upper style={{ marginBottom: 6 }}>Club Value</PixelText>
-        <PixelText size={22} color={WK.yellow} numberOfLines={1}>
-          {formatCurrencyCompact(totalValuation)}
-        </PixelText>
-        <BodyText size={12} color={WK.green} style={{ marginTop: 4 }}>
-          +{reputationBonusPct.toFixed(1)}% REPUTATION BONUS
-        </BodyText>
-        <View style={{ marginTop: 14 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-            <PixelText size={6} color={WK.yellow} upper>{currentTier}</PixelText>
-            <PixelText size={6} dim upper>{nextLabel}</PixelText>
-          </View>
-          <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
-            <View style={{ height: '100%', width: `${tierProgressPct}%`, backgroundColor: WK.yellow }} />
-          </View>
-          <BodyText size={11} dim style={{ marginTop: 4, textAlign: 'right' }}>
-            {tierProgressPct.toFixed(0)}% through {currentTier}
-          </BodyText>
-        </View>
-      </SectionCard>
 
       {/* Financial Status */}
       <View style={{ flexDirection: 'row', marginHorizontal: 10, marginBottom: willGoNegative ? 6 : 10, gap: 10 }}>
@@ -1066,33 +1142,6 @@ export function ClubDashboard() {
         )}
       </SectionCard>
 
-      {/* Facilities */}
-      <SectionCard>
-        <PixelText size={7} dim upper style={{ marginBottom: 10 }}>Facilities</PixelText>
-        {builtFacilities.length === 0 ? (
-          <PixelText size={7} dim>No facilities built yet.</PixelText>
-        ) : (
-          <>
-            <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-              <View style={{ flex: 1 }}><BodyText size={11} dim>FACILITY</BodyText></View>
-              <View style={{ width: 44, alignItems: 'center' }}><BodyText size={11} dim>LVL</BodyText></View>
-              <View style={{ width: 56, alignItems: 'flex-end' }}><BodyText size={11} dim>COND.</BodyText></View>
-            </View>
-            {builtFacilities.map((def) => {
-              const lvl  = levels[def.slug] ?? 0;
-              const cond = Math.round(conditions[def.slug] ?? 100);
-              const condColor = cond >= 60 ? WK.tealLight : cond >= 30 ? WK.orange : WK.red;
-              return (
-                <View key={def.slug} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: WK.border }}>
-                  <View style={{ flex: 1 }}><BodyText size={13} numberOfLines={1}>{def.label}</BodyText></View>
-                  <View style={{ width: 44, alignItems: 'center' }}><PixelText size={8} color={WK.yellow}>{lvl}</PixelText></View>
-                  <View style={{ width: 56, alignItems: 'flex-end' }}><PixelText size={8} color={condColor}>{cond}%</PixelText></View>
-                </View>
-              );
-            })}
-          </>
-        )}
-      </SectionCard>
     </ScrollView>
 
     <MatchResultOverlay

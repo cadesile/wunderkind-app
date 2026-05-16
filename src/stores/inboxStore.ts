@@ -66,10 +66,12 @@ export const useInboxStore = create<InboxState>()(
       messages: [],
       incidents: [],
 
-      addMessage: (msg) =>
+      addMessage: (msg) => {
+        const gameDate = require('@/stores/calendarStore').useCalendarStore.getState().gameDate;
         set((state) => ({
-          messages: [{ createdAt: new Date().toISOString(), ...msg }, ...state.messages],
-        })),
+          messages: [{ createdAt: gameDate ?? new Date().toISOString(), ...msg }, ...state.messages],
+        }));
+      },
 
       markRead: (id) =>
         set((state) => ({

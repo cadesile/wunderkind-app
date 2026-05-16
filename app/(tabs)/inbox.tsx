@@ -39,7 +39,7 @@ import { worldTierToAppTier } from '@/engine/MarketEngine';
 import { TIER_ORDER, TIER_REPUTATION_BASELINE } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 import { useCalendarStore } from '@/stores/calendarStore';
-import { isTransferWindowOpen, getNextTransferWindowDate } from '@/utils/dateUtils';
+import { isTransferWindowOpen, getNextTransferWindowDate, formatShortDate } from '@/utils/dateUtils';
 
 // ─── Type config ───────────────────────────────────────────────────────────────
 
@@ -563,9 +563,8 @@ function TransferOfferCard({ message, onDone }: { message: InboxMessage; onDone:
   function handleAccept() {
     // addTransaction drives addBalance automatically; addEarnings tracks career total separately
     addEarnings(fee);
-    const feeWholePounds = Math.round(fee / 100);
     useFinanceStore.getState().addTransaction({
-      amount:      feeWholePounds,
+      amount:      fee, // pence
       category:    'transfer_fee',
       description: `Transfer: ${player!.name} → ${biddingClubName}`,
       weekNumber:  message.week,
@@ -811,7 +810,7 @@ function InboxMessageRow({
             )}
           </View>
           <PixelText variant="body" size={13} dim numberOfLines={2}>{message.body}</PixelText>
-          <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>WK {message.week}</PixelText>
+          <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>{message.createdAt ? `${formatShortDate(message.createdAt)} | ` : ''}WK {message.week}</PixelText>
         </View>
       </View>
     </Pressable>
@@ -1081,7 +1080,7 @@ function NarrativeMessageRow({
           </View>
           <PixelText variant="body" size={13} dim numberOfLines={2}>{message.body}</PixelText>
           {message.week != null && (
-            <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>WK {message.week}</PixelText>
+            <PixelText size={13} variant="vt323" dim style={{ marginTop: 5 }}>{message.createdAt ? `${formatShortDate(message.createdAt)} | ` : ''}WK {message.week}</PixelText>
           )}
         </View>
       </View>
@@ -1174,7 +1173,7 @@ function InboxMessageDetail({
       }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
           <Badge label={typeConf.label} color={typeConf.color} />
-          <PixelText size={14} variant="vt323" dim>WK {message.week}</PixelText>
+          <PixelText size={14} variant="vt323" dim>{message.createdAt ? `${formatShortDate(message.createdAt)} | ` : ''}WK {message.week}</PixelText>
         </View>
         <PixelText size={11} upper style={{ marginBottom: 14 }}>{message.subject}</PixelText>
         <PixelText size={14} variant="body" style={{ color: WK.dim }}>{message.body}</PixelText>
@@ -1745,7 +1744,10 @@ export default function InboxScreen() {
     const tsA = a.message.createdAt ?? '';
     const tsB = b.message.createdAt ?? '';
     if (tsB !== tsA) return tsB < tsA ? -1 : 1;
-    // Within same timestamp: actionable unresponded narratives first
+    // Secondary: sort by week number descending (handles messages with identical timestamps)
+    const weekDiff = (b.message.week ?? 0) - (a.message.week ?? 0);
+    if (weekDiff !== 0) return weekDiff;
+    // Tertiary: actionable unresponded narratives first
     const aPriority = a.kind === 'narrative' && a.message.isActionable && !a.message.respondedAt ? 1 : 0;
     const bPriority = b.kind === 'narrative' && b.message.isActionable && !b.message.respondedAt ? 1 : 0;
     return bPriority - aPriority;

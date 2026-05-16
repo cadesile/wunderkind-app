@@ -8,6 +8,7 @@ import { useMarketStore } from '@/stores/marketStore';
 import { useLoanStore, getLoanLimit } from '@/stores/loanStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { useCoachStore } from '@/stores/coachStore';
+import { useScoutStore } from '@/stores/scoutStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { useFinanceStore } from '@/stores/financeStore';
 import { PixelTopTabBar } from '@/components/ui/PixelTopTabBar';
@@ -21,7 +22,7 @@ import { calculateWeeklyFinances } from '@/engine/finance';
 import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
-import { renderMoney } from '@/utils/currency';
+import { renderMoney, formatCurrencyCompact } from '@/utils/currency';
 import { Money } from '@/components/ui/Money';
 import useClubMetrics from '@/hooks/useClubMetrics';
 
@@ -61,9 +62,13 @@ function FinanceRow({ label, value, accent, pence, moneyStyle = 'whole', sign = 
 
 function BalancePane() {
   const club = useClubStore((s) => s.club);
+  const { totalValuation, reputationBonusPct, currentTier, nextTier, tierProgressPct } = useClubMetrics();
+  const nextLabel = nextTier ?? 'MAX';
   const { totalWeeklyRepayment } = useLoanStore();
   const players = useSquadStore((s) => s.players);
   const coaches = useCoachStore((s) => s.coaches);
+  const scouts  = useScoutStore((s) => s.scouts);
+  const transactions = useFinanceStore((s) => s.transactions);
   const facilityLevels = useFacilityStore((s) => s.levels);
   const facilityConditions = useFacilityStore((s) => s.conditions);
   const facilityTemplates = useFacilityStore((s) => s.templates);
@@ -85,12 +90,16 @@ function BalancePane() {
   );
 
   // All values in pence for consistent display via Money component
+  const currentWeek = club.weekNumber ?? 1;
+
   const sponsorIncomePence = (club.sponsorContracts ?? []).reduce(
     (sum, c) => sum + c.weeklyPayment,
     0,
   );
-  const playerWagesPence = players.reduce((sum, p) => sum + (p.wage ?? 0), 0);
+  const playerWagesPence  = players.reduce((sum, p) => sum + (p.wage ?? 0), 0);
   const coachSalariesPence = coaches.reduce((sum, c) => sum + c.salary, 0);
+  const scoutSalariesPence = scouts.reduce((sum, s) => sum + (s.salary ?? 0), 0);
+  const staffSalariesPence = coachSalariesPence + scoutSalariesPence;
   const facilityMaintPence = record.breakdown
     .filter((b) => b.label.includes('maintenance'))
     .reduce((sum, b) => sum + b.amount, 0);
@@ -107,10 +116,53 @@ function BalancePane() {
     ? 'FACILITY INCOME'
     : `FACILITY INCOME (${nonMatchPct}% NON-MATCHDAY)`;
 
-  const displayNetPence = sponsorIncomePence + facilityIncomePence - playerWagesPence - coachSalariesPence - facilityMaintPence - weeklyRepaymentPence;
+  // Current-week transfer and repair activity from the ledger
+  const weekTxns = transactions.filter((tx) => tx.weekNumber === currentWeek);
+  const transferIncomePence = weekTxns
+    .filter((tx) => tx.category === 'transfer_fee' && tx.amount > 0)
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const transferFeePaidPence = weekTxns
+    .filter((tx) => tx.category === 'transfer_fee' && tx.amount < 0)
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const facilityRepairPence = weekTxns
+    .filter((tx) => tx.category === 'upkeep' && tx.description.toLowerCase().includes('repair'))
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+  const displayNetPence = sponsorIncomePence + facilityIncomePence + transferIncomePence
+    - playerWagesPence - staffSalariesPence - facilityMaintPence - facilityRepairPence
+    - transferFeePaidPence - weeklyRepaymentPence;
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, gap: 10, paddingBottom: FAB_CLEARANCE }}>
+      {/* Club Value + Tier Progress */}
+      <View style={{
+        backgroundColor: WK.tealCard,
+        borderWidth: 3,
+        borderColor: WK.yellow,
+        padding: 16,
+        ...pixelShadow,
+      }}>
+        <PixelText size={7} dim upper style={{ marginBottom: 6 }}>Club Value</PixelText>
+        <PixelText size={22} color={WK.yellow} numberOfLines={1}>
+          {formatCurrencyCompact(totalValuation)}
+        </PixelText>
+        <BodyText size={12} color={WK.green} style={{ marginTop: 4 }}>
+          +{reputationBonusPct.toFixed(1)}% REPUTATION BONUS
+        </BodyText>
+        <View style={{ marginTop: 14 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+            <PixelText size={6} color={WK.yellow} upper>{currentTier}</PixelText>
+            <PixelText size={6} dim upper>{nextLabel}</PixelText>
+          </View>
+          <View style={{ height: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 2, borderColor: WK.border }}>
+            <View style={{ height: '100%', width: `${tierProgressPct}%`, backgroundColor: WK.yellow }} />
+          </View>
+          <BodyText size={11} dim style={{ marginTop: 4, textAlign: 'right' }}>
+            {tierProgressPct.toFixed(0)}% through {currentTier}
+          </BodyText>
+        </View>
+      </View>
+
       {/* Current balance hero */}
       <View style={{
         backgroundColor: WK.tealCard,
@@ -145,6 +197,14 @@ function BalancePane() {
           accent={facilityIncomePence > 0 ? WK.green : WK.dim}
           sign
         />
+        {transferIncomePence > 0 && (
+          <FinanceRow
+            label="TRANSFER INCOME"
+            pence={transferIncomePence}
+            accent={WK.green}
+            sign
+          />
+        )}
         <FinanceRow
           label="PLAYER WAGES"
           pence={-playerWagesPence}
@@ -152,9 +212,9 @@ function BalancePane() {
           sign
         />
         <FinanceRow
-          label="COACH SALARIES"
-          pence={-coachSalariesPence}
-          accent={coachSalariesPence > 0 ? WK.orange : WK.dim}
+          label="STAFF SALARIES"
+          pence={-staffSalariesPence}
+          accent={staffSalariesPence > 0 ? WK.orange : WK.dim}
           sign
         />
         <FinanceRow
@@ -163,6 +223,22 @@ function BalancePane() {
           accent={facilityMaintPence > 0 ? WK.orange : WK.dim}
           sign
         />
+        {facilityRepairPence > 0 && (
+          <FinanceRow
+            label="FACILITY REPAIRS"
+            pence={-facilityRepairPence}
+            accent={WK.orange}
+            sign
+          />
+        )}
+        {transferFeePaidPence > 0 && (
+          <FinanceRow
+            label="TRANSFER FEES PAID"
+            pence={-transferFeePaidPence}
+            accent={WK.red}
+            sign
+          />
+        )}
         <FinanceRow
           label="LOAN REPAYMENTS"
           pence={-weeklyRepaymentPence}

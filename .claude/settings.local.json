@@ -38,7 +38,8 @@
       "Bash(npx eas-cli:*)",
       "WebFetch(domain:www.dicebear.com)",
       "WebFetch(domain:dicebear.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git checkout:*)"
     ]
   }
 }

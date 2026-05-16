@@ -149,7 +149,7 @@ export interface Club {
   /** Secondary kit colour as a 7-char hex string. */
   secondaryColor: string;
   /** Club badge/crest shape selected by the AMP. Defaults to 'shield'. */
-  badgeShape?: 'shield' | 'circle' | 'crest';
+  badgeShape?: 'classic' | 'compact' | 'badge' | 'shield' | 'modern';
   trophies: TrophyRecord[];
   /** Matchday and merchandise pricing set by the AMP. */
   pricing?: ClubPricing;

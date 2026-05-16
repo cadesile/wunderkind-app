@@ -31,7 +31,7 @@ export function FanFavoriteCard() {
       borderWidth: 3,
       borderColor: WK.border,
       ...pixelShadow,
-      marginBottom: 16,
+      marginBottom: 0,
     }}>
       <View style={{
         flexDirection: 'row',

@@ -60,6 +60,28 @@ export async function loadPlayerAppearances(
   return out;
 }
 
+export interface RecentAppearanceRow {
+  player_id: string;
+  week: number;
+  rating: number;
+  goals: number;
+  assists: number;
+  result: string;
+  scoreline: string;
+}
+
+/** Load all appearances for a club ordered most-recent first, for in-form calculations. */
+export async function loadClubRecentPlayerAppearances(
+  db: SQLiteDatabase,
+  clubId: string,
+): Promise<RecentAppearanceRow[]> {
+  return db.getAllAsync<RecentAppearanceRow>(
+    `SELECT player_id, week, rating, goals, assists, result, scoreline
+     FROM appearances WHERE club_id = ? ORDER BY week DESC`,
+    [clubId],
+  );
+}
+
 export async function loadClubSeasonAppearances(
   db: SQLiteDatabase,
   clubId: string,

@@ -40,6 +40,13 @@ export function formatGameDate(date: Date): string {
   return `${day} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+/** Formats a date as "DD MMM", e.g. "06 JUN". Used in inbox message timestamps. */
+export function formatShortDate(isoString: string): string {
+  const d = new Date(isoString);
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${day} ${MONTHS[d.getMonth()]}`;
+}
+
 /** Returns true if the ISO game date string falls within June (transfer window). */
 export function isTransferWindowOpen(gameDate: string): boolean {
   return new Date(gameDate).getMonth() === 5;

@@ -1,6 +1,6 @@
 import type { ViewStyle } from 'react-native';
 
-export type BaseShape = 'shield' | 'circle' | 'crest';
+export type BaseShape = 'classic' | 'compact' | 'badge' | 'shield' | 'modern';
 
 export interface PixelFootballBadgeProps {
   baseShape: BaseShape;
