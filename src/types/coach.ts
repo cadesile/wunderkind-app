@@ -49,4 +49,12 @@ export interface Coach {
   facilityManagerAutoRepair?: boolean;
   /** Club tier this coach belongs to — from backend */
   tier?: ClubTier;
+  /** Manager's preferred formation from backend (e.g. '4-4-2'). Only set for role='manager'. */
+  preferredFormation?: string;
+  /** Manager's preferred playing style from backend. Only set for role='manager'. */
+  preferredPlayingStyle?: 'POSSESSION' | 'DIRECT' | 'COUNTER' | 'HIGH_PRESS';
+  /** If true, the club's formation is overridden by the manager's preferredFormation. */
+  managerDeterminesFormation?: boolean;
+  /** If true, the club's playing style is overridden by the manager's preferredPlayingStyle. */
+  managerDeterminesPlayingStyle?: boolean;
 }

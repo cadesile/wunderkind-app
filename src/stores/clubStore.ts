@@ -62,6 +62,12 @@ interface ClubState {
   setBadgeShape: (shape: NonNullable<Club['badgeShape']>) => void;
   addTrophy: (record: TrophyRecord) => void;
   updatePricing: (pricing: Partial<ClubPricing>) => void;
+  /** Number of free (zero-fee) signings used in the current season. */
+  seasonFreeSigningsUsed: number;
+  /** Increment the free signing counter by 1. */
+  incrementFreeSignings: () => void;
+  /** Reset the free signing counter to 0 (called at season rollover). */
+  resetFreeSignings: () => void;
 }
 
 export const DEFAULT_CLUB: Club = {
@@ -104,6 +110,7 @@ export const useClubStore = create<ClubState>()(
       club: DEFAULT_CLUB,
       managerPersonality: null,
       managerProfile: null,
+      seasonFreeSigningsUsed: 0,
       setId: (id) =>
         set((state) => ({ club: { ...state.club, id } })),
       setName: (name) =>
@@ -301,6 +308,10 @@ export const useClubStore = create<ClubState>()(
             },
           },
         })),
+      incrementFreeSignings: () =>
+        set((state) => ({ seasonFreeSigningsUsed: state.seasonFreeSigningsUsed + 1 })),
+      resetFreeSignings: () =>
+        set({ seasonFreeSigningsUsed: 0 }),
     }),
     { name: 'club-store', storage: zustandStorage }
   )

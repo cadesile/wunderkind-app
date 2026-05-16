@@ -6,7 +6,9 @@ import { useSQLiteContext } from 'expo-sqlite';
 import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
 import { useSquadStore } from '@/stores/squadStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
-import { PixelText, BodyText } from '@/components/ui/PixelText';
+import { useClubStore } from '@/stores/clubStore';
+import { useClubStatsStore } from '@/stores/clubStatsStore';
+import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -78,7 +80,6 @@ function SquadAbilityChart({ players }: { players: Player[] }) {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      {/* Donut */}
       <Svg width={SIZE} height={SIZE}>
         <G>
           {slices.map((s) => (
@@ -90,43 +91,324 @@ function SquadAbilityChart({ players }: { players: Player[] }) {
               strokeWidth={2}
             />
           ))}
-          {/* Center label */}
-          <SvgText
-            x={CX}
-            y={CY - 5}
-            textAnchor="middle"
-            fill={WK.text}
-            fontSize={16}
-            fontFamily="VT323_400Regular"
-          >
+          <SvgText x={CX} y={CY - 5} textAnchor="middle" fill={WK.text} fontSize={16} fontFamily="VT323_400Regular">
             {teamOvr}
           </SvgText>
-          <SvgText
-            x={CX}
-            y={CY + 9}
-            textAnchor="middle"
-            fill={WK.dim}
-            fontSize={9}
-            fontFamily="VT323_400Regular"
-          >
+          <SvgText x={CX} y={CY + 9} textAnchor="middle" fill={WK.dim} fontSize={9} fontFamily="VT323_400Regular">
             AVG OVR
           </SvgText>
         </G>
       </Svg>
-
-      {/* Legend */}
       <View style={{ flex: 1, gap: 5 }}>
         {data.map((d) => (
           <View key={d.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{ width: 8, height: 8, backgroundColor: d.color, borderWidth: 1, borderColor: WK.border }} />
             <BodyText size={11} dim style={{ width: 44 }}>{d.label}</BodyText>
-            {/* Mini bar */}
             <View style={{ flex: 1, height: 6, backgroundColor: WK.tealDark, borderWidth: 1, borderColor: WK.border }}>
               <View style={{ width: `${Math.min(d.avg, 100)}%`, height: '100%', backgroundColor: d.color + 'CC' }} />
             </View>
             <PixelText size={6} style={{ width: 26, textAlign: 'right' }}>{d.avg > 0 ? d.avg.toFixed(0) : '—'}</PixelText>
           </View>
         ))}
+      </View>
+    </View>
+  );
+}
+
+// ─── Club Record Bar ──────────────────────────────────────────────────────────
+
+function ClubRecordSection({ clubId }: { clubId: string }) {
+  const getClubRecord = useClubStatsStore((s) => s.getClubRecord);
+  const record = getClubRecord(clubId);
+
+  const wins    = record?.wins    ?? 0;
+  const draws   = record?.draws   ?? 0;
+  const losses  = record?.losses  ?? 0;
+  const played  = record?.played  ?? 0;
+  const gf      = record?.goalsFor      ?? 0;
+  const ga      = record?.goalsAgainst  ?? 0;
+  const gd      = gf - ga;
+  const winPct  = played > 0 ? Math.round((wins / played) * 100) : 0;
+
+  const wPct = played > 0 ? (wins / played) * 100 : 0;
+  const dPct = played > 0 ? (draws / played) * 100 : 0;
+  const lPct = played > 0 ? (losses / played) * 100 : 0;
+
+  const winColor  = '#22C55E';
+  const drawColor = WK.yellow;
+  const lossColor = '#EF4444';
+
+  return (
+    <View style={[{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border }, pixelShadow]}>
+      {/* Header */}
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <PixelText size={8} color={WK.yellow}>ALL-TIME RECORD</PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <PixelText size={6} color={WK.dim}>{played}P</PixelText>
+          <View style={{ backgroundColor: winColor + '33', borderWidth: 2, borderColor: winColor, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <VT323Text size={18} color={winColor}>{winPct}%</VT323Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ padding: 14, gap: 12 }}>
+        {/* W/D/L segmented bar */}
+        <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: 'row', height: 18, borderWidth: 2, borderColor: WK.border, overflow: 'hidden' }}>
+            {wPct > 0 && <View style={{ width: `${wPct}%`, backgroundColor: winColor }} />}
+            {dPct > 0 && <View style={{ width: `${dPct}%`, backgroundColor: drawColor }} />}
+            {lPct > 0 && <View style={{ width: `${lPct}%`, backgroundColor: lossColor }} />}
+            {played === 0 && <View style={{ flex: 1, backgroundColor: WK.tealDark }} />}
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, backgroundColor: winColor, borderWidth: 1, borderColor: WK.border }} />
+              <PixelText size={7} color={winColor}>{wins}W</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, backgroundColor: drawColor, borderWidth: 1, borderColor: WK.border }} />
+              <PixelText size={7} color={drawColor}>{draws}D</PixelText>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, backgroundColor: lossColor, borderWidth: 1, borderColor: WK.border }} />
+              <PixelText size={7} color={lossColor}>{losses}L</PixelText>
+            </View>
+          </View>
+        </View>
+
+        {/* Goals row */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, alignItems: 'center', gap: 2 }}>
+            <PixelText size={5} color={WK.dim}>SCORED</PixelText>
+            <VT323Text size={28} color={winColor}>{gf}</VT323Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, alignItems: 'center', gap: 2 }}>
+            <PixelText size={5} color={WK.dim}>CONCEDED</PixelText>
+            <VT323Text size={28} color={lossColor}>{ga}</VT323Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: gd >= 0 ? winColor : lossColor, padding: 10, alignItems: 'center', gap: 2 }}>
+            <PixelText size={5} color={WK.dim}>GOAL DIFF</PixelText>
+            <VT323Text size={28} color={gd >= 0 ? winColor : lossColor}>{gd >= 0 ? `+${gd}` : gd}</VT323Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Leader card ──────────────────────────────────────────────────────────────
+
+function LeaderCard({
+  sectionTitle,
+  seasonStat,
+  allTimeStat,
+  seasonValue,
+  allTimeValue,
+  unit,
+  accentColor,
+  onPress,
+}: {
+  sectionTitle: string;
+  seasonStat: PlayerStats | null;
+  allTimeStat: PlayerStats | null;
+  seasonValue: number;
+  allTimeValue: number;
+  unit: string;
+  accentColor: string;
+  onPress: (id: string) => void;
+}) {
+  function SubCard({
+    label,
+    stat,
+    value,
+  }: {
+    label: string;
+    stat: PlayerStats | null;
+    value: number;
+  }) {
+    return (
+      <Pressable
+        style={({ pressed }) => ({
+          flex: 1,
+          backgroundColor: pressed ? WK.tealMid : WK.tealDark,
+          borderWidth: 2,
+          borderColor: stat ? accentColor + '66' : WK.border,
+          padding: 10,
+          gap: 8,
+        })}
+        onPress={() => { if (stat) { hapticTap(); onPress(stat.player.id); } }}
+        disabled={!stat}
+      >
+        <PixelText size={5} color={WK.dim}>{label}</PixelText>
+
+        {stat ? (
+          <>
+            {/* Avatar + name row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Avatar
+                appearance={stat.player.appearance}
+                role="PLAYER"
+                size={44}
+                morale={stat.player.morale ?? 70}
+                age={stat.player.age}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <BodyText size={13} upper numberOfLines={1}>{stat.player.name}</BodyText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <FlagText nationality={stat.player.nationality} size={11} />
+                  <PixelText size={6} color={WK.dim}>{stat.player.position}</PixelText>
+                  <PixelText size={6} color={WK.dim}>·{stat.player.age}</PixelText>
+                </View>
+              </View>
+            </View>
+
+            {/* Stat highlight */}
+            <View style={{
+              backgroundColor: accentColor + '22',
+              borderWidth: 2,
+              borderColor: accentColor,
+              paddingVertical: 6,
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 6,
+            }}>
+              <VT323Text size={26} color={accentColor}>{value}</VT323Text>
+              <PixelText size={6} color={accentColor}>{unit}</PixelText>
+            </View>
+          </>
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <PixelText size={7} color={WK.dim}>—</PixelText>
+          </View>
+        )}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={[{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border }, pixelShadow]}>
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+      }}>
+        <PixelText size={8} color={WK.yellow}>{sectionTitle}</PixelText>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 0 }}>
+        <View style={{ flex: 1 }}>
+          <SubCard label="THIS SEASON" stat={seasonStat} value={seasonValue} />
+        </View>
+        <View style={{ width: 3, backgroundColor: WK.border }} />
+        <View style={{ flex: 1 }}>
+          <SubCard label="ALL TIME" stat={allTimeStat} value={allTimeValue} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Development section ──────────────────────────────────────────────────────
+
+function DevelopmentSection({ playerStats, totalImprovement, mostImproved, onPress }: {
+  playerStats: PlayerStats[];
+  totalImprovement: number;
+  mostImproved: PlayerStats | null;
+  onPress: (id: string) => void;
+}) {
+  const improvedCount = playerStats.filter((s) => s.improvement > 0).length;
+  const declinedCount = playerStats.filter((s) => s.improvement < 0).length;
+
+  return (
+    <View style={[{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border }, pixelShadow]}>
+      <View style={{
+        backgroundColor: WK.tealMid,
+        borderBottomWidth: 2,
+        borderBottomColor: WK.border,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+      }}>
+        <PixelText size={8} color={WK.yellow}>DEVELOPMENT</PixelText>
+      </View>
+
+      <View style={{ padding: 12, gap: 10 }}>
+        {/* Summary stat row */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, alignItems: 'center', gap: 2 }}>
+            <PixelText size={5} color={WK.dim}>OVR GAINED</PixelText>
+            <VT323Text size={28} color={totalImprovement > 0 ? '#22C55E' : WK.dim}>
+              {totalImprovement > 0 ? `+${totalImprovement}` : '—'}
+            </VT323Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, alignItems: 'center', gap: 2 }}>
+            <PixelText size={5} color={WK.dim}>IMPROVED</PixelText>
+            <VT323Text size={28} color="#22C55E">{improvedCount}</VT323Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, alignItems: 'center', gap: 2 }}>
+            <PixelText size={5} color={WK.dim}>DECLINED</PixelText>
+            <VT323Text size={28} color={declinedCount > 0 ? '#EF4444' : WK.dim}>{declinedCount}</VT323Text>
+          </View>
+        </View>
+
+        {/* Most improved player */}
+        <PixelText size={6} color={WK.dim}>MOST IMPROVED</PixelText>
+        {mostImproved ? (
+          <Pressable
+            onPress={() => { hapticTap(); onPress(mostImproved.player.id); }}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? WK.tealMid : WK.tealDark,
+              borderWidth: 2,
+              borderColor: '#22C55E66',
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+            })}
+          >
+            <Avatar
+              appearance={mostImproved.player.appearance}
+              role="PLAYER"
+              size={52}
+              morale={mostImproved.player.morale ?? 70}
+              age={mostImproved.player.age}
+            />
+            <View style={{ flex: 1, gap: 4 }}>
+              <BodyText size={14} upper numberOfLines={1}>{mostImproved.player.name}</BodyText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <FlagText nationality={mostImproved.player.nationality} size={11} />
+                <PixelText size={6} color={WK.dim}>{mostImproved.player.position}</PixelText>
+                <PixelText size={6} color={WK.dim}>· AGE {mostImproved.player.age}</PixelText>
+              </View>
+              {/* Progress bar */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <View style={{ backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 5, paddingVertical: 2 }}>
+                  <PixelText size={6} color={WK.dim}>{mostImproved.startOvr}</PixelText>
+                </View>
+                <View style={{ flex: 1, height: 8, backgroundColor: WK.tealCard, borderWidth: 1, borderColor: WK.border }}>
+                  <View style={{ width: `${Math.min((mostImproved.improvement / 5) * 100, 100)}%`, height: '100%', backgroundColor: '#22C55E' }} />
+                </View>
+                <View style={{ backgroundColor: '#22C55E22', borderWidth: 2, borderColor: '#22C55E', paddingHorizontal: 5, paddingVertical: 2 }}>
+                  <PixelText size={6} color="#22C55E">+{mostImproved.improvement} → {mostImproved.currentOvr}</PixelText>
+                </View>
+              </View>
+            </View>
+          </Pressable>
+        ) : (
+          <View style={{ backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 14, alignItems: 'center' }}>
+            <PixelText size={7} color={WK.dim}>NO DEVELOPMENT DATA YET</PixelText>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -160,9 +442,10 @@ function shortName(name: string): string {
 }
 
 export function PerformancePane() {
-  const allPlayers = useSquadStore((s) => s.players);
-  const router = useRouter();
-  const db = useSQLiteContext();
+  const allPlayers  = useSquadStore((s) => s.players);
+  const club        = useClubStore((s) => s.club);
+  const router      = useRouter();
+  const db          = useSQLiteContext();
 
   const activePlayers = useMemo(() => allPlayers.filter((p) => p.isActive), [allPlayers]);
 
@@ -172,9 +455,8 @@ export function PerformancePane() {
     return Math.max(...fixtures.map((f) => f.season));
   }, [fixtures]);
 
-  const seasonStartWeek = (currentSeasonNumber - 1) * 38 + 1; // Used for development snapshots
+  const seasonStartWeek = (currentSeasonNumber - 1) * 38 + 1;
 
-  // Fetch all player stats for the squad from SQLite
   const { data: allStatsRows = [] } = useQuery({
     queryKey: ['squad-all-stats'],
     queryFn: async () => {
@@ -196,7 +478,6 @@ export function PerformancePane() {
 
   const playerStats = useMemo((): PlayerStats[] => {
     return activePlayers.map((player) => {
-      // Season stats from SQLite (all clubs/leagues this season)
       const seasonRows = allStatsRows.filter(
         (r) => r.player_id === player.id && r.season === currentSeasonNumber,
       );
@@ -207,7 +488,6 @@ export function PerformancePane() {
         ? seasonRows.reduce((s, r) => s + r.avg_rating * r.appearances, 0) / games
         : 0;
 
-      // All-time stats from SQLite
       const allTimeRows = allStatsRows.filter((r) => r.player_id === player.id);
       const allTimeGoals = allTimeRows.reduce((s, r) => s + r.goals, 0);
       const allTimeAssists = allTimeRows.reduce((s, r) => s + r.assists, 0);
@@ -279,124 +559,87 @@ export function PerformancePane() {
     },
   ], []);
 
-  function renderLeaderPanel(
-    label: string,
-    stat: PlayerStats | null,
-    statBadge: string,
-  ) {
-    if (!stat) {
-      return (
-        <View style={{ flex: 1, backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 12, minHeight: 130 }}>
-          <PixelText size={6} color={WK.dim} style={{ marginBottom: 10 }}>{label}</PixelText>
-          <BodyText size={11} dim>—</BodyText>
-        </View>
-      );
-    }
-    return (
-      <Pressable
-        style={({ pressed }) => ({
-          flex: 1,
-          backgroundColor: pressed ? WK.tealMid : WK.tealDark,
-          borderWidth: 2,
-          borderColor: WK.border,
-          padding: 12,
-          minHeight: 130,
-        })}
-        onPress={() => { hapticTap(); router.push(`/player/${stat.player.id}`); }}
-      >
-        <PixelText size={6} color={WK.dim} style={{ marginBottom: 8 }}>{label}</PixelText>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <View style={{ backgroundColor: WK.yellow, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 7, paddingVertical: 4 }}>
-            <PixelText size={9} color={WK.border}>{statBadge}</PixelText>
-          </View>
-        </View>
-        <BodyText size={15} upper numberOfLines={1} style={{ marginBottom: 10 }}>
-          {stat.player.name.split(' ')[0]}
-        </BodyText>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Avatar appearance={stat.player.appearance} role="PLAYER" size={32} morale={stat.player.morale ?? 70} age={stat.player.age} />
-          <BodyText size={11} dim>AGE {stat.player.age}</BodyText>
-          <BodyText size={12} dim>{stat.player.position}</BodyText>
-        </View>
-      </Pressable>
-    );
+  function goToPlayer(id: string) {
+    router.push(`/player/${id}`);
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE }}>
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>TOP SCORER</PixelText>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {renderLeaderPanel('THIS SEASON', topScorerSeason, topScorerSeason ? `${topScorerSeason.goals} GOALS` : '— GOALS')}
-          {renderLeaderPanel('ALL TIME', topScorerAllTime, topScorerAllTime ? `${topScorerAllTime.allTimeGoals} GOALS` : '— GOALS')}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: FAB_CLEARANCE, gap: 12 }}>
+
+      {/* Club record */}
+      <ClubRecordSection clubId={club.id} />
+
+      {/* Top scorer */}
+      <LeaderCard
+        sectionTitle="TOP SCORER"
+        seasonStat={topScorerSeason}
+        allTimeStat={topScorerAllTime}
+        seasonValue={topScorerSeason?.goals ?? 0}
+        allTimeValue={topScorerAllTime?.allTimeGoals ?? 0}
+        unit="GOALS"
+        accentColor={WK.yellow}
+        onPress={goToPlayer}
+      />
+
+      {/* Assist maker */}
+      <LeaderCard
+        sectionTitle="ASSIST MAKER"
+        seasonStat={assistMakerSeason}
+        allTimeStat={assistMakerAllTime}
+        seasonValue={assistMakerSeason?.assists ?? 0}
+        allTimeValue={assistMakerAllTime?.allTimeAssists ?? 0}
+        unit="ASSISTS"
+        accentColor={WK.tealLight}
+        onPress={goToPlayer}
+      />
+
+      {/* Squad ability */}
+      <View style={[{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border }, pixelShadow]}>
+        <View style={{
+          backgroundColor: WK.tealMid,
+          borderBottomWidth: 2,
+          borderBottomColor: WK.border,
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+        }}>
+          <PixelText size={8} color={WK.yellow}>SQUAD ABILITY</PixelText>
+        </View>
+        <View style={{ padding: 14 }}>
+          <SquadAbilityChart players={activePlayers} />
         </View>
       </View>
 
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>ASSIST MAKER</PixelText>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {renderLeaderPanel('THIS SEASON', assistMakerSeason, assistMakerSeason ? `${assistMakerSeason.assists} ASSISTS` : '— ASSISTS')}
-          {renderLeaderPanel('ALL TIME', assistMakerAllTime, assistMakerAllTime ? `${assistMakerAllTime.allTimeAssists} ASSISTS` : '— ASSISTS')}
+      {/* Development */}
+      <DevelopmentSection
+        playerStats={playerStats}
+        totalImprovement={totalImprovement}
+        mostImproved={mostImproved}
+        onPress={goToPlayer}
+      />
+
+      {/* Season performance table */}
+      <View style={[{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border }, pixelShadow]}>
+        <View style={{
+          backgroundColor: WK.tealMid,
+          borderBottomWidth: 2,
+          borderBottomColor: WK.border,
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+        }}>
+          <PixelText size={8} color={WK.yellow}>SEASON PERFORMANCE</PixelText>
+        </View>
+        <View style={{ padding: 4 }}>
+          <SortableTable
+            columns={PERF_COLS}
+            data={seasonPerformers}
+            defaultSortKey="goals"
+            defaultSortDir="desc"
+            onRowPress={(s) => { hapticTap(); goToPlayer(s.player.id); }}
+            emptyMessage="NO MATCH DATA YET"
+          />
         </View>
       </View>
 
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 12 }}>SQUAD ABILITY</PixelText>
-        <SquadAbilityChart players={activePlayers} />
-      </View>
-
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, marginBottom: 12, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>SEASON PERFORMANCE</PixelText>
-        <SortableTable
-          columns={PERF_COLS}
-          data={seasonPerformers}
-          defaultSortKey="goals"
-          defaultSortDir="desc"
-          onRowPress={(s) => { hapticTap(); router.push(`/player/${s.player.id}`); }}
-          emptyMessage="NO MATCH DATA YET"
-        />
-      </View>
-
-      <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
-        <PixelText size={8} upper color={WK.yellow} style={{ marginBottom: 10 }}>SEASON DEVELOPMENT</PixelText>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: WK.tealDark, borderWidth: 2, borderColor: WK.border, padding: 10, marginBottom: 12 }}>
-          <BodyText size={13} dim>SQUAD OVR GAINED</BodyText>
-          <PixelText size={10} color={totalImprovement > 0 ? WK.green : WK.dim}>+{totalImprovement}</PixelText>
-        </View>
-        <PixelText size={6} color={WK.dim} style={{ marginBottom: 8 }}>MOST IMPROVED</PixelText>
-        {mostImproved ? (
-          <Pressable
-            onPress={() => { hapticTap(); router.push(`/player/${mostImproved.player.id}`); }}
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? WK.tealMid : WK.tealDark,
-              borderWidth: 2,
-              borderColor: WK.green,
-              padding: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-            })}
-          >
-            <Avatar appearance={mostImproved.player.appearance} role="PLAYER" size={40} morale={mostImproved.player.morale ?? 70} age={mostImproved.player.age} />
-            <View style={{ flex: 1 }}>
-              <BodyText size={13} upper numberOfLines={1}>{mostImproved.player.name}</BodyText>
-              <BodyText size={11} dim style={{ marginTop: 2 }}>{mostImproved.player.position} · {mostImproved.player.nationality}</BodyText>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <View style={{ backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingHorizontal: 6, paddingVertical: 3 }}>
-                  <PixelText size={7} color={WK.dim}>START {mostImproved.startOvr}</PixelText>
-                </View>
-                <PixelText size={8} color={WK.dim}>→</PixelText>
-                <View style={{ backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.green, paddingHorizontal: 6, paddingVertical: 3 }}>
-                  <PixelText size={7} color={WK.green}>NOW {mostImproved.currentOvr}</PixelText>
-                </View>
-                <Badge label={`+${mostImproved.improvement}`} color="green" />
-              </View>
-            </View>
-          </Pressable>
-        ) : (
-          <BodyText size={11} dim>No development data yet.</BodyText>
-        )}
-      </View>
     </ScrollView>
   );
 }

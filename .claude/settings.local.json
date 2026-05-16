@@ -39,7 +39,9 @@
       "WebFetch(domain:www.dicebear.com)",
       "WebFetch(domain:dicebear.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git diff *)",
+      "Bash(git status *)"
     ]
   }
 }

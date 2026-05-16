@@ -501,12 +501,7 @@ function StaffPane() {
   const weekNumber = club.weekNumber ?? 1;
 
   const config = useGameConfigStore((s) => s.config);
-  const staffRoles = config.staffRoles;
-  const STAFF_FILTER_OPTIONS = useMemo(() => {
-    const roles = ['ALL', ...staffRoles];
-    if (!roles.includes('scout')) roles.push('scout' as any);
-    return roles as StaffRoleFilter[];
-  }, [staffRoles]);
+  const STAFF_FILTER_OPTIONS: StaffRoleFilter[] = ['ALL', 'coach', 'assistant_coach', 'scout'];
 
   const [filterRole, setFilterRole] = useState<StaffRoleFilter>('ALL');
   const [showFilter, setShowFilter] = useState(false);
@@ -520,12 +515,16 @@ function StaffPane() {
   const [renewError, setRenewError] = useState<string | null>(null);
   const [fireError, setFireError] = useState<string | null>(null);
 
+  const COACHING_ROLES = new Set<string>(['coach', 'assistant_coach']);
+
   type HiredStaffItem =
     | { kind: 'coach'; data: Coach }
     | { kind: 'scout'; data: Scout };
 
   const allStaff: HiredStaffItem[] = [
-    ...coaches.map((c) => ({ kind: 'coach' as const, data: c })),
+    ...coaches
+      .filter((c) => COACHING_ROLES.has(c.role))
+      .map((c) => ({ kind: 'coach' as const, data: c })),
     ...scouts.map((s) => ({ kind: 'scout' as const, data: s })),
   ];
 

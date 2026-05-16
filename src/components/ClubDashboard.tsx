@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Trophy, UserPlus, BarChart2, Heart, ArrowLeftRight, Building2 } from 'lucide-react-native';
+import { ChevronRight, Trophy, UserPlus, BarChart2, Heart, ArrowLeftRight, Building2, Search, Landmark } from 'lucide-react-native';
 import useClubMetrics from '@/hooks/useClubMetrics';
 import { useInboxStore } from '@/stores/inboxStore';
 import { useClubStore } from '@/stores/clubStore';
@@ -846,10 +846,25 @@ export function ClubDashboard() {
             </Pressable>
           ))}
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
           {([
             { icon: ArrowLeftRight, label: 'TRANSFERS', color: WK.tealLight, route: '/transfers'                        },
             { icon: Building2,      label: 'STADIUM',   color: WK.tealLight, route: '/(tabs)/office?tab=STADIUM'  },
+          ] as const).map(({ icon: Icon, label, color, route }) => (
+            <Pressable
+              key={label}
+              onPress={() => router.push(route as any)}
+              style={[{ flex: 1, backgroundColor: WK.tealCard, borderWidth: 2, borderColor: WK.border, paddingVertical: 14, alignItems: 'center', gap: 8 }, pixelShadow]}
+            >
+              <Icon size={18} color={color} />
+              <PixelText size={6} color={color}>{label}</PixelText>
+            </Pressable>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {([
+            { icon: Search,   label: 'SCOUTING', color: WK.tealLight, route: '/(tabs)/facilities?tab=SCOUTING' },
+            { icon: Landmark, label: 'MUSEUM',   color: WK.tealLight, route: '/museum'                         },
           ] as const).map(({ icon: Icon, label, color, route }) => (
             <Pressable
               key={label}

@@ -19,9 +19,12 @@ import { WK, pixelShadow } from '@/constants/theme';
 import { Loan } from '@/types/market';
 import { type FinancialCategory, type FinancialTransaction } from '@/types/finance';
 import { calculateWeeklyFinances } from '@/engine/finance';
-import { calculateMatchdayIncome } from '@/utils/matchdayIncome';
+import { calculateMatchdayIncome, calculateStandIncome } from '@/utils/matchdayIncome';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useGameConfigStore } from '@/stores/gameConfigStore';
+import { useFanStore } from '@/stores/fanStore';
+import { useCalendarStore } from '@/stores/calendarStore';
+import { isTransferWindowOpen } from '@/utils/dateUtils';
 import { renderMoney, formatCurrencyCompact } from '@/utils/currency';
 import { Money } from '@/components/ui/Money';
 import useClubMetrics from '@/hooks/useClubMetrics';
@@ -72,9 +75,11 @@ function BalancePane() {
   const facilityLevels = useFacilityStore((s) => s.levels);
   const facilityConditions = useFacilityStore((s) => s.conditions);
   const facilityTemplates = useFacilityStore((s) => s.templates);
+  const ticketPrice = useFacilityStore((s) => s.ticketPrice);
   const fixtures = useFixtureStore((s) => s.fixtures);
   const currentMatchday = useFixtureStore((s) => s.currentMatchday);
   const nonMatchPct = useGameConfigStore((s) => s.config.nonMatchFacilityIncomePercent ?? 0);
+  const getFanState = useFanStore((s) => s.getFanState);
 
   const weeklyRepaymentPence = totalWeeklyRepayment();
 
@@ -104,14 +109,26 @@ function BalancePane() {
     .filter((b) => b.label.includes('maintenance'))
     .reduce((sum, b) => sum + b.amount, 0);
 
-  const hasHomeMatch = fixtures.some(
-    (f) => f.round === currentMatchday && f.homeClubId === club.id,
-  );
+  const isMatchSimulationWeek =
+    (club.weekNumber ?? 1) >= 5 &&
+    !isTransferWindowOpen(useCalendarStore.getState().gameDate);
+  const hasHomeMatch =
+    isMatchSimulationWeek &&
+    fixtures.some((f) => f.round === currentMatchday && f.homeClubId === club.id);
   const facilityMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
-  const facilityIncomePence = Math.round(
+  const fanMoraleMultiplier = hasHomeMatch ? (getFanState(club.id)?.morale ?? 60) / 100 : 1;
+  const rawMatchdayIncome = Math.round(
     calculateMatchdayIncome(facilityTemplates, facilityLevels, facilityConditions, club.reputation)
-    * facilityMultiplier
+      * facilityMultiplier
+      * fanMoraleMultiplier,
   );
+  const rawStandIncome = hasHomeMatch
+    ? Math.round(
+        calculateStandIncome(facilityTemplates, facilityLevels, facilityConditions, club.reputationTier, ticketPrice)
+          * fanMoraleMultiplier,
+      )
+    : 0;
+  const facilityIncomePence = Math.max(0, rawMatchdayIncome + rawStandIncome);
   const facilityIncomeLabel = hasHomeMatch
     ? 'FACILITY INCOME'
     : `FACILITY INCOME (${nonMatchPct}% NON-MATCHDAY)`;

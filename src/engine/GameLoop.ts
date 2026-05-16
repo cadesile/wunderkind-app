@@ -42,6 +42,7 @@ import { useFinanceStore } from '@/stores/financeStore';
 import { useEventChainStore } from '@/stores/eventChainStore';
 import { useLossConditionStore } from '@/stores/lossConditionStore';
 import { WeeklyTick } from '@/types/game';
+import type { NpcLedgerEntry } from '@/types/world';
 import { FacilityLevels, repairFacilityCost } from '@/types/facility';
 import { PersonalityMatrix } from '@/types/player';
 import { CompanySize } from '@/types/market';
@@ -378,7 +379,75 @@ export function processWeeklyTick(): WeeklyTick {
     newInjuries.push({ playerId: id, severity: tier.severity, weeksRemaining });
   });
 
-  // ── 3c. Contract expiry ───────────────────────────────────────────────────
+  // ── 3c. AMP player condition ─────────────────────────────────────────────────
+  // No match this week → all players fully recover to 100.
+  // Match weeks → condition drain is applied by SimulationService AFTER the match
+  //   (starting XI drops to 50–75; bench players recover to 100 there too).
+  {
+    const fixtureState = useFixtureStore.getState();
+    const hasMatchThisWeek = fixtureState.fixtures.some(
+      (f) => f.round === fixtureState.currentMatchday &&
+        (f.homeClubId === club.id || f.awayClubId === club.id),
+    );
+    if (!hasMatchThisWeek) {
+      const { updatePlayer: restoreCondition } = useSquadStore.getState();
+      for (const player of players) {
+        if ((player.condition ?? 100) < 100) {
+          restoreCondition(player.id, { condition: 100 });
+        }
+      }
+    }
+  }
+
+  // ── 3d. NPC player condition + injury simulation ──────────────────────────────
+  // No match this week → all players in that club fully recover to 100.
+  // Match weeks → condition drain applied by SimulationService after each match.
+  // Injury rolls and recovery run every tick regardless of match schedule.
+  {
+    const worldState   = useWorldStore.getState();
+    const fixtureState = useFixtureStore.getState();
+    const npcClubs     = Object.values(worldState.clubs);
+
+    for (const npcClub of npcClubs) {
+      if (npcClub.players.length === 0) continue;
+
+      const hasMatch = fixtureState.fixtures.some(
+        (f) => f.round === fixtureState.currentMatchday &&
+          (f.homeClubId === npcClub.id || f.awayClubId === npcClub.id),
+      );
+
+      const updatedPlayers = npcClub.players.map((p) => {
+        let updated = { ...p };
+
+        // ── Injury recovery ──────────────────────────────────────────────────
+        if (updated.injury) {
+          const remaining = updated.injury.weeksRemaining - 1;
+          updated = remaining <= 0
+            ? { ...updated, injury: undefined }
+            : { ...updated, injury: { ...updated.injury, weeksRemaining: remaining } };
+        }
+
+        // ── Condition: restore to 100 on non-match weeks ─────────────────────
+        if (!hasMatch && (updated.condition ?? 100) < 100) {
+          updated = { ...updated, condition: 100 };
+        }
+        // Match week: drain applied by SimulationService post-match.
+
+        // ── New injury roll (skip if already injured) ────────────────────────
+        if (!updated.injury && Math.random() < injuryProb) {
+          const tier           = pickInjurySeverity(INJURY_TIERS);
+          const weeksRemaining = calculateInjuryDuration(tier, 0);
+          updated = { ...updated, injury: { severity: tier.severity, weeksRemaining, injuredWeek: weekNumber } };
+        }
+
+        return updated;
+      });
+
+      worldState.updateClub(npcClub.id, { players: updatedPlayers });
+    }
+  }
+
+  // ── 3e. Contract expiry ──────────────────────────────────────────────────────
   // Check every active player's enrollment. Fires inbox warnings at 12 and 4
   // weeks remaining, applies morale decay during the critical window (1–11w),
   // and removes the player when the contract expires (weeksRemaining <= 0).
@@ -453,7 +522,7 @@ export function processWeeklyTick(): WeeklyTick {
     });
   }
 
-  // ── 3d. Staff contract expiry ─────────────────────────────────────────────
+  // ── 3f. Staff contract expiry ─────────────────────────────────────────────
   // Mirrors player enrollment expiry. Fires inbox warnings at 12 and 4 weeks
   // remaining, applies morale decay weeks 1–11, removes the member at 0 weeks.
   {
@@ -562,11 +631,17 @@ export function processWeeklyTick(): WeeklyTick {
     addEarnings(sponsorIncomePence);
   }
 
-  // Facility income — full on home-match weeks, reduced on non-matchday weeks
+  // Facility income — full on home-match weeks, reduced on non-matchday weeks.
+  // Guard: simulation (and therefore actual matches) only runs when weekNumber >= 5
+  // and outside the transfer window — mirror the condition in _layout.tsx so that
+  // pre-season weeks and transfer-window ticks never count as matchday income.
   const { fixtures, currentMatchday } = useFixtureStore.getState();
-  const hasHomeMatch = fixtures.some(
-    (f) => f.round === currentMatchday && f.homeClubId === club.id,
-  );
+  const isMatchSimulationWeek =
+    weekNumber >= 5 &&
+    !isTransferWindowOpen(useCalendarStore.getState().gameDate);
+  const hasHomeMatch =
+    isMatchSimulationWeek &&
+    fixtures.some((f) => f.round === currentMatchday && f.homeClubId === club.id);
   const nonMatchPct = config.nonMatchFacilityIncomePercent ?? 0;
   const facilityIncomeMultiplier = hasHomeMatch ? 1.0 : nonMatchPct / 100;
 
@@ -632,6 +707,32 @@ export function processWeeklyTick(): WeeklyTick {
   }
 
   clearOldTransactions();
+
+  // ── 6a. NPC club wage deductions ──────────────────────────────────────────────
+  // Deduct each NPC club's weekly squad wage bill from their in-memory balance
+  // and append a ledger entry. Balance/ledger live in-memory only (not SQLite).
+  {
+    const worldState = useWorldStore.getState();
+    const npcClubs = Object.values(worldState.clubs);
+    for (const npcClub of npcClubs) {
+      if (npcClub.players.length === 0) continue;
+      const weeklyWageBill = npcClub.players.reduce(
+        (sum, p) => sum + (p.contractValue ?? 0), 0,
+      );
+      if (weeklyWageBill <= 0) continue;
+      const entry: NpcLedgerEntry = {
+        weekNumber,
+        type: 'wage',
+        amount: -weeklyWageBill,
+        description: `Week ${weekNumber} squad wages (${npcClub.players.length} players)`,
+      };
+      const newLedger = [...npcClub.ledger, entry].slice(-52);
+      worldState.updateClub(npcClub.id, {
+        balance: npcClub.balance - weeklyWageBill,
+        ledger: newLedger,
+      });
+    }
+  }
 
   // ── 6b. Player development + trait shifts — ONE combined set() ──────────────
   // Re-read players to pick up injuries set in step 3b so the injury check

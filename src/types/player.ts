@@ -169,10 +169,37 @@ export interface Player {
     /** Game week when the injury occurred */
     injuredWeek: number;
   };
+  /**
+   * Physical condition 0–100. Drains weekly from training and matches.
+   * Affects development gain multiplier and injury probability.
+   * Defaults to 80 on signing.
+   */
+  condition?: number;
   /** Monthly (every-4-weeks) development snapshots — populated by GameLoop */
   developmentLog?: DevelopmentSnapshot[];
   /** Match appearance history — keyed season → clubId → appearances[] */
   appearances?: PlayerAppearances;
   /** If true, the club will not receive any transfer bids for this player */
   notForSale?: boolean;
+}
+
+// ─── Player Brain decision types ──────────────────────────────────────────────
+
+export type PlayerWillingness = 'eager' | 'open' | 'reluctant' | 'refusing';
+
+export interface PlayerDecision {
+  /** How willing the player is to renew their enrollment/contract */
+  renewalWillingness: PlayerWillingness;
+  /** How willing the player is to accept a transfer offer */
+  transferWillingness: PlayerWillingness;
+  /** Human-readable reasons driving the decision — for DOF report display */
+  reasoning: string[];
+}
+
+export interface PlayerDecisionContext {
+  academyReputation: number;        // 0–100
+  weekNumber: number;
+  enrollmentEndWeek: number;
+  /** Optional — only provided when evaluating a specific transfer offer */
+  offerFee?: number;                // pence
 }

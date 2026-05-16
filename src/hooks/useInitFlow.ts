@@ -112,7 +112,9 @@ function worldStaffToCoach(ws: WorldStaff, weekNumber: number): Coach {
     nationality:  ws.nationality ?? '',
     joinedWeek:   weekNumber,
     morale:       randomBaseMorale(defaultMoraleMin, defaultMoraleMax),
-    specialisms:  Array.isArray(ws.specialisms) ? undefined : (ws.specialisms as import('@/types/coach').CoachSpecialisms | undefined),
+    specialisms:           Array.isArray(ws.specialisms) ? undefined : (ws.specialisms as import('@/types/coach').CoachSpecialisms | undefined),
+    preferredFormation:    ws.preferredFormation ?? ((!Array.isArray(ws.specialisms) && ws.specialisms) ? (ws.specialisms as unknown as Record<string, string>).formation : undefined),
+    preferredPlayingStyle: (ws.preferredPlayingStyle ?? ((!Array.isArray(ws.specialisms) && ws.specialisms) ? (ws.specialisms as unknown as Record<string, string>).playingStyle : undefined)) as import('@/types/coach').Coach['preferredPlayingStyle'],
     relationships: [],
   };
 }

@@ -31,6 +31,14 @@ export interface WorldPlayer {
   weight?: number;
   /** ID of the NPC club this player belongs to, or null if unassigned. Updated by MarketEngine. */
   npcClubId: string | null;
+  /** Physical condition 0–100. Drained each tick by training + match load; recovers slowly. */
+  condition?: number;
+  /** Active injury, if any. Cleared when weeksRemaining reaches 0. */
+  injury?: {
+    severity: 'minor' | 'moderate' | 'serious';
+    weeksRemaining: number;
+    injuredWeek: number;
+  };
 }
 
 /** Staff member as delivered in the world pack */
@@ -45,6 +53,10 @@ export interface WorldStaff {
   specialisms?: Record<string, number> | [];
   /** Deterministic visual appearance generated client-side during initialization */
   appearance?: Appearance;
+  /** Manager's preferred formation (e.g. '4-4-2'). Only present for role='manager'. */
+  preferredFormation?: string;
+  /** Manager's preferred playing style. Only present for role='manager'. */
+  preferredPlayingStyle?: string;
 }
 
 /** Club-level personality traits */
@@ -52,6 +64,14 @@ export interface ClubPersonality {
   playingStyle: 'POSSESSION' | 'DIRECT' | 'COUNTER' | 'HIGH_PRESS';
   financialApproach: 'SPECULATIVE' | 'BALANCED' | 'CONSERVATIVE';
   managerTemperament: number;
+}
+
+export interface NpcLedgerEntry {
+  weekNumber: number;
+  type: 'signing' | 'sale' | 'wage';
+  /** Signed pence value. Negative = expense, positive = income. */
+  amount: number;
+  description: string;
 }
 
 /** A fully-staffed NPC club as delivered in the world pack */
@@ -70,6 +90,16 @@ export interface WorldClub {
   /** Randomly assigned formation, e.g. '4-4-2', '4-3-3'. Assigned at world init. */
   formation: string;
   trophies?: TrophyRecord[];
+  /**
+   * Spendable cash balance in pence.
+   * Seeded from GameConfig.npcStartingBalanceByTier on world initialisation.
+   * Mutated by MarketEngine during NPC transfers and by GameLoop weekly wage deductions.
+   */
+  balance: number;
+  /**
+   * Rolling ledger of financial activity. Pruned to the last 52 entries.
+   */
+  ledger: NpcLedgerEntry[];
 }
 
 /** Lightweight league metadata stored in worldStore (no club rosters) */

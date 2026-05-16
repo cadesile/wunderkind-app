@@ -581,7 +581,7 @@ function HirePane({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Avatar appearance={coachAppearance} role="COACH" size={44} />
                   <View style={{ flex: 1 }}>
-                    <BodyText size={14} upper numberOfLines={1}>{mc.firstName} {mc.lastName}</BodyText>
+                    <BodyText size={14} upper numberOfLines={1}>{`${mc.firstName} ${mc.lastName}`}</BodyText>
                     <PixelText size={8} color={WK.tealLight}>{formatStaffRole(mc.role).toUpperCase()}</PixelText>
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                       <FlagText nationality={mc.nationality} size={11} />
@@ -638,7 +638,7 @@ function HirePane({
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Avatar appearance={scoutAppearance} role="SCOUT" size={44} />
                 <View style={{ flex: 1 }}>
-                  <BodyText size={14} upper numberOfLines={1}>{ms.firstName} {ms.lastName}</BodyText>
+                  <BodyText size={14} upper numberOfLines={1}>{`${ms.firstName} ${ms.lastName}`}</BodyText>
                   <PixelText size={8} color={rangeColor[range]}>{`${rangeLabel[range] ?? ''} SCOUT`}</PixelText>
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                     <FlagText nationality={ms.nationality} size={11} />
@@ -880,6 +880,8 @@ export default function FacilitiesScreen() {
     if (params.tab === 'HIRE') {
       setActiveTab('HIRE');
       setSelectedRole(params.role ?? 'ALL');
+    } else if (params.tab === 'SCOUTING' || params.tab === 'TRAINING' || params.tab === 'MEDICAL') {
+      setActiveTab(params.tab as FacilityCategory);
     }
   }, [params.tab, params.role]);
 

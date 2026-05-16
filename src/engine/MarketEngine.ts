@@ -1,6 +1,6 @@
 import type { Player, Position } from '@/types/player';
 import type { TransferOffer } from '@/types/market';
-import type { WorldClub, WorldPlayer } from '@/types/world';
+import type { WorldClub, WorldPlayer, NpcLedgerEntry } from '@/types/world';
 import { uuidv7 } from '@/utils/uuidv7';
 import { useWorldStore } from '@/stores/worldStore';
 import type { LeaguePlayerAbilityRanges } from '@/types/gameConfig';
@@ -193,6 +193,17 @@ export async function processNPCTransfers(
   );
 
   const mutatedIds = new Set<string>();
+  // Track balance deltas and ledger entries per club for this transfer round.
+  // Applied after roster flushes (updateClub is in-memory only).
+  const balanceDeltas = new Map<string, number>();
+  const ledgerEntries = new Map<string, NpcLedgerEntry[]>();
+
+  function recordTransferFinance(clubId: string, amount: number, entry: NpcLedgerEntry) {
+    balanceDeltas.set(clubId, (balanceDeltas.get(clubId) ?? 0) + amount);
+    const entries = ledgerEntries.get(clubId) ?? [];
+    entries.push(entry);
+    ledgerEntries.set(clubId, entries);
+  }
 
   for (const buyerClub of Object.values(mutableClubs)) {
     // Never sign if already at or above global squad cap
@@ -238,6 +249,16 @@ export async function processNPCTransfers(
 
       mutatedIds.add(seller.id);
       mutatedIds.add(buyerClub.id);
+
+      const playerName = `${transferPlayer.firstName} ${transferPlayer.lastName}`;
+      recordTransferFinance(seller.id, fee, {
+        weekNumber, type: 'sale', amount: fee,
+        description: `Sold ${playerName} to ${buyerClub.name}`,
+      });
+      recordTransferFinance(buyerClub.id, -fee, {
+        weekNumber, type: 'signing', amount: -fee,
+        description: `Signed ${playerName} from ${seller.name}`,
+      });
 
       digest.transfers.push({
         playerName: `${transferPlayer.firstName} ${transferPlayer.lastName}`,
@@ -300,6 +321,16 @@ export async function processNPCTransfers(
     mutatedIds.add(club.id);
     mutatedIds.add(upgradeSource.id);
 
+    const candidateName = `${candidate.firstName} ${candidate.lastName}`;
+    recordTransferFinance(upgradeSource.id, fee, {
+      weekNumber, type: 'sale', amount: fee,
+      description: `Sold ${candidateName} to ${club.name}`,
+    });
+    recordTransferFinance(club.id, -fee, {
+      weekNumber, type: 'signing', amount: -fee,
+      description: `Signed ${candidateName} from ${upgradeSource.name}`,
+    });
+
     digest.transfers.push({
       playerName: `${candidate.firstName} ${candidate.lastName}`,
       fromClub:   upgradeSource.name,
@@ -316,6 +347,18 @@ export async function processNPCTransfers(
       return club ? storeState.mutateClubRoster(id, club.players as WorldPlayer[]) : Promise.resolve();
     }),
   );
+
+  // Apply balance and ledger updates in-memory for all clubs involved in transfers
+  for (const [clubId, delta] of balanceDeltas) {
+    const club = storeState.clubs[clubId];
+    if (!club) continue;
+    const newEntries = ledgerEntries.get(clubId) ?? [];
+    const newLedger = [...club.ledger, ...newEntries].slice(-52);
+    storeState.updateClub(clubId, {
+      balance: club.balance + delta,
+      ledger: newLedger,
+    });
+  }
 
   return digest;
 }

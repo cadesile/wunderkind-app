@@ -8,6 +8,7 @@ import { useClubStore } from '@/stores/clubStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
 import { useFinanceStore } from '@/stores/financeStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { penceToPounds } from '@/utils/currency';
 import { generateAppearance } from '@/engine/appearance';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
@@ -72,6 +73,11 @@ interface WorldState {
    */
   applySeasonUpdate: (responseLeagues: SeasonUpdateLeague[]) => Promise<void>;
   addTrophyToClub: (clubId: string, trophy: TrophyRecord) => Promise<void>;
+  /**
+   * Update arbitrary fields on a WorldClub in-memory (balance, ledger, etc.).
+   * Does NOT persist to SQLite — use mutateClubRoster for roster changes that need durability.
+   */
+  updateClub: (clubId: string, updates: Partial<WorldClub>) => void;
 }
 
 export const useWorldStore = create<WorldState>()(
@@ -87,6 +93,7 @@ export const useWorldStore = create<WorldState>()(
         const leagues: WorldLeague[] = [];
         const clubs: Record<string, WorldClub> = {};
         const gameDate = getGameDate(1); // Default to Week 1 for world init age calculation
+        const { npcStartingBalanceByTier } = useGameConfigStore.getState().config;
 
         // Build leagues + clubs, writing each league's club map to AsyncStorage with verification.
         // Throws on any write failure so the caller (useAuthFlow) is notified loudly.
@@ -112,10 +119,17 @@ export const useWorldStore = create<WorldState>()(
                 npcClubId: club.id,
                 appearance: generateAppearance(p.id, 'PLAYER', computePlayerAge(p.dateOfBirth, gameDate), p.personality),
               })),
-              staff: club.staff.map((s) => ({
-                ...s,
-                appearance: generateAppearance(s.id, s.role === 'scout' ? 'SCOUT' : 'COACH', 35),
-              })),
+              staff: club.staff.map((s) => {
+                const rawSpec = (!Array.isArray(s.specialisms) && s.specialisms) ? s.specialisms as unknown as Record<string, string> : undefined;
+                return {
+                  ...s,
+                  appearance: generateAppearance(s.id, s.role === 'scout' ? 'SCOUT' : 'COACH', 35),
+                  preferredFormation:    s.preferredFormation    ?? rawSpec?.formation,
+                  preferredPlayingStyle: s.preferredPlayingStyle ?? rawSpec?.playingStyle,
+                };
+              }),
+              balance: npcStartingBalanceByTier[leagueData.tier] ?? 0,
+              ledger: [],
             };
             clubs[builtClub.id] = builtClub;
             builtClubs.push(builtClub);
@@ -334,6 +348,13 @@ export const useWorldStore = create<WorldState>()(
         if (!leagueId) return;
         await upsertClub(getDatabase(), updatedClub, leagueId);
       },
+
+      updateClub: (clubId, updates) =>
+        set((s) => {
+          const existing = s.clubs[clubId];
+          if (!existing) return s;
+          return { clubs: { ...s.clubs, [clubId]: { ...existing, ...updates } } };
+        }),
 
       addTrophyToClub: async (clubId, trophy) => {
         const { clubs, leagues } = get();

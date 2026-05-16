@@ -129,6 +129,10 @@ export interface ApiStaffCoach {
   morale: number;
   specialisms?: Record<string, number>;
   tier?: string;
+  /** Manager's preferred formation (e.g. '4-4-2'). Only present for role='manager'. */
+  preferredFormation?: string;
+  /** Manager's preferred playing style. Only present for role='manager'. */
+  preferredPlayingStyle?: string;
 }
 
 export interface ApiStaffScout {

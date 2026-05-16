@@ -320,6 +320,19 @@ export interface GameConfig {
   investorProbabilityNational: number;
   /** Weekly probability of an investor offer when club is Elite tier. */
   investorProbabilityElite: number;
+
+  /**
+   * Maximum number of free (zero-fee) player signings allowed per season.
+   * Managed via EasyAdmin on the backend. Default: 3.
+   */
+  freeTransfersPerSeason: number;
+
+  /**
+   * Seed balance for NPC clubs by league tier (pence).
+   * Key is tier number (1 = top tier, higher = lower division).
+   * Default provides reasonable starting budgets across four tiers.
+   */
+  npcStartingBalanceByTier: Record<number, number>;
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -430,4 +443,12 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   investorProbabilityRegional: 0.12,
   investorProbabilityNational: 0.06,
   investorProbabilityElite:    0.02,
+
+  freeTransfersPerSeason: 3,
+  npcStartingBalanceByTier: {
+    1: 500000000,   // £5,000,000
+    2: 200000000,   // £2,000,000
+    3:  80000000,   //   £800,000
+    4:  30000000,   //   £300,000
+  },
 };

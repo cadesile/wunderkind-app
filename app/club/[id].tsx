@@ -16,7 +16,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Money } from '@/components/ui/Money';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
-import type { WorldPlayer } from '@/types/world';
+import type { WorldPlayer, WorldStaff } from '@/types/world';
+import { Avatar } from '@/components/ui/Avatar';
 
 function calcOvr(p: WorldPlayer): number {
   return Math.round((p.pace + p.technical + p.vision + p.power + p.stamina + p.heart) / 6);
@@ -85,6 +86,60 @@ function DashCard({
           {name}
         </BodyText>
       </View>
+    </View>
+  );
+}
+
+const STAFF_ROLE_LABEL: Record<string, string> = {
+  manager: 'MANAGER',
+  director_of_football: 'DOF',
+  chairman: 'CHAIRMAN',
+};
+
+function StaffProfile({ member }: { member: WorldStaff }) {
+  const label = STAFF_ROLE_LABEL[member.role] ?? member.role.toUpperCase();
+  const isManager = member.role === 'manager';
+
+  return (
+    <View style={{
+      flex: 1,
+      backgroundColor: WK.tealDark,
+      borderWidth: 2,
+      borderColor: WK.border,
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+      gap: 6,
+    }}>
+      {/* Role badge */}
+      <View style={{
+        backgroundColor: WK.greenDark,
+        borderWidth: 1,
+        borderColor: WK.border,
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        alignSelf: 'center',
+      }}>
+        <PixelText size={5} color={WK.yellow}>{label}</PixelText>
+      </View>
+
+      {/* Avatar */}
+      <Avatar appearance={member.appearance} role="COACH" size={42} morale={70} />
+
+      {/* Name */}
+      <View style={{ alignItems: 'center', gap: 2 }}>
+        <BodyText size={11} style={{ color: WK.text, textAlign: 'center' }} numberOfLines={1}>
+          {member.firstName[0]}. {member.lastName}
+        </BodyText>
+        <FlagText nationality={member.nationality} size={12} />
+      </View>
+
+      {/* Stat */}
+      {isManager && member.preferredFormation ? (
+        <PixelText size={6} color={WK.tealLight}>{member.preferredFormation}</PixelText>
+      ) : (
+        <VT323Text size={16} color={WK.dim}>{member.coachingAbility}</VT323Text>
+      )}
     </View>
   );
 }
@@ -288,6 +343,39 @@ export default function ClubDetailScreen() {
             <VT323Text size={22} color={WK.yellow}>{club.reputation}</VT323Text>
           </View>
         </View>
+
+        {/* ── Staff profiles ──────────────────────────────────────────────── */}
+        {(() => {
+          const keyRoles = ['manager', 'director_of_football', 'chairman'];
+          const staffProfiles = keyRoles
+            .map((role) => club.staff.find((s) => s.role === role))
+            .filter((s): s is WorldStaff => !!s);
+          if (staffProfiles.length === 0) return null;
+          return (
+            <View style={[{
+              borderWidth: 3,
+              borderColor: WK.border,
+              overflow: 'hidden',
+            }, pixelShadow]}>
+              <View style={{
+                backgroundColor: WK.tealMid,
+                borderBottomWidth: 2,
+                borderBottomColor: WK.border,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}>
+                <PixelText size={7} color={WK.yellow}>CLUB LEADERSHIP</PixelText>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 0 }}>
+                {staffProfiles.map((s, i) => (
+                  <View key={s.id} style={{ flex: 1, borderLeftWidth: i > 0 ? 2 : 0, borderLeftColor: WK.border }}>
+                    <StaffProfile member={s} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* ── Dashboard cards 2×2 ─────────────────────────────────────────── */}
         {dashStats && (

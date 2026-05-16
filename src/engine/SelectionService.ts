@@ -20,13 +20,24 @@ export const FORMATION_CONFIG: Record<Formation, FormationRequirement> = {
 
 export class SelectionService {
   /**
-   * Ranking Formula: Ability * (1 + (Morale - 50) / 100)
-   * If morale is missing, default to 50.
+   * Ranking formula: Ability × conditionFactor × moraleFactor
+   *
+   * conditionFactor = 0.7 + (condition / 100) × 0.3
+   *   100 → 1.00 (full ability)
+   *    70 → 0.91
+   *    40 → 0.82
+   *     0 → 0.70 (still eligible, but deprioritised)
+   *
+   * moraleFactor = 1 + (morale − 50) / 100
+   *   Defaults: condition → 80, morale → 50.
    */
   static calculateScore(player: Player): number {
-    const ability = player.overallRating;
-    const morale = player.morale ?? 50;
-    return ability * (1 + (morale - 50) / 100);
+    const ability   = player.overallRating;
+    const morale    = player.morale    ?? 50;
+    const condition = player.condition ?? 80;
+    const conditionFactor = 0.7 + (condition / 100) * 0.3;
+    const moraleFactor    = 1 + (morale - 50) / 100;
+    return ability * conditionFactor * moraleFactor;
   }
 
   /**

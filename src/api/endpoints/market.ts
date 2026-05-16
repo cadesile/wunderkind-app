@@ -214,6 +214,8 @@ function transformMarketData(raw: RawMarketData, validRoles: StaffRole[] = []): 
       morale: c.morale,
       specialisms: c.specialisms as import('@/types/coach').CoachSpecialisms | undefined,
       tier: c.tier as import('@/types/club').ClubTier | undefined,
+      preferredFormation:   c.preferredFormation,
+      preferredPlayingStyle: c.preferredPlayingStyle as import('@/types/coach').Coach['preferredPlayingStyle'],
     })),
 
     scouts: raw.scouts.map((s) => {

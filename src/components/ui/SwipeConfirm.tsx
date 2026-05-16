@@ -1,6 +1,3 @@
-// TODO: install react-native-gesture-handler for a more robust gesture implementation.
-// Currently using PanResponder from React Native core.
-//
 // Binary decision point candidates to migrate to SwipeConfirm in a future pass:
 //   - inbox.tsx InboxMessageDetail: ACCEPT / REJECT for investor offers
 //   - inbox.tsx InboxMessageDetail: ACCEPT / REJECT for sponsor offers
@@ -13,7 +10,8 @@
 //   - coaches.tsx ProspectCard: SIGN / PASS
 
 import React, { useRef } from 'react';
-import { View, PanResponder, LayoutChangeEvent } from 'react-native';
+import { View, LayoutChangeEvent } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -56,36 +54,33 @@ export function SwipeConfirm({
     width: thumbX.value > 0 ? thumbX.value : 0,
   }));
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
-      onPanResponderMove: (_, { dx }) => {
-        const maxDrag = Math.max(0, trackWidth.current / 2 - THUMB_SIZE / 2);
-        thumbX.value = Math.max(-maxDrag, Math.min(maxDrag, dx));
-      },
-      onPanResponderRelease: (_, { dx }) => {
-        const maxDrag = Math.max(0, trackWidth.current / 2 - THUMB_SIZE / 2);
-        const threshold = maxDrag * THRESHOLD_RATIO;
-        if (dx <= -threshold) {
-          thumbX.value = withSpring(0);
-          hapticConfirm();
-          hapticSuccess();
-          onAccept();
-        } else if (dx >= threshold) {
-          thumbX.value = withSpring(0);
-          hapticConfirm();
-          hapticWarning();
-          onDecline();
-        } else {
-          thumbX.value = withSpring(0);
-        }
-      },
-      onPanResponderTerminate: () => {
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .enabled(!disabled)
+    .onChange((e) => {
+      const maxDrag = Math.max(0, trackWidth.current / 2 - THUMB_SIZE / 2);
+      thumbX.value = Math.max(-maxDrag, Math.min(maxDrag, e.translationX));
+    })
+    .onEnd((e) => {
+      const maxDrag = Math.max(0, trackWidth.current / 2 - THUMB_SIZE / 2);
+      const threshold = maxDrag * THRESHOLD_RATIO;
+      if (e.translationX <= -threshold) {
         thumbX.value = withSpring(0);
-      },
-    }),
-  ).current;
+        hapticConfirm();
+        hapticSuccess();
+        onAccept();
+      } else if (e.translationX >= threshold) {
+        thumbX.value = withSpring(0);
+        hapticConfirm();
+        hapticWarning();
+        onDecline();
+      } else {
+        thumbX.value = withSpring(0);
+      }
+    })
+    .onFinalize(() => {
+      thumbX.value = withSpring(0);
+    });
 
   function handleLayout(e: LayoutChangeEvent) {
     trackWidth.current = e.nativeEvent.layout.width;
@@ -197,21 +192,22 @@ export function SwipeConfirm({
         }}
         pointerEvents="box-none"
       >
-        <Animated.View
-          style={[{
-            width: THUMB_SIZE,
-            height: THUMB_SIZE,
-            backgroundColor: WK.tealPanel,
-            borderWidth: 3,
-            borderColor: WK.border,
-            alignItems: 'center',
-            justifyContent: 'center',
-            ...pixelShadow,
-          }, thumbStyle]}
-          {...panResponder.panHandlers}
-        >
-          <PixelText size={12}>⇔</PixelText>
-        </Animated.View>
+        <GestureDetector gesture={pan}>
+          <Animated.View
+            style={[{
+              width: THUMB_SIZE,
+              height: THUMB_SIZE,
+              backgroundColor: WK.tealPanel,
+              borderWidth: 3,
+              borderColor: WK.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...pixelShadow,
+            }, thumbStyle]}
+          >
+            <PixelText size={12}>⇔</PixelText>
+          </Animated.View>
+        </GestureDetector>
       </View>
     </View>
   );

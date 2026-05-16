@@ -70,13 +70,34 @@ type PositionFilter = typeof POSITION_FILTERS[number];
 
 // ─── Player card ──────────────────────────────────────────────────────────────
 
+function conditionColor(c: number): string {
+  if (c >= 70) return WK.green;
+  if (c >= 40) return WK.yellow;
+  return WK.red;
+}
+
+function renewalWillingness(loyalty: number, morale: number): { label: string; color: string } {
+  const score = (loyalty + (morale / 5)) / 2; // 1–20 scale
+  if (score >= 14) return { label: 'WILL RENEW',  color: WK.green  };
+  if (score >= 8)  return { label: 'UNCERTAIN',   color: WK.yellow };
+  return             { label: "WON'T RENEW", color: WK.red    };
+}
+
 function PlayerCard({ player }: { player: Player }) {
   const router = useRouter();
   const cliques = useInteractionStore((s) => s.cliques);
+  const weekNumber = useClubStore((s) => s.club.weekNumber ?? 1);
   const playerClique = cliques.find((c) => c.isDetected && c.memberIds.includes(player.id));
   const cliqueColor = playerClique ? CLIQUE_PALETTE[playerClique.color] : NO_GROUP_COLOR;
   const cliqueLabel = playerClique ? playerClique.name.toUpperCase() : 'NO GROUP';
   const statusStyle = getInjuryStatusStyle(player);
+
+  const condition = player.condition ?? 80;
+  const condCol   = conditionColor(condition);
+
+  const weeksLeft   = player.enrollmentEndWeek != null ? player.enrollmentEndWeek - weekNumber : null;
+  const showRenewal = weeksLeft != null && weeksLeft > 0 && weeksLeft <= 16;
+  const renewal     = showRenewal ? renewalWillingness(player.personality.loyalty, player.morale ?? 70) : null;
 
   const traitValues = [
     player.personality.determination,
@@ -149,6 +170,10 @@ function PlayerCard({ player }: { player: Player }) {
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${player.overallRating}`} color="yellow" />
           <MoraleBar morale={player.morale ?? 70} width={48} />
+          {/* Condition bar */}
+          <View style={{ width: 48, height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+            <View style={{ height: '100%', width: `${condition}%`, backgroundColor: condCol }} />
+          </View>
           <View style={{
             backgroundColor: statusStyle.badgeColor,
             borderWidth: 2,
@@ -158,6 +183,16 @@ function PlayerCard({ player }: { player: Player }) {
           }}>
             <PixelText size={5} color={WK.text}>{statusStyle.badgeLabel}</PixelText>
           </View>
+          {renewal && (
+            <View style={{
+              borderWidth: 2,
+              borderColor: renewal.color,
+              paddingHorizontal: 4,
+              paddingVertical: 2,
+            }}>
+              <PixelText size={5} color={renewal.color}>{renewal.label}</PixelText>
+            </View>
+          )}
         </View>
       </View>
     </Pressable>

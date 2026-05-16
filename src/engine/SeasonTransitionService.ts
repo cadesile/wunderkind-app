@@ -555,7 +555,7 @@ export function applySeasonFanEngagement(
 ): void {
   const fanStore      = useFanStore.getState();
   const { config }    = useGameConfigStore.getState();
-  const ampClubId     = useClubStore.getState().club.id;
+  const { id: ampClubId, pricing } = useClubStore.getState().club;
   const { addTransaction } = useFinanceStore.getState();
   const { addMessage }     = useInboxStore.getState();
 
@@ -606,8 +606,7 @@ export function applySeasonFanEngagement(
   // Re-read after Part 1 mutations so fanCount and morale are current.
   const ampFan = useFanStore.getState().getFanState(ampClubId);
   if (ampFan) {
-    // TODO(Frontend P5): replace with club-specific shirtPrice from pricing config.
-    const SHIRT_PRICE_PENCE = 4500; // £45 default
+    const SHIRT_PRICE_PENCE = pricing?.shirtPrice ?? 4500;
     const shirtSalesIncome  = Math.round(ampFan.fanCount * (ampFan.morale / 100)) * SHIRT_PRICE_PENCE;
 
     addTransaction({
@@ -729,6 +728,23 @@ export async function performSeasonTransition(snapshot: SeasonTransitionSnapshot
 
   // Prune fixture archives older than 5 seasons (archive already written in applySeasonResponse)
   await pruneFixtureArchives(5);
+
+  // Reset per-season counters for the new season
+  useClubStore.getState().resetFreeSignings();
+
+  // NPC club balance floor: clubs that ended the season with a negative balance receive
+  // a partial bailout to floor = 10% of their tier's starting balance.
+  // Prevents permanent insolvency death spirals across seasons.
+  {
+    const { clubs, updateClub } = useWorldStore.getState();
+    const tierBalances = useGameConfigStore.getState().config.npcStartingBalanceByTier;
+    for (const club of Object.values(clubs)) {
+      if ((club.balance ?? 0) < 0) {
+        const startingBalance = tierBalances[club.tier] ?? tierBalances[4] ?? 30_000_000;
+        updateClub(club.id, { balance: Math.round(startingBalance * 0.1) });
+      }
+    }
+  }
 
   // Advance the persistent season counter
   useLeagueStore.getState().incrementSeason();

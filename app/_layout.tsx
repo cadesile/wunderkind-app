@@ -1,4 +1,5 @@
 import { enableScreens } from 'react-native-screens';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import '../global.css';
 import { Stack } from 'expo-router';
 
@@ -68,7 +69,9 @@ function AppNavigator() {
 
   useEffect(() => {
     async function waitForHydration() {
-      const stores = [useClubStore, useSquadStore] as const;
+      // leagueStore MUST be included — hydrateFixtures() reads league.id + currentSeason
+      // from it. If it hasn't rehydrated yet the fixture hydration silently bails.
+      const stores = [useClubStore, useSquadStore, useLeagueStore] as const;
       for (const store of stores) {
         if (!store.persist.hasHydrated()) {
           await new Promise<void>((resolve) => {
@@ -205,6 +208,7 @@ function AppNavigator() {
 
 export default function RootLayout() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SQLiteProvider
       databaseName="wk.db"
       onInit={async (db) => {
@@ -222,5 +226,6 @@ export default function RootLayout() {
         </QueryClientProvider>
       </SafeAreaProvider>
     </SQLiteProvider>
+    </GestureHandlerRootView>
   );
 }

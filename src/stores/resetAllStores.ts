@@ -64,7 +64,7 @@ const ALL_STORE_KEYS = [
 export function resetInMemoryStores(): void {
   useAuthStore.getState().clearAuth();
 
-  useClubStore.setState({ club: DEFAULT_CLUB, managerPersonality: null });
+  useClubStore.setState({ club: DEFAULT_CLUB, managerPersonality: null, seasonFreeSigningsUsed: 0 });
   useSquadStore.setState({ players: [] });
   useCoachStore.setState({ coaches: [] });
   useScoutStore.setState({ scouts: [] });

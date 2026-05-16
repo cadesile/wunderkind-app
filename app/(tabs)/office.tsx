@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Modal, TextInput, ScrollView, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
-import { Trophy, ChevronRight, ArrowLeftRight } from 'lucide-react-native';
+import { Trophy, ChevronRight, ArrowLeftRight, Settings } from 'lucide-react-native';
 import { FAB_CLEARANCE } from './_layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -649,7 +649,7 @@ function KeyStaffSection({
               <Avatar
                 appearance={hired.appearance}
                 role="COACH"
-                size={52}
+                size={104}
                 morale={hired.morale}
                 age={hired.age}
               />
@@ -659,16 +659,39 @@ function KeyStaffSection({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
                   <FlagText nationality={hired.nationality ?? ''} size={11} />
                   <Badge label={`INF ${hired.influence}`} color="yellow" />
-                  {archetype && (
-                    <View style={{
-                      paddingHorizontal: 5, paddingVertical: 2,
-                      borderWidth: 2, borderColor: WK.border,
-                      backgroundColor: WK.tealMid,
-                    }}>
-                      <PixelText size={6} color={WK.yellow}>{archetype.name.toUpperCase()}</PixelText>
-                    </View>
-                  )}
                 </View>
+                {archetype && (
+                  <View style={{
+                    alignSelf: 'flex-start', marginTop: 4,
+                    paddingHorizontal: 5, paddingVertical: 2,
+                    borderWidth: 2, borderColor: WK.border,
+                    backgroundColor: WK.tealMid,
+                  }}>
+                    <PixelText size={6} color={WK.yellow}>{archetype.name.toUpperCase()}</PixelText>
+                  </View>
+                )}
+                {role === 'manager' && (hired.preferredFormation || hired.preferredPlayingStyle) && (
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                    {hired.preferredFormation && (
+                      <View style={{
+                        paddingHorizontal: 5, paddingVertical: 2,
+                        borderWidth: 2, borderColor: WK.border,
+                        backgroundColor: WK.greenDark,
+                      }}>
+                        <PixelText size={6} color={WK.tealLight}>{hired.preferredFormation}</PixelText>
+                      </View>
+                    )}
+                    {hired.preferredPlayingStyle && (
+                      <View style={{
+                        paddingHorizontal: 5, paddingVertical: 2,
+                        borderWidth: 2, borderColor: WK.border,
+                        backgroundColor: WK.greenDark,
+                      }}>
+                        <PixelText size={6} color={WK.tealLight}>{hired.preferredPlayingStyle.replace(/_/g, ' ')}</PixelText>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             </View>
 
@@ -708,6 +731,24 @@ function KeyStaffSection({
                     value={!!hired.autoManageEvents}
                     onToggle={() => updateCoach(hired.id, { autoManageEvents: !hired.autoManageEvents })}
                   />
+
+                  {hired.preferredFormation && (
+                    <StaffToggle
+                      label="MANAGER DETERMINES FORMATION"
+                      description={`Manager's preference: ${hired.preferredFormation}. Overrides the Tactics setting.`}
+                      value={!!hired.managerDeterminesFormation}
+                      onToggle={() => updateCoach(hired.id, { managerDeterminesFormation: !hired.managerDeterminesFormation })}
+                    />
+                  )}
+
+                  {hired.preferredPlayingStyle && (
+                    <StaffToggle
+                      label="MANAGER DETERMINES PLAYING STYLE"
+                      description={`Manager's preference: ${hired.preferredPlayingStyle.replace('_', ' ')}. Overrides the Tactics setting.`}
+                      value={!!hired.managerDeterminesPlayingStyle}
+                      onToggle={() => updateCoach(hired.id, { managerDeterminesPlayingStyle: !hired.managerDeterminesPlayingStyle })}
+                    />
+                  )}
 
                   {/* Sack manager button */}
                   <Pressable
@@ -794,10 +835,14 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
     setName, setStadiumName, setFormation, setPlayingStyle, setClubColors, setBadgeShape,
   } = useClubStore();
   const coaches = useCoachStore((s) => s.coaches);
+  const manager = coaches.find((c) => c.role === 'manager');
+  const formationLocked  = !!(manager?.managerDeterminesFormation  && manager.preferredFormation);
+  const styleLocked      = !!(manager?.managerDeterminesPlayingStyle && manager.preferredPlayingStyle);
 
   const [clubNameDraft, setClubNameDraft] = useState(club.name);
   const [stadiumDraft, setStadiumDraft] = useState(club.stadiumName ?? '');
   const [kitSlot, setKitSlot] = useState<'primary' | 'secondary'>('primary');
+  const [showIdentityEdit, setShowIdentityEdit] = useState(false);
 
   function commitClubName() {
     const trimmed = clubNameDraft.trim();
@@ -825,40 +870,103 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: FAB_CLEARANCE }}>
 
-      <SectionCard label="IDENTITY">
-        {managerProfile && (
-          <>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-              <Avatar appearance={managerProfile.appearance} role="COACH" size={52} />
-              <View style={{ flex: 1 }}>
-                <PixelText size={9} upper>{managerProfile.name}</PixelText>
-                <BodyText size={11} dim style={{ marginTop: 2 }}>{managerProfile.nationality}</BodyText>
+      {/* ── Identity card ────────────────────────────────────────────────── */}
+      <View style={{ marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <PixelText size={7} dim>IDENTITY</PixelText>
+          <Pressable
+            onPress={() => { hapticTap(); setShowIdentityEdit(true); }}
+            hitSlop={8}
+            style={{ padding: 4 }}
+          >
+            <Settings size={14} color={WK.dim} />
+          </Pressable>
+        </View>
+        <View style={{ backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, padding: 14, ...pixelShadow }}>
+          {managerProfile && (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+                <Avatar appearance={managerProfile.appearance} role="COACH" size={52} />
+                <View style={{ flex: 1 }}>
+                  <PixelText size={9} upper>{managerProfile.name}</PixelText>
+                  <BodyText size={11} dim style={{ marginTop: 2 }}>{managerProfile.nationality}</BodyText>
+                </View>
               </View>
+              <View style={{ height: 2, backgroundColor: WK.border, marginBottom: 14 }} />
+            </>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ gap: 4 }}>
+              <PixelText size={6} color={WK.dim}>CLUB</PixelText>
+              <BodyText size={13}>{club.name}</BodyText>
             </View>
-            <View style={{ height: 2, backgroundColor: WK.border, marginBottom: 14 }} />
-          </>
-        )}
-        <PixelText size={7} dim style={{ marginBottom: 6 }}>CLUB NAME</PixelText>
-        <TextInput
-          value={clubNameDraft}
-          onChangeText={setClubNameDraft}
-          onBlur={commitClubName}
-          returnKeyType="done"
-          onSubmitEditing={commitClubName}
-          style={{ ...inputStyle, marginBottom: 12 }}
-        />
-        <PixelText size={7} dim style={{ marginBottom: 6 }}>STADIUM</PixelText>
-        <TextInput
-          value={stadiumDraft}
-          onChangeText={setStadiumDraft}
-          onBlur={commitStadiumName}
-          returnKeyType="done"
-          onSubmitEditing={commitStadiumName}
-          placeholder="e.g. The Factory Ground"
-          placeholderTextColor={WK.dim}
-          style={inputStyle}
-        />
-      </SectionCard>
+            {club.stadiumName ? (
+              <View style={{ gap: 4, alignItems: 'flex-end' }}>
+                <PixelText size={6} color={WK.dim}>STADIUM</PixelText>
+                <BodyText size={13}>{club.stadiumName}</BodyText>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      {/* ── Identity edit overlay ─────────────────────────────────────────── */}
+      <Modal
+        visible={showIdentityEdit}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowIdentityEdit(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+          onPress={() => setShowIdentityEdit(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{ width: '100%', backgroundColor: WK.tealCard, borderWidth: 3, borderColor: WK.border, ...pixelShadow }}
+          >
+            {/* Modal header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: WK.tealMid, borderBottomWidth: 2, borderBottomColor: WK.border, paddingHorizontal: 14, paddingVertical: 10 }}>
+              <PixelText size={8} color={WK.yellow}>CLUB IDENTITY</PixelText>
+              <Pressable onPress={() => setShowIdentityEdit(false)} hitSlop={8}>
+                <PixelText size={8} color={WK.dim}>✕</PixelText>
+              </Pressable>
+            </View>
+            <View style={{ padding: 16, gap: 12 }}>
+              <View>
+                <PixelText size={6} color={WK.dim} style={{ marginBottom: 6 }}>CLUB NAME</PixelText>
+                <TextInput
+                  value={clubNameDraft}
+                  onChangeText={setClubNameDraft}
+                  onBlur={commitClubName}
+                  returnKeyType="done"
+                  onSubmitEditing={commitClubName}
+                  style={inputStyle}
+                />
+              </View>
+              <View>
+                <PixelText size={6} color={WK.dim} style={{ marginBottom: 6 }}>STADIUM NAME</PixelText>
+                <TextInput
+                  value={stadiumDraft}
+                  onChangeText={setStadiumDraft}
+                  onBlur={commitStadiumName}
+                  returnKeyType="done"
+                  onSubmitEditing={commitStadiumName}
+                  placeholder="e.g. The Factory Ground"
+                  placeholderTextColor={WK.dim}
+                  style={inputStyle}
+                />
+              </View>
+              <Pressable
+                onPress={() => { commitClubName(); commitStadiumName(); setShowIdentityEdit(false); }}
+                style={{ backgroundColor: WK.yellow, borderWidth: 2, borderColor: WK.border, padding: 12, alignItems: 'center', marginTop: 4 }}
+              >
+                <PixelText size={8} color={WK.border}>SAVE</PixelText>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <KeyStaffSection coaches={coaches} onNavigateToHire={onNavigateToHire} />
 
@@ -884,44 +992,82 @@ function ClubPane({ onNavigateToHire }: { onNavigateToHire: (role: string) => vo
       </TouchableOpacity>
 
       <SectionCard label="TACTICS">
+        {(formationLocked || styleLocked) && (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6,
+            backgroundColor: 'rgba(245,200,66,0.08)',
+            borderWidth: 2, borderColor: WK.yellow,
+            paddingHorizontal: 10, paddingVertical: 6, marginBottom: 12,
+          }}>
+            <PixelText size={6} color={WK.yellow}>MANAGER CONTROLS TACTICS</PixelText>
+          </View>
+        )}
+
         <PixelText size={7} dim style={{ marginBottom: 8 }}>FORMATION</PixelText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-          {FORMATIONS.map((f) => (
-            <Pressable
-              key={f}
-              onPress={() => { hapticTap(); setFormation(f); }}
-              style={{
-                paddingHorizontal: 16, paddingVertical: 10,
-                backgroundColor: club.formation === f ? WK.yellow : WK.tealMid,
-                borderWidth: 2,
-                borderColor: club.formation === f ? WK.yellow : WK.border,
-                ...pixelShadow,
-              }}
-            >
-              <PixelText size={9} color={club.formation === f ? WK.border : WK.text}>{f}</PixelText>
-            </Pressable>
-          ))}
-        </View>
+        {formationLocked ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <View style={{
+              paddingHorizontal: 16, paddingVertical: 10,
+              backgroundColor: WK.tealMid,
+              borderWidth: 2, borderColor: WK.yellow,
+            }}>
+              <PixelText size={9} color={WK.yellow}>{manager!.preferredFormation}</PixelText>
+            </View>
+            <BodyText size={12} color={WK.yellow}>MANAGER'S CHOICE</BodyText>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+            {FORMATIONS.map((f) => (
+              <Pressable
+                key={f}
+                onPress={() => { hapticTap(); setFormation(f); }}
+                style={{
+                  paddingHorizontal: 16, paddingVertical: 10,
+                  backgroundColor: club.formation === f ? WK.yellow : WK.tealMid,
+                  borderWidth: 2,
+                  borderColor: club.formation === f ? WK.yellow : WK.border,
+                  ...pixelShadow,
+                }}
+              >
+                <PixelText size={9} color={club.formation === f ? WK.border : WK.text}>{f}</PixelText>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         <PixelText size={7} dim style={{ marginBottom: 8 }}>PLAYING STYLE</PixelText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {PLAYING_STYLES.map((s) => (
-            <Pressable
-              key={s}
-              onPress={() => { hapticTap(); setPlayingStyle(s); }}
-              style={{
-                paddingHorizontal: 16, paddingVertical: 10,
-                backgroundColor: club.playingStyle === s ? WK.yellow : WK.tealMid,
-                borderWidth: 2,
-                borderColor: club.playingStyle === s ? WK.yellow : WK.border,
-                ...pixelShadow,
-              }}
-            >
-              <PixelText size={8} color={club.playingStyle === s ? WK.border : WK.text}>
-                {s.replace('_', ' ')}
-              </PixelText>
-            </Pressable>
-          ))}
-        </View>
+        {styleLocked ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{
+              paddingHorizontal: 16, paddingVertical: 10,
+              backgroundColor: WK.tealMid,
+              borderWidth: 2, borderColor: WK.yellow,
+            }}>
+              <PixelText size={8} color={WK.yellow}>{manager!.preferredPlayingStyle!.replace('_', ' ')}</PixelText>
+            </View>
+            <BodyText size={12} color={WK.yellow}>MANAGER'S CHOICE</BodyText>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {PLAYING_STYLES.map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => { hapticTap(); setPlayingStyle(s); }}
+                style={{
+                  paddingHorizontal: 16, paddingVertical: 10,
+                  backgroundColor: club.playingStyle === s ? WK.yellow : WK.tealMid,
+                  borderWidth: 2,
+                  borderColor: club.playingStyle === s ? WK.yellow : WK.border,
+                  ...pixelShadow,
+                }}
+              >
+                <PixelText size={8} color={club.playingStyle === s ? WK.border : WK.text}>
+                  {s.replace('_', ' ')}
+                </PixelText>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </SectionCard>
 
       <SectionCard label="KIT COLOURS">

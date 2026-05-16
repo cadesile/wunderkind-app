@@ -39,6 +39,7 @@ import { worldTierToAppTier } from '@/engine/MarketEngine';
 import { TIER_ORDER, TIER_REPUTATION_BASELINE } from '@/types/club';
 import type { ClubTier } from '@/types/club';
 import { useCalendarStore } from '@/stores/calendarStore';
+import { useGameConfigStore } from '@/stores/gameConfigStore';
 import { isTransferWindowOpen, getNextTransferWindowDate, formatShortDate } from '@/utils/dateUtils';
 
 // ─── Type config ───────────────────────────────────────────────────────────────
@@ -278,6 +279,9 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
   const squad   = useSquadStore((s) => s.players);
   const { club } = useClubStore();
 
+  const seasonFreeSigningsUsed = useClubStore((s) => s.seasonFreeSigningsUsed);
+  const freeTransfersPerSeason = useGameConfigStore((s) => s.config.freeTransfersPerSeason);
+
   // weeklyWage is safe even when player is undefined (nullish coalescing to 0)
   const weeklyWage = player?.currentOffer ?? player?.marketValue ?? 0;
 
@@ -286,6 +290,11 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
     return ManagerBrain.assessScoutedPlayer(manager, player, squad, club.balance ?? 0, weeklyWage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manager?.id, player?.id, squad.length, club.balance, weeklyWage]);
+
+  // Free-transfer gate — NPC players always require a fee; free agents do not
+  const isFreeTransfer    = !player?.requiresTransferFee || !player?.transferFee;
+  const freeSigningsLeft  = freeTransfersPerSeason - seasonFreeSigningsUsed;
+  const atFreeLimit       = isFreeTransfer && freeSigningsLeft <= 0;
   // ────────────────────────────────────────────────────────────────────────────
 
   // Player was signed this session or is already in the squad
@@ -352,6 +361,9 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
         description: `Transfer fee: ${player.firstName} ${player.lastName}`,
         weekNumber:  club.weekNumber ?? 1,
       });
+    } else {
+      // Free transfer — increment the seasonal counter
+      useClubStore.getState().incrementFreeSignings();
     }
     signPlayer(playerId);
     respond(messageId, 'accepted');
@@ -434,7 +446,7 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
             <PixelText size={14} variant="vt323" dim>TRANSFER FEE</PixelText>
             <Money pence={player.transferFee ?? 0} size={18} variant="vt323" color={WK.orange} />
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {player.npcClubTier != null && (
               <Badge label={`TIER ${player.npcClubTier}`} color="dim" />
             )}
@@ -442,9 +454,28 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
               {player.npcClubName ?? 'NPC CLUB'}
             </PixelText>
           </View>
+          {/* Transfer willingness — based on AMP reputation vs player's club tier */}
+          {(() => {
+            const ampTierIdx = club.reputation >= 75 ? 3 : club.reputation >= 40 ? 2 : club.reputation >= 15 ? 1 : 0;
+            const npcTierIdx = player.npcClubTier != null ? Math.max(0, Math.min(3, 4 - player.npcClubTier)) : 0;
+            const diff = ampTierIdx - npcTierIdx;
+            const w = diff >= 0
+              ? { label: 'WILLING TO JOIN',  color: WK.green  }
+              : diff === -1
+                ? { label: 'UNCERTAIN',      color: WK.yellow }
+                : { label: 'UNLIKELY TO JOIN', color: WK.red  };
+            return (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <PixelText size={14} variant="vt323" dim>WILLINGNESS</PixelText>
+                <View style={{ borderWidth: 2, borderColor: w.color, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <PixelText size={13} variant="vt323" color={w.color}>{w.label}</PixelText>
+                </View>
+              </View>
+            );
+          })()}
         </>
       ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <View style={{
             borderWidth: 2,
             borderColor: WK.green,
@@ -453,6 +484,9 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
           }}>
             <PixelText size={13} variant="vt323" color={WK.green}>FREE AGENT</PixelText>
           </View>
+          <PixelText size={13} variant="vt323" color={freeSigningsLeft > 0 ? WK.dim : WK.red}>
+            {freeSigningsLeft}/{freeTransfersPerSeason} FREE SLOTS
+          </PixelText>
         </View>
       )}
 
@@ -476,7 +510,18 @@ function GemPlayerCard({ playerId, messageId }: { playerId: string; messageId: s
         </View>
       )}
 
-      {windowOpen ? (
+      {atFreeLimit ? (
+        <View style={{
+          borderWidth: 2,
+          borderColor: WK.red,
+          padding: 10,
+          alignItems: 'center',
+          gap: 4,
+        }}>
+          <PixelText size={7} color={WK.red} upper>FREE SIGNING LIMIT REACHED</PixelText>
+          <PixelText size={6} dim>{`${seasonFreeSigningsUsed}/${freeTransfersPerSeason} free signings used this season`}</PixelText>
+        </View>
+      ) : windowOpen ? (
         <>
           <Button label="SIGN PLAYER" variant="yellow" fullWidth onPress={handleRecruit} />
           <Button label="PASS" variant="teal" fullWidth onPress={handlePass} style={{ marginTop: 6 }} />

@@ -18,7 +18,8 @@ import type { ClubResultEntry } from '@/stores/clubStatsStore';
 import type { MatchResultRecord } from '@/db/types';
 import { calculateStadiumCapacity } from '@/utils/stadiumCapacity';
 import { SelectionService } from './SelectionService';
-import { ResultsEngine, SimTeam } from './ResultsEngine';
+import { ResultsEngine, SimTeam, PlayingStyle } from './ResultsEngine';
+import { useCoachStore } from '@/stores/coachStore';
 import { Player, Position } from '../types/player';
 import { Formation } from '../types/game';
 import { WorldPlayer, WorldClub } from '../types/world';
@@ -117,6 +118,34 @@ class SimulationService {
             for (const [playerId, delta] of Object.entries(result.moraleDeltas)) {
               useSquadStore.getState().updateMorale(playerId, delta);
             }
+          }
+
+          // ── Post-match condition drain ─────────────────────────────────────
+          // Starters: 50–75 (fatigue); non-playing squad: fully rested → 100
+          const postMatchCondition = () => 50 + Math.round(Math.random() * 25);
+
+          // AMP condition update
+          if (ampSide) {
+            const ampXI    = ampSide === 'home' ? homeTeam.xi : awayTeam.xi;
+            const ampXIIds = new Set(ampXI.map((p) => p.id));
+            const { updatePlayer } = useSquadStore.getState();
+            for (const p of userSquad) {
+              updatePlayer(p.id, { condition: ampXIIds.has(p.id) ? postMatchCondition() : 100 });
+            }
+          }
+
+          // NPC condition update
+          const npcClubUpdates: Array<{ clubId: string; xiIds: Set<string> }> = [];
+          if (!ampIsHome) npcClubUpdates.push({ clubId: fixture.homeClubId, xiIds: new Set(homeTeam.xi.map((p) => p.id)) });
+          if (!ampIsAway) npcClubUpdates.push({ clubId: fixture.awayClubId, xiIds: new Set(awayTeam.xi.map((p) => p.id)) });
+          for (const { clubId, xiIds } of npcClubUpdates) {
+            const club = useWorldStore.getState().clubs[clubId];
+            if (!club) continue;
+            const updatedPlayers = club.players.map((p) => ({
+              ...p,
+              condition: xiIds.has(p.id) ? postMatchCondition() : 100,
+            }));
+            useWorldStore.getState().updateClub(clubId, { players: updatedPlayers });
           }
 
           // ── Collect fixture result (flushed in batch below) ────────────────
@@ -364,12 +393,19 @@ class SimulationService {
   ): SimTeam | null {
     // Check if it's the user's club
     if (userClub && clubId === userClub.id) {
-      const xi = SelectionService.selectStartingXI(userSquad, (userClub.formation as any) ?? '4-4-2');
-      return {
-        xi,
-        playingStyle: 'POSSESSION', // TODO: Get from club config
-        managerAbility: 70, // TODO: Get from manager profile
-      };
+      const manager = useCoachStore.getState().coaches.find((c) => c.role === 'manager');
+      const activeFormation = (manager?.managerDeterminesFormation && manager.preferredFormation)
+        ? manager.preferredFormation
+        : (userClub.formation ?? '4-4-2');
+      const activeStyle: PlayingStyle = (manager?.managerDeterminesPlayingStyle && manager.preferredPlayingStyle)
+        ? manager.preferredPlayingStyle
+        : (userClub.playingStyle ?? 'DIRECT');
+      const xi = SelectionService.selectStartingXI(userSquad, (activeFormation as Formation) ?? '4-4-2');
+      const personality = useClubStore.getState().managerPersonality;
+      const managerAbility = personality
+        ? Math.round((personality.temperament + personality.discipline + personality.ambition) / 3)
+        : 70;
+      return { xi, playingStyle: activeStyle, managerAbility };
     }
 
     // Otherwise it's an NPC club from worldStore
@@ -377,13 +413,16 @@ class SimulationService {
     if (!club) return null;
 
     const players = club.players.map((p) => this.mapWorldPlayerToPlayer(p));
-    const formation = (club.formation ?? '4-4-2') as Formation;
-    const xi = SelectionService.selectStartingXI(players, formation);
+    // Use the manager's preferred formation/style if available, else fall back to club personality
+    const npcManager = club.staff.find((s) => s.role === 'manager');
+    const npcFormation = ((npcManager?.preferredFormation ?? club.formation ?? '4-4-2')) as Formation;
+    const npcStyle     = (npcManager?.preferredPlayingStyle ?? club.personality.playingStyle) as PlayingStyle;
+    const xi = SelectionService.selectStartingXI(players, npcFormation);
 
     return {
       xi,
-      playingStyle: club.personality.playingStyle,
-      managerAbility: 50 + (club.personality.managerTemperament / 10), // Approximate
+      playingStyle: npcStyle,
+      managerAbility: 50 + (club.personality.managerTemperament / 10),
     };
   }
 
@@ -404,6 +443,8 @@ class SimulationService {
       joinedWeek: 1,
       isActive: true,
       status: 'active',
+      condition: wp.condition,
+      injury:    wp.injury,
     };
   }
 
