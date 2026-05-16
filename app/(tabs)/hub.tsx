@@ -28,6 +28,7 @@ import { useInteractionStore } from '@/stores/interactionStore';
 import { CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import type { Clique } from '@/types/interaction';
 import { Avatar } from '@/components/ui/Avatar';
+import { MoraleArrow } from '@/components/ui/MoraleArrow';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -418,11 +419,7 @@ function SquadPane() {
       flex: 1,
       align: 'center',
       sortValue: (p) => p.morale ?? 50,
-      render: (p) => {
-        const m = p.morale ?? 50;
-        const color = m >= 70 ? WK.green : m >= 40 ? WK.yellow : WK.red;
-        return <PixelText size={9} color={color}>{m}</PixelText>;
-      },
+      render: (p) => <MoraleArrow morale={p.morale ?? 50} size={20} />,
     },
     {
       key: 'overallRating',

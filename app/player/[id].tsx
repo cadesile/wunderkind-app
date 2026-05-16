@@ -30,7 +30,7 @@ import { useCalendarStore } from '@/stores/calendarStore';
 import { isTransferWindowOpen, getNextTransferWindowDate } from '@/utils/dateUtils';
 import { calculateExtensionCost, calculateWeeklyWage } from '@/engine/finance';
 import { moraleLabel } from '@/utils/morale';
-import { MoraleBar } from '@/components/ui/MoraleBar';
+import { MoraleArrow } from '@/components/ui/MoraleArrow';
 import { getLoyaltyNote, getDemandNote } from '@/utils/guardianNarrative';
 import { ScoutReportCard } from '@/components/ScoutReportCard';
 import { DevelopmentChart } from '@/components/ui/DevelopmentChart';
@@ -538,7 +538,7 @@ export default function PlayerDetailScreen() {
               <Badge label={player.position} color="dim" />
               <Badge label={`AGE ${displayAge}`} color="dim" />
               {player.morale !== undefined && (
-                <MoraleBar morale={player.morale} width={48} />
+                <MoraleArrow morale={player.morale} size={20} />
               )}
             </View>
             {/* Physical — height · weight */}
@@ -895,7 +895,7 @@ export default function PlayerDetailScreen() {
                   {player.morale !== undefined && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <BodyText size={13} dim>MORALE</BodyText>
-                      <MoraleBar morale={player.morale} width={80} />
+                      <MoraleArrow morale={player.morale} size={24} />
                     </View>
                   )}
                   {(player.extensionCount ?? 0) > 0 && (

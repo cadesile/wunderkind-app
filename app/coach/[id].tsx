@@ -16,7 +16,7 @@ import { useFinanceStore } from '@/stores/financeStore';
 import { useSquadStore } from '@/stores/squadStore';
 import { Relationship } from '@/types/player';
 import { moraleLabel } from '@/utils/morale';
-import { MoraleBar } from '@/components/ui/MoraleBar';
+import { MoraleArrow } from '@/components/ui/MoraleArrow';
 import { Money } from '@/components/ui/Money';
 import { penceToPounds } from '@/utils/currency';
 
@@ -145,7 +145,7 @@ export default function CoachDetailScreen() {
             <PixelText size={8} upper>Morale</PixelText>
             <PixelText size={8} color={moraleColor(morale)}>{moraleLabel(morale)}</PixelText>
           </View>
-          <MoraleBar morale={morale} width="100%" height={8} borderWidth={2} />
+          <MoraleArrow morale={morale} size={28} />
           {(coach as any).isLowMorale && (
             <View style={{ marginTop: 8, padding: 6, backgroundColor: 'rgba(200,30,30,0.15)', borderWidth: 2, borderColor: WK.red }}>
               <PixelText size={6} color={WK.red}>LOW MORALE — INFLUENCE HALVED THIS WEEK</PixelText>

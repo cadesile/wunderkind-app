@@ -10,6 +10,7 @@ import { useClubStore } from '@/stores/clubStore';
 import { useClubStatsStore } from '@/stores/clubStatsStore';
 import { PixelText, BodyText, VT323Text } from '@/components/ui/PixelText';
 import { FlagText } from '@/components/ui/FlagText';
+import { moraleBarColor } from '@/components/ui/MoraleBar';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { SortableTable } from '@/components/ui/SortableTable';
@@ -241,9 +242,9 @@ function LeaderCard({
           flex: 1,
           backgroundColor: pressed ? WK.tealMid : WK.tealDark,
           borderWidth: 2,
-          borderColor: stat ? accentColor + '66' : WK.border,
-          padding: 10,
-          gap: 8,
+          borderColor: stat ? accentColor + '55' : WK.border,
+          padding: 8,
+          gap: 6,
         })}
         onPress={() => { if (stat) { hapticTap(); onPress(stat.player.id); } }}
         disabled={!stat}
@@ -252,37 +253,36 @@ function LeaderCard({
 
         {stat ? (
           <>
-            {/* Avatar + name row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* Avatar + name stacked */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Avatar
                 appearance={stat.player.appearance}
                 role="PLAYER"
-                size={44}
+                size={36}
                 morale={stat.player.morale ?? 70}
                 age={stat.player.age}
               />
-              <View style={{ flex: 1, gap: 2 }}>
-                <BodyText size={13} upper numberOfLines={1}>{stat.player.name}</BodyText>
+              <View style={{ flex: 1, gap: 3 }}>
+                <BodyText size={11} upper numberOfLines={1}>{stat.player.name}</BodyText>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <FlagText nationality={stat.player.nationality} size={11} />
-                  <PixelText size={6} color={WK.dim}>{stat.player.position}</PixelText>
-                  <PixelText size={6} color={WK.dim}>·{stat.player.age}</PixelText>
+                  <FlagText nationality={stat.player.nationality} size={10} />
+                  <PixelText size={6} color={WK.dim}>{stat.player.position} · {stat.player.age}</PixelText>
                 </View>
               </View>
             </View>
 
             {/* Stat highlight */}
             <View style={{
-              backgroundColor: accentColor + '22',
+              backgroundColor: accentColor + '1A',
               borderWidth: 2,
               borderColor: accentColor,
-              paddingVertical: 6,
+              paddingVertical: 4,
               alignItems: 'center',
               flexDirection: 'row',
               justifyContent: 'center',
-              gap: 6,
+              gap: 5,
             }}>
-              <VT323Text size={26} color={accentColor}>{value}</VT323Text>
+              <VT323Text size={24} color={accentColor}>{value}</VT323Text>
               <PixelText size={6} color={accentColor}>{unit}</PixelText>
             </View>
           </>
@@ -458,7 +458,7 @@ export function PerformancePane() {
   const seasonStartWeek = (currentSeasonNumber - 1) * 38 + 1;
 
   const { data: allStatsRows = [] } = useQuery({
-    queryKey: ['squad-all-stats'],
+    queryKey: ['amp-season-stats', 'squad-all'],
     queryFn: async () => {
       type StatsRow = {
         player_id: string;
@@ -518,12 +518,20 @@ export function PerformancePane() {
       render: (s) => <BodyText size={12} upper numberOfLines={1} style={{ flex: 1 }}>{shortName(s.player.name)}</BodyText>,
     },
     {
-      key: 'nationality',
-      label: 'NAT',
+      key: 'condition',
+      label: 'CON',
       flex: 0.9,
       align: 'center',
-      sortValue: (s) => s.player.nationality,
-      render: (s) => <FlagText nationality={s.player.nationality} size={12} />,
+      sortValue: (s) => s.player.condition ?? 100,
+      render: (s) => {
+        const cond = Math.max(0, Math.min(100, s.player.condition ?? 100));
+        const color = moraleBarColor(cond);
+        return (
+          <View style={{ width: 32, height: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
+            <View style={{ height: '100%', width: `${cond}%`, backgroundColor: color }} />
+          </View>
+        );
+      },
     },
     {
       key: 'games',

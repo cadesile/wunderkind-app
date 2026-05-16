@@ -18,6 +18,7 @@ import { Money } from '@/components/ui/Money';
 import { computePlayerAge, getGameDate } from '@/utils/gameDate';
 import type { WorldPlayer, WorldStaff } from '@/types/world';
 import { Avatar } from '@/components/ui/Avatar';
+import { MoraleArrow } from '@/components/ui/MoraleArrow';
 
 function calcOvr(p: WorldPlayer): number {
   return Math.round((p.pace + p.technical + p.vision + p.power + p.stamina + p.heart) / 6);
@@ -446,6 +447,7 @@ export default function ClubDetailScreen() {
             <PixelText size={6} color={WK.dim} style={{ width: 20, textAlign: 'center', flexShrink: 0 }}>NAT</PixelText>
             <PixelText size={6} color={WK.dim} style={{ width: 28, textAlign: 'right', flexShrink: 0 }}>AGE</PixelText>
             <PixelText size={6} color={WK.dim} style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>OVR</PixelText>
+            <View style={{ width: 26, flexShrink: 0 }} />
             <View style={{ width: 14, flexShrink: 0 }} />
           </View>
 
@@ -504,6 +506,11 @@ export default function ClubDetailScreen() {
                 <VT323Text size={18} color={WK.yellow} style={{ width: 32, flexShrink: 0, textAlign: 'right' }}>
                   {ovr}
                 </VT323Text>
+
+                {/* Condition arrow */}
+                <View style={{ width: 26, flexShrink: 0, alignItems: 'center' }}>
+                  <MoraleArrow morale={p.condition ?? 70} size={18} />
+                </View>
 
                 <ChevronRight size={12} color={WK.dim} style={{ marginLeft: 2, flexShrink: 0 }} />
               </TouchableOpacity>

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PixelDialog } from '@/components/ui/PixelDialog';
 import { WK, pixelShadow } from '@/constants/theme';
-import { MoraleBar } from '@/components/ui/MoraleBar';
+import { MoraleArrow } from '@/components/ui/MoraleArrow';
 import { useScoutStore } from '@/stores/scoutStore';
 import { useMarketStore } from '@/stores/marketStore';
 import { useClubStore } from '@/stores/clubStore';
@@ -76,7 +76,7 @@ function ScoutCard({ scout, weekNumber, onPress, onRenew, onRelease }: {
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <MoraleBar morale={morale} width={48} />
+            <MoraleArrow morale={morale} size={22} />
           </View>
         </View>
 

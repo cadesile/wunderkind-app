@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Player } from '@/types/player';
 import { Clique, CLIQUE_PALETTE, NO_GROUP_COLOR } from '@/types/interaction';
 import { WK, traitColor, pixelShadow } from '@/constants/theme';
+import { MoraleArrow } from '@/components/ui/MoraleArrow';
 import { MoraleBar } from '@/components/ui/MoraleBar';
 import { PerformancePane } from '@/components/PerformancePane';
 
@@ -169,7 +170,7 @@ function PlayerCard({ player }: { player: Player }) {
 
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Badge label={`${player.overallRating}`} color="yellow" />
-          <MoraleBar morale={player.morale ?? 70} width={48} />
+          <MoraleArrow morale={player.morale ?? 70} size={22} />
           {/* Condition bar */}
           <View style={{ width: 48, height: 5, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: WK.border }}>
             <View style={{ height: '100%', width: `${condition}%`, backgroundColor: condCol }} />
