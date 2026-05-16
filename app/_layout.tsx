@@ -23,6 +23,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { loadSeasonFixtures } from '@/db/repositories/fixtureRepository';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useFixtureStore } from '@/stores/fixtureStore';
+import { useWorldStore } from '@/stores/worldStore';
 import { useNarrativeSync } from '@/hooks/useNarrativeSync';
 import { fetchAndCacheGameConfig } from '@/hooks/useGameConfigSync';
 import { useArchetypeSync } from '@/hooks/useArchetypeSync';
@@ -34,7 +35,6 @@ import { syncQueue } from '@/api/syncQueue';
 import { WK } from '@/constants/theme';
 import { useClubStore } from '@/stores/clubStore';
 import { useSquadStore } from '@/stores/squadStore';
-import { useWorldStore } from '@/stores/worldStore';
 import { PixelText } from '@/components/ui/PixelText';
 import { Button } from '@/components/ui/Button';
 
@@ -69,9 +69,9 @@ function AppNavigator() {
 
   useEffect(() => {
     async function waitForHydration() {
-      // leagueStore MUST be included — hydrateFixtures() reads league.id + currentSeason
-      // from it. If it hasn't rehydrated yet the fixture hydration silently bails.
-      const stores = [useClubStore, useSquadStore, useLeagueStore] as const;
+      // leagueStore and worldStore MUST be included — hydrateFixtures() reads
+      // league.id + currentSeason from leagueStore, and all league IDs from worldStore.
+      const stores = [useClubStore, useSquadStore, useLeagueStore, useWorldStore] as const;
       for (const store of stores) {
         if (!store.persist.hasHydrated()) {
           await new Promise<void>((resolve) => {
@@ -109,17 +109,49 @@ function AppNavigator() {
     void syncQueue.init();
   }, []);
 
-  // Hydrate fixtureStore from SQLite once the app is ready and stores have rehydrated
+  // Hydrate fixtureStore from SQLite once the app is ready and stores have rehydrated.
+  // Loads ALL leagues (AMP + NPC) so the competition browser shows correct standings
+  // after a restart. Also restores currentMatchday so the advance button doesn't force
+  // the user through ghost ticks for already-played rounds.
   useEffect(() => {
     if (!isReady || isOnboarding || !storesHydrated) return;
     async function hydrateFixtures() {
       const leagueState = useLeagueStore.getState();
-      const leagueId = leagueState.league?.id;
+      const ampLeagueId = leagueState.league?.id;
       const season = leagueState.currentSeason;
-      if (!leagueId || !season) return;
-      const fixtures = await loadSeasonFixtures(db, leagueId, season);
-      if (fixtures.length > 0) {
-        useFixtureStore.getState().setFixtures(fixtures);
+      if (!ampLeagueId || !season) return;
+
+      // Collect all league IDs: AMP's league + every NPC league in the pyramid
+      const worldLeagues = useWorldStore.getState().leagues;
+      const allLeagueIds: string[] = worldLeagues.length > 0
+        ? worldLeagues.map((l) => l.id)
+        : [ampLeagueId]; // fallback: AMP only (e.g. worldStore not yet populated)
+
+      // Ensure AMP's league is always included even if missing from worldLeagues
+      if (!allLeagueIds.includes(ampLeagueId)) allLeagueIds.push(ampLeagueId);
+
+      const allFixtures = (
+        await Promise.all(allLeagueIds.map((id) => loadSeasonFixtures(db, id, season)))
+      ).flat();
+
+      if (allFixtures.length === 0) return;
+
+      useFixtureStore.getState().setFixtures(allFixtures);
+
+      // Restore currentMatchday from the AMP league fixtures: find the lowest round
+      // that still has at least one unplayed fixture, so simulation resumes at the
+      // correct point without burning through already-played matchdays as ghost ticks.
+      const ampFixtures = allFixtures.filter((f) => f.leagueId === ampLeagueId);
+      if (ampFixtures.length > 0) {
+        const maxRound = Math.max(...ampFixtures.map((f) => f.round));
+        let nextMatchday = maxRound + 1; // default: all rounds played
+        for (let r = 1; r <= maxRound; r++) {
+          if (ampFixtures.some((f) => f.round === r && f.result === null)) {
+            nextMatchday = r;
+            break;
+          }
+        }
+        useFixtureStore.getState().setCurrentMatchday(nextMatchday);
       }
     }
     void hydrateFixtures();

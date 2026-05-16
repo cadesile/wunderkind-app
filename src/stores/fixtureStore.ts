@@ -51,6 +51,7 @@ interface FixtureActions {
    */
   applyResultsToMemory: (entries: FixtureResultEntry[]) => void;
   advanceMatchday: () => void;
+  setCurrentMatchday: (day: number) => void;
   markSynced: (fixtureIds: string[]) => void;
   clearSeason: () => void;
   getUnsyncedResults: () => Fixture[];
@@ -185,6 +186,8 @@ export const useFixtureStore = create<FixtureStore>()(
 
       advanceMatchday: () =>
         set((state) => ({ currentMatchday: state.currentMatchday + 1 })),
+
+      setCurrentMatchday: (day) => set({ currentMatchday: day }),
 
       markSynced: (fixtureIds) => {
         const idSet = new Set(fixtureIds);
